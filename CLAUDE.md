@@ -38,6 +38,16 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 - Screenshots render slowly, so physics runs many steps per frame: in `gameplay` shots the cars have
   driven further than in real time.
 
+## Owner play-test feedback (session 1) — to do next
+1. **Too easy:** health is too low and damage too high, so fights end too fast. Raise health, lower damage.
+2. **Getting stuck:** too many obstacles; hitting a wall stops the car and only reversing helps.
+   Wanted: Twisted Metal-style wall hits that deflect/slide the car left or right so it keeps moving.
+3. **Stage:** replace the cluttered Junkyard as the first stage with an arena like Twisted Metal 1's first
+   stage as the owner describes it: a **circular ring**, **breakable crates that hide weapons**, a
+   **ramp/jump in the middle** to reach health or a superior weapon, and **no annoying obstacles**.
+4. **Car models:** Sweet Tooth's model is too crude. Rebuild cars with much more detail, using the
+   owner's reference images in `docs/reference/` (see that folder's README).
+
 ## Code map
 ```
 scenes/main.tscn            single scene; everything is spawned from scripts/main.gd
