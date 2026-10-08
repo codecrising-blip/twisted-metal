@@ -99,11 +99,14 @@ func _environment() -> void:
 	env.fog_light_color = Color(0.11, 0.1, 0.11)
 	env.fog_density = 0.008
 	env.fog_sky_affect = 0.5
-	env.volumetric_fog_enabled = true
-	env.volumetric_fog_density = 0.012
-	env.volumetric_fog_albedo = Color(0.5, 0.48, 0.46)
-	env.ssao_enabled = true
-	env.ssr_enabled = true
+	# Forward+ only extras. The project defaults to the Compatibility renderer (OpenGL)
+	# because Forward+ (Vulkan) crashed on the owner's PC.
+	if RenderingServer.get_rendering_device() != null: # Forward+ or Mobile (Vulkan)
+		env.volumetric_fog_enabled = true
+		env.volumetric_fog_density = 0.012
+		env.volumetric_fog_albedo = Color(0.5, 0.48, 0.46)
+		env.ssao_enabled = true
+		env.ssr_enabled = true
 	env.adjustment_enabled = true
 	env.adjustment_saturation = 0.8
 	env.adjustment_contrast = 1.12

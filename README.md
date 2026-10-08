@@ -35,8 +35,8 @@ Put `.ogg` or `.mp3` files into `audio/music/`. The first file (alphabetically) 
 | ![Gameplay](docs/screenshots/gameplay.png) | ![Enemies](docs/screenshots/enemies.png) |
 | ![Overview](docs/screenshots/overview.png) | ![Sweet Tooth](docs/screenshots/hero.png) |
 
-These were rendered on a server without a graphics card (Compatibility renderer). On a normal PC the game
-uses Forward+ with volumetric fog, ambient occlusion and reflections, so it looks better than these.
+The game uses Godot's Compatibility renderer (OpenGL), which runs on most PCs including older
+or integrated graphics.
 
 ## For developers
 - Design document: [docs/GDD.md](docs/GDD.md)

@@ -32,8 +32,9 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 ```
 - Always run the smoke test before committing. Look at screenshots after visual changes.
 - The headless run prints `Parameter "m" is null` from the dummy renderer — harmless noise.
-- Screenshots use the Compatibility renderer (no GPU here): no volumetric fog/SSAO/SSR and a blockier glow
-  than the real game, which runs Forward+ on the owner's PC.
+- **Renderer: GL Compatibility (OpenGL).** Forward+ (Vulkan) made Godot and the game crash / hang on a
+  black screen on the owner's PC, so the project uses Compatibility. Screenshots here match what the
+  owner sees. Forward+-only extras (volumetric fog, SSAO, SSR) switch on only if run with Forward+.
 - Screenshots render slowly, so physics runs many steps per frame: in `gameplay` shots the cars have
   driven further than in real time.
 
@@ -80,3 +81,5 @@ energy jump + freeze, health and weapon pickups, ramming, wrecks, win/lose/resta
   suite and the screenshot tool. Fixed: idle cars kept their last input (an AI car kept driving after its
   brain was removed), particles rendered as squares (switched to a hand-built soft texture), scene too dark
   to read, HUD clipped on the right, Sweet Tooth's head blocking the chase camera (camera height per car).
+  Owner's PC: game hung on a black screen and the editor crashed on open with Forward+; switched the
+  project to the Compatibility renderer.
