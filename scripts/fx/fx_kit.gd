@@ -1,0 +1,203 @@
+class_name FxKit
+extends RefCounted
+## Particle effects built in code: fire, smoke, sparks, explosions.
+
+static var _soft_tex: ImageTexture
+static var _meshes := {}
+
+
+## Round soft dot used by every particle so quads don't look square.
+## Built pixel by pixel so it exists immediately (no deferred generation).
+static func soft_texture() -> ImageTexture:
+	if _soft_tex == null:
+		var size := 64
+		var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+		var c := (size - 1) * 0.5
+		for y in size:
+			for x in size:
+				var d := Vector2(x - c, y - c).length() / c
+				var a := clampf(1.0 - d, 0.0, 1.0)
+				img.set_pixel(x, y, Color(1, 1, 1, a * a * (3.0 - 2.0 * a)))
+		_soft_tex = ImageTexture.create_from_image(img)
+	return _soft_tex
+
+
+## Billboard quad for particles. additive = glowing (fire), otherwise alpha (smoke).
+static func particle_mesh(additive: bool) -> QuadMesh:
+	if _meshes.has(additive):
+		return _meshes[additive]
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+	m.vertex_color_use_as_albedo = true
+	m.albedo_texture = soft_texture()
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD if additive else BaseMaterial3D.BLEND_MODE_MIX
+	m.no_depth_test = false
+	m.disable_receive_shadows = true
+	var q := QuadMesh.new()
+	q.material = m
+	_meshes[additive] = q
+	return q
+
+
+static func _ramp(colors: Array) -> Gradient:
+	var offsets := PackedFloat32Array()
+	var cols := PackedColorArray()
+	var n := colors.size()
+	for i in n:
+		offsets.append(float(i) / float(n - 1))
+		cols.append(colors[i])
+	var g := Gradient.new()
+	g.offsets = offsets
+	g.colors = cols
+	return g
+
+
+static func _shrink_curve() -> Curve:
+	var c := Curve.new()
+	c.add_point(Vector2(0, 0.4))
+	c.add_point(Vector2(0.25, 1.0))
+	c.add_point(Vector2(1, 0.0))
+	return c
+
+
+static func _grow_curve() -> Curve:
+	var c := Curve.new()
+	c.add_point(Vector2(0, 0.3))
+	c.add_point(Vector2(1, 1.0))
+	return c
+
+
+## Continuous fire (barrels, Sweet Tooth's hair, burning wrecks).
+static func fire(scale := 1.0, amount := 32) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.mesh = particle_mesh(true)
+	p.amount = amount
+	p.lifetime = 0.7
+	p.local_coords = false
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 0.25 * scale
+	p.direction = Vector3.UP
+	p.spread = 15.0
+	p.gravity = Vector3(0, 3.0 * scale, 0)
+	p.initial_velocity_min = 1.0 * scale
+	p.initial_velocity_max = 2.2 * scale
+	p.scale_amount_min = 0.35 * scale
+	p.scale_amount_max = 0.75 * scale
+	p.scale_amount_curve = _shrink_curve()
+	p.color_ramp = _ramp([Color(1.0, 0.75, 0.35, 0.9), Color(1.0, 0.4, 0.06, 0.7), Color(0.6, 0.1, 0.02, 0.35), Color(0.1, 0.05, 0.05, 0.0)])
+	return p
+
+
+static func smoke(scale := 1.0, amount := 20) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.mesh = particle_mesh(false)
+	p.amount = amount
+	p.lifetime = 2.2
+	p.local_coords = false
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 0.3 * scale
+	p.direction = Vector3.UP
+	p.spread = 20.0
+	p.gravity = Vector3(0.4, 1.4, 0)
+	p.initial_velocity_min = 0.8
+	p.initial_velocity_max = 1.6
+	p.scale_amount_min = 1.0 * scale
+	p.scale_amount_max = 2.0 * scale
+	p.scale_amount_curve = _grow_curve()
+	p.color_ramp = _ramp([Color(0.24, 0.23, 0.22, 0.0), Color(0.2, 0.19, 0.18, 0.45), Color(0.14, 0.14, 0.14, 0.0)])
+	return p
+
+
+## One-shot explosion: fireball, smoke, sparks and a light flash. Frees itself.
+static func explosion(parent: Node, pos: Vector3, size := 1.0, tint := Color(1.0, 0.5, 0.15)) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var root := Node3D.new()
+	parent.add_child(root)
+	root.global_position = pos
+
+	var ball := CPUParticles3D.new()
+	ball.mesh = particle_mesh(true)
+	ball.one_shot = true
+	ball.explosiveness = 0.95
+	ball.amount = int(28 * size) + 6
+	ball.lifetime = 0.6
+	ball.local_coords = false
+	ball.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	ball.emission_sphere_radius = 0.6 * size
+	ball.spread = 180.0
+	ball.initial_velocity_min = 2.0 * size
+	ball.initial_velocity_max = 7.0 * size
+	ball.damping_min = 6.0
+	ball.damping_max = 10.0
+	ball.scale_amount_min = 1.2 * size
+	ball.scale_amount_max = 2.6 * size
+	ball.scale_amount_curve = _shrink_curve()
+	ball.color_ramp = _ramp([Color(1, 0.95, 0.7, 1), tint, Color(0.5, 0.08, 0.02, 0.6), Color(0.05, 0.05, 0.05, 0)])
+	root.add_child(ball)
+	ball.emitting = true
+
+	var sm := smoke(size * 1.2, int(14 * size) + 4)
+	sm.one_shot = true
+	sm.explosiveness = 0.8
+	sm.lifetime = 2.5
+	sm.spread = 180.0
+	sm.initial_velocity_max = 3.0 * size
+	root.add_child(sm)
+	sm.emitting = true
+
+	var sparks := CPUParticles3D.new()
+	sparks.mesh = particle_mesh(true)
+	sparks.one_shot = true
+	sparks.explosiveness = 1.0
+	sparks.amount = int(18 * size) + 4
+	sparks.lifetime = 0.9
+	sparks.local_coords = false
+	sparks.spread = 180.0
+	sparks.gravity = Vector3(0, -18, 0)
+	sparks.initial_velocity_min = 8.0 * size
+	sparks.initial_velocity_max = 16.0 * size
+	sparks.scale_amount_min = 0.08
+	sparks.scale_amount_max = 0.18
+	sparks.color_ramp = _ramp([Color(1, 0.9, 0.5, 1), Color(1, 0.4, 0.1, 0)])
+	root.add_child(sparks)
+	sparks.emitting = true
+
+	var light := OmniLight3D.new()
+	light.light_color = tint
+	light.light_energy = 6.0 * size
+	light.omni_range = 9.0 * size
+	root.add_child(light)
+	var tw := root.create_tween()
+	tw.tween_property(light, "light_energy", 0.0, 0.45)
+	tw.tween_interval(2.4)
+	tw.tween_callback(root.queue_free)
+
+
+## Small hit spark (bullets). No light: guns fire many of these per second.
+static func spark(parent: Node, pos: Vector3, normal := Vector3.UP) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var p := CPUParticles3D.new()
+	p.mesh = particle_mesh(true)
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.amount = 6
+	p.lifetime = 0.35
+	p.local_coords = false
+	p.direction = normal
+	p.spread = 60.0
+	p.gravity = Vector3(0, -15, 0)
+	p.initial_velocity_min = 4.0
+	p.initial_velocity_max = 9.0
+	p.scale_amount_min = 0.06
+	p.scale_amount_max = 0.14
+	p.color_ramp = _ramp([Color(1, 0.95, 0.6, 1), Color(1, 0.5, 0.1, 0)])
+	parent.add_child(p)
+	p.global_position = pos
+	p.emitting = true
+	var tw := p.create_tween()
+	tw.tween_interval(0.6)
+	tw.tween_callback(p.queue_free)
