@@ -52,9 +52,9 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 **Playable cast — vehicle version / driver version:**
 | Character | Vehicle from | Driver from |
 |---|---|---|
-| Sweet Tooth — Needles Kane | TM2 look (reference image) | — |
+| Sweet Tooth — Needles Kane | TM 2012 truck (`TM2012SweetToothRender`) | Head-On (`Screen_shot_2012-02-05...`) |
 | Roadkill — Marcus Kane | TM1 | Head-On |
-| Outlaw — Jamie Roberts | Head-On look (reference image) | TM2 |
+| Outlaw — Jamie Roberts | TM2 Outlaw 2 (`TM2Outlaw2Render`) | TM2 |
 | Axel | TM4 Super Axel | — |
 | Mr. Grimm | Black | Black |
 | Shadow — Raven | TM2 | Black (Raven) |
@@ -68,9 +68,12 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 | Spectre — Ken | TM2 | TM2 |
 | Twister — Amanda Watts | Head-On look (reference image) | TM2 |
 | Orbital — Alan Vame (owner's name) | TM4 | TM4 |
+| Warthog | TM2 (assumed) | Colonel Hall, Head-On (assumed — confirm) |
+| Junkyard Dog | Black | Billy Ray, Black (assumed — confirm) |
 
-**Bosses:** Manslaughter (Black), Primeval (TM3), Warhawk (Black), Minion (version not chosen yet: TM1 APC / TM4 tank); final boss Calypso:
-TM2 look and TM2-style voice/manner; his vehicle is undecided.
+**Bosses:** Manslaughter (Black), Primeval (TM3), Warhawk (Black), Minion (TM1 design); final boss Calypso:
+TM2 look (face: `InfoboxTM2Calypso`; suit from TM2, research it) and TM2-style voice/manner; his vehicle is undecided.
+Warhawk must NOT use Black's tanker-shield gimmick; Black's explosive tankers are reserved for the Calypso fight.
 **Stage order:** Los Angeles, Paris, Russia–Chernobyl (+Manslaughter), Egypt, Tokyo, London (+Primeval), Antarctica,
 Hong Kong, New York (+Warhawk), Athens, Rome, Amazonia (+Minion), final: the blimp vs Calypso.
 Sub bosses appear right after the normal fight on that stage, 1-on-1.
