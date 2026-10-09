@@ -57,7 +57,7 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 | Outlaw — Jamie Roberts | TM2 Outlaw 2 (`TM2Outlaw2Render`) | TM2 |
 | Axel | TM4 Super Axel | — |
 | Mr. Grimm | Black | Black |
-| Shadow — Raven | TM2 | Black (Raven) |
+| Shadow — Raven | TM2 (exact TM2 design: purple hearse, black roof) | Black (Raven) |
 | Mr. Slam — Simon Whittlebone | Head-On | Head-On, but alive (not a ghost) |
 | Hammerhead — Mike and Stu | TM2 | TM2 |
 | Thumper — Bruce | TM3 | TM2 |
@@ -68,9 +68,13 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 | Spectre — Ken | TM2 | TM2 |
 | Twister — Amanda Watts | Head-On look (reference image) | TM2 |
 | Orbital — Alan Vame (owner's name) | TM4 | TM4 |
-| Warthog | TM2 (assumed) | Colonel Hall, Head-On (assumed — confirm) |
-| Junkyard Dog | Black | Billy Ray, Black (assumed — confirm) |
+| Warthog | TM2 | Colonel Hall, Head-On (confirmed) |
+| Junkyard Dog | Black | Billy Ray Stillwell, Black (confirmed) |
 
+**Story facts:** Needles Kane and Marcus Kane believe they are brothers but are the same person (Head-On twist,
+revealed in the story; both stay playable). Mr. Slam's story is set before his TM2 wish and fall, so he is alive.
+**Junkyard Dog's special (owner's design): Chain Bomb** — a spiked bomb on the crane chain, thrown in a straight line,
+manually detonated for area damage (see `docs/design/01b-roster-update.md`).
 **Bosses:** Manslaughter (Black), Primeval (TM3), Warhawk (Black), Minion (TM1 design); final boss Calypso:
 TM2 look (face: `InfoboxTM2Calypso`; suit from TM2, research it) and TM2-style voice/manner; his vehicle is undecided.
 Warhawk must NOT use Black's tanker-shield gimmick; Black's explosive tankers are reserved for the Calypso fight.
