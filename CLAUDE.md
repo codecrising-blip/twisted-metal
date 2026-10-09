@@ -57,23 +57,24 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 | Outlaw — Jamie Roberts | Head-On look (reference image) | TM2 |
 | Axel | TM4 Super Axel | — |
 | Mr. Grimm | Black | Black |
-| Shadow — Mortimer | TM2 | Black (owner's pick; Black's driver is canonically Raven — confirm) |
+| Shadow — Raven | TM2 | Black (Raven) |
 | Mr. Slam — Simon Whittlebone | Head-On | Head-On, but alive (not a ghost) |
 | Hammerhead — Mike and Stu | TM2 | TM2 |
 | Thumper — Bruce | TM3 | TM2 |
 | Brimstone — Jebidiah | Black (reference image) | — |
 | Darkside — Mr. Ash | Black (reference image) | — |
 | Yellow Jacket — Charlie Kane Jr. | Black (reference image) | — |
-| Crimson Fury — Agent Sheppard | TM 2012 (PS3) | Head-On |
+| Crimson Fury — Agent Shepherd | TM 2012 (PS3) | Head-On |
 | Spectre — Ken | TM2 | TM2 |
 | Twister — Amanda Watts | Head-On look (reference image) | TM2 |
 | Orbital — Alan Vame (owner's name) | TM4 | TM4 |
 
-**Bosses:** Manslaughter (Black), Primeval (TM3), Warhawk (Black), Minion (TM1 look); final boss Calypso:
+**Bosses:** Manslaughter (Black), Primeval (TM3), Warhawk (Black), Minion (version not chosen yet: TM1 APC / TM4 tank); final boss Calypso:
 TM2 look and TM2-style voice/manner; his vehicle is undecided.
 **Stage order:** Los Angeles, Paris, Russia–Chernobyl (+Manslaughter), Egypt, Tokyo, London (+Primeval), Antarctica,
 Hong Kong, New York (+Warhawk), Athens, Rome, Amazonia (+Minion), final: the blimp vs Calypso.
 Sub bosses appear right after the normal fight on that stage, 1-on-1.
+The owner deliberately mixes the best of every game (e.g. Manslaughter and Warhawk as sub bosses) — canon roles don't bind us.
 **Modeling:** the owner only provides front views; infer side/back to match the front and research references online.
 Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/` once approved.
 
