@@ -5,6 +5,7 @@ extends CanvasLayer
 ## Runs while paused so it can handle pause / restart.
 
 signal restart_requested
+signal driver_requested(index: int)
 
 const POST_SHADER := """
 shader_type canvas_item;
@@ -41,7 +42,8 @@ Q / E  ............  change weapon
 C  ................  jump  (energy)
 F  ................  freeze (energy)
 B  ................  look back
-ESC pause   ENTER restart   F1 hide help"""
+ESC pause (pick another driver there)
+ENTER restart   F1 hide help"""
 
 
 class Reticle extends Control:
@@ -61,6 +63,7 @@ class Reticle extends Control:
 var player: Vehicle
 var camera: Camera3D
 var game_over := false
+var drivers: Array[String] = [] # names for the pause menu's driver pick (keys 1-5)
 
 var _post: ShaderMaterial
 var _player_name: Label
@@ -279,12 +282,25 @@ func _handle_input() -> void:
 	if Input.is_action_just_pressed("pause") and not game_over:
 		get_tree().paused = not get_tree().paused
 		if get_tree().paused:
-			show_message("PAUSED", "ESC to resume   ENTER to restart")
+			show_message("PAUSED", "ESC to resume   ENTER to restart\n\n" + _driver_menu())
 		else:
 			clear_message()
 	if Input.is_action_just_pressed("restart") and (game_over or get_tree().paused):
 		get_tree().paused = false
 		restart_requested.emit()
+	if game_over or get_tree().paused:
+		for i in mini(drivers.size(), 5):
+			if Input.is_action_just_pressed("pick_%d" % (i + 1)):
+				get_tree().paused = false
+				driver_requested.emit(i)
+				return
+
+
+func _driver_menu() -> String:
+	var parts: PackedStringArray = []
+	for i in mini(drivers.size(), 5):
+		parts.append("%d  %s" % [i + 1, drivers[i].to_upper()])
+	return "PICK A DRIVER:   " + "     ".join(parts)
 
 
 func _update_target() -> void:

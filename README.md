@@ -12,7 +12,8 @@ stages are built in code.
 3. Press **F5** (or the play button).
 
 Stage 1 is TM2's **Los Angeles: Quake Zone Rumble**. You drive Sweet Tooth against Outlaw, Junkyard Dog,
-Mr. Grimm and Spectre. Last car running wins. You have **3 lives**: a wreck costs one and you are back in
+Mr. Grimm and Spectre. To try another driver, press **Esc** and then **1-5** (the stage restarts with
+that car, and Sweet Tooth joins the AI). Last car running wins. You have **3 lives**: a wreck costs one and you are back in
 the fight after 6 seconds; lose the last one and it's game over.
 
 Things to find: the ramps onto the tunnel roof (weapons and a teleporter to the caged super health),
@@ -31,6 +32,7 @@ through, and the HOLLYWOOD sign (shoot every letter from the tunnel roof).
 | Jump / Freeze (energy) | C / F |
 | Look back | B |
 | Pause / Restart / Help | Esc / Enter / F1 |
+| Pick a driver (while paused) | 1 Sweet Tooth, 2 Outlaw, 3 Junkyard Dog, 4 Mr. Grimm, 5 Spectre |
 
 Gamepads work too (RT gas, LT brake, A guns, X weapon).
 

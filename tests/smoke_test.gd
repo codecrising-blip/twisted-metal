@@ -313,6 +313,15 @@ func _run() -> void:
 	await _frames(3)
 	_check(main.state == "lost", "losing the last life is game over")
 
+	# Driver pick (pause menu): play as Outlaw, and Sweet Tooth joins the AI.
+	main.queue_free()
+	await _frames(3)
+	var main_script: GDScript = load("res://scripts/main.gd")
+	main_script.player_car = "outlaw"
+	main = await _new_game()
+	_check(main.player.car_id == "outlaw" and main.enemies.any(func(e: Vehicle): return e.car_id == "sweet_tooth"), "pick a driver: play Outlaw, Sweet Tooth joins the AI")
+	main_script.player_car = "sweet_tooth"
+
 	print("")
 	if _failures.is_empty():
 		print("ALL TESTS PASSED")

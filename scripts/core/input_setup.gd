@@ -20,6 +20,12 @@ const KEYS := {
 	"pause": [KEY_ESCAPE],
 	"restart": [KEY_ENTER],
 	"toggle_help": [KEY_F1],
+	# Pause menu: pick a driver (restarts the stage).
+	"pick_1": [KEY_1],
+	"pick_2": [KEY_2],
+	"pick_3": [KEY_3],
+	"pick_4": [KEY_4],
+	"pick_5": [KEY_5],
 }
 
 const MOUSE := {

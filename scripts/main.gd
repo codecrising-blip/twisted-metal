@@ -4,12 +4,14 @@ extends Node3D
 ## in the same fight; the last one lost is game over. Stage 1 = TM2 Los Angeles with 4 enemies.
 ## Run with `-- junkyard` after the project path to play the old Junkyard instead.
 
-const PLAYER_CAR := "sweet_tooth"
-const ENEMY_CARS := ["outlaw", "junkyard_dog", "mr_grimm", "spectre"]
+## Drivers in this test build. You play one (pick it in the pause menu), the AI drives the rest.
+const DRIVERS := ["sweet_tooth", "outlaw", "junkyard_dog", "mr_grimm", "spectre"]
 const START_LIVES := 3
 const RESPAWN_DELAY := 6.0
 const FALL_LIMIT := -25.0 # below this a car fell out of the world: put it back
 const MUSIC_DIR := "res://audio/music"
+
+static var player_car := "sweet_tooth" # survives scene reloads
 
 var state := "playing" # playing | won | lost
 var lives := START_LIVES # counts the life in use; spare lives = lives - 1
@@ -31,11 +33,12 @@ func _ready() -> void:
 	arena.build()
 	arena.easter_egg.connect(_on_easter_egg)
 
-	player = _spawn(PLAYER_CAR, arena.spawn_points[0], true)
+	player = _spawn(player_car, arena.spawn_points[0], true)
 	player.controller = PlayerController.new()
 	player.protect()
-	for i in ENEMY_CARS.size():
-		var e := _spawn(ENEMY_CARS[i], arena.spawn_points[(i + 1) % arena.spawn_points.size()], false)
+	var enemy_cars: Array = DRIVERS.filter(func(id: String): return id != player_car)
+	for i in enemy_cars.size():
+		var e := _spawn(enemy_cars[i], arena.spawn_points[(i + 1) % arena.spawn_points.size()], false)
 		var brain := AIDriver.new()
 		brain.arena = arena
 		e.controller = brain
@@ -54,10 +57,12 @@ func _ready() -> void:
 	add_child(hud)
 	hud.bind(player, camera)
 	hud.restart_requested.connect(_restart)
+	hud.driver_requested.connect(_pick_driver)
+	hud.drivers.assign(DRIVERS.map(func(id: String): return String(Roster.get_car(id).get("name", id))))
 	hud.set_enemies_left(enemies.size())
 	hud.set_lives(lives - 1)
 	var stage_line: String = arena.title + ("  -  " + arena.subtitle if arena.subtitle != "" else "")
-	hud.show_message(arena.title, "%s\n%s  -  %s\n%s" % [arena.subtitle, player.display_name, player.stats.get("driver", ""), player.stats.get("tagline", "")], 4.0)
+	hud.show_message(arena.title, "%s\n%s  -  %s\n%s\n(ESC: pick another driver)" % [arena.subtitle, player.display_name, player.stats.get("driver", ""), player.stats.get("tagline", "")], 4.0)
 	print("Stage: ", stage_line)
 
 	_start_music()
@@ -116,7 +121,7 @@ func _respawn_player() -> void:
 	_respawn_timer = -1.0
 	hud.set_countdown(-1)
 	var wreck := player
-	player = _spawn(PLAYER_CAR, _safest_spawn(), true)
+	player = _spawn(player_car, _safest_spawn(), true)
 	player.controller = PlayerController.new()
 	player.protect()
 	camera.follow(player)
@@ -198,3 +203,8 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 
 func _restart() -> void:
 	get_tree().reload_current_scene()
+
+
+func _pick_driver(index: int) -> void:
+	player_car = DRIVERS[index]
+	_restart()

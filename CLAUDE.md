@@ -153,6 +153,7 @@ docs/GDD.md                 game design document (living); docs/design/ = design
 homing 12, fire 14 + Burning, power 45, freeze 2 s + ice break + Grit, energy 2.5/s with 1.5 s pause,
 weight-based rams), 30% health pickups, wall deflection, 3 lives with 6 s respawn and spawn protection.
 Specials: Napalm Cone, Omni Taser (owner's Crazy 8 version), Chain Bomb, Reaper Skull (94), Ghost Missile.
+Test aid: pause menu keys 1-5 pick the player's driver (`main.gd` static `player_car`), the rest are AI.
 Not built yet from the design: Sweet Bot, the other energy moves (shield, mines, invisibility, rear moves),
 sub-boss arrivals, story, character select, detailed car models, sounds.
 
