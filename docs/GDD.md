@@ -8,12 +8,15 @@ A new vehicular-combat game in the Twisted Metal tradition that takes the best o
 - **Music** in the spirit of *Twisted Metal 4*, with tracks chosen by the owner.
 - **Story telling, direction and gameplay** of *Twisted Metal: Black*: a grim, adult tone, a personal
   story for every driver, heavy weapons and energy moves.
-- **Look:** Black's darkness everywhere: night, fog, fire as the main light, desaturated colour, film grain.
+- **Look (owner, session 3):** bright, readable TM2-style lighting (the Black darkness idea is dropped).
+  Stages are big like the main series. Full design bible: `docs/design/` (revisions in `05-owner-revisions-1.md`).
 
 ## Core loop
-Pick a driver, then enter an arena of 3–6 cars, all against all. Collect weapons, use your special and
-energy moves, and be the last car running. In story mode, each won arena moves the driver's story forward,
-up to a boss and an ending.
+Pick a driver, then enter an arena, all against all (4 enemies in stage 1, up to 9 in Rome). Collect weapons,
+use your special and energy moves, and be the last car running. In story mode, each won arena moves the
+driver's story forward, up to a sub boss every third stage and Calypso at the end.
+**Lives:** 3 for the whole tournament. A wreck costs one; you respawn after 6 s in the same fight.
+Saving only after a sub boss.
 
 ## Controls (prototype)
 | Action | Keyboard / mouse | Gamepad |
@@ -33,34 +36,35 @@ up to a boss and an ending.
 ## Weapons (balance lives in `scripts/weapons/weapon_data.gd`)
 | Weapon | Role |
 |---|---|
-| Machine guns | Unlimited, light damage, slight aim assist |
-| Homing missile | Low damage, strong tracking |
-| Fire missile | Fast, medium damage, mild tracking |
-| Power missile | Big damage, flies straight |
-| Freeze (energy) | Freezes the target for 2.5 s |
-| Jump (energy) | Hop over obstacles and shots |
-| Specials | One per driver, recharges over time |
+| Machine guns | Unlimited, 0.55 a bullet (6.9 a second), slight aim assist |
+| Homing missile | 12, strong tracking, 3 per pickup |
+| Fire missile | 14 + Burning (3/s for 4 s), mild tracking, 3 per pickup |
+| Power missile | 45, flies straight, 1 per pickup |
+| Health pickup | 30% of max health (Mega health in the LA cage: 60%, proposed) |
+| Freeze (energy 50) | Frozen 2 s; a single hit of 15+ shatters the ice; 3 s of Grit after |
+| Jump (energy 25) | Hop over obstacles and shots |
+| Specials | One per driver, charges recharge over time |
 
-Specials so far: **Sweet Tooth: Laughing Ghost** (slow, flaming clown skull, heavy homing hit).
-Outlaw: Riot Slug. Junkyard Dog: Tow Hook.
+Specials built: **Sweet Tooth: Napalm Cone** (lobbed where the target will be, fire pool),
+**Outlaw: Omni Taser** (Crazy 8-style: fired by hand, mash to strengthen, breaks at range),
+**Junkyard Dog: Chain Bomb** (straight throw on the chain, press again to detonate, hooks cars),
+**Mr. Grimm: Reaper Skull** (TM2 flaming skull, 94: three kill a medium car),
+**Spectre: Ghost Missile** (through walls). Health = 200 + 16 x Armor (216-360).
 
-## Drivers (planned roster)
-Built so far: Sweet Tooth (player), Outlaw, Junkyard Dog.
-Next: Axel, Mr. Grimm, Thumper, Spectre, Shadow, Roadkill, Hammerhead, Mr. Slam, Minion (boss),
-Dark Tooth (boss). The owner decides the order and each driver's story.
+## Drivers (roster of 18, see CLAUDE.md)
+Built so far: Sweet Tooth (player), Outlaw, Junkyard Dog, Mr. Grimm, Spectre (low-poly placeholders; the
+detailed rebuild from the reference images is still to do). Bosses: Manslaughter, Primeval, Warhawk, Minion,
+Calypso.
 
 ## Stages (planned)
 | Stage | Inspiration | Status |
 |---|---|---|
-| Junkyard | Black / TM2 | **Prototype done**: crusher with roof ramp, jump mound, crane, bus wreck, car-stack lanes |
-| Amazonia 3000 B.C. | TM2 | — |
-| The Carnival | — | — |
-| Los Angeles | TM2 | — |
-| Paris | TM2 | — |
-| Others from TM2 / Head-On | — | owner's choice |
+| Los Angeles: Quake Zone Rumble | TM2 | **Test stage built**: ring road, twin glass tunnels with roof + teleporter, caged super health on an overpass deck, fire pit crater, burnt building, 3 road humps, hot dog stands, power tower, HOLLYWOOD sign easter egg |
+| Junkyard | Black | Prototype, now free play |
+| Paris, Chernobyl, Egypt, Tokyo, London, Antarctica, Hong Kong, New York, Athens, Rome, Amazonia, the blimp | TM2 / Head-On / new | Designed in `docs/design/02-stages.md`, not built |
 
-Every stage needs: lanes, at least one vertical route (ramp/roof), a jump, health on risky high ground,
-weapons in the open, and fire, neon or street lights as the main light sources.
+Every stage needs: wide lanes, at least one vertical route (ramp/roof), a jump, health on risky high ground,
+weapons in the open, breakable props that hide weapons, and walls that deflect cars instead of stopping them.
 
 ## Story structure (Black tone)
 - **Calypso** runs the tournament and grants the winner one wish, always with a cruel twist.
@@ -69,8 +73,9 @@ weapons in the open, and fire, neon or street lights as the main light sources.
 
 ## Milestones
 1. ~~Playable prototype: Sweet Tooth in the Junkyard vs 2 AI~~ **done**
-2. Feel pass from the owner's play-test, plus sound effects and music hookup
-3. Character select and 4–6 drivers
-4. Second stage
-5. Story mode skeleton (Calypso, one full driver story)
-6. Vertical slice: polished, shareable build
+2. ~~Owner's play-test fixes: balance, wall slide, lives, TM2 Los Angeles test stage, 4 enemies~~ **done**
+3. Detailed car models from the reference images; sound effects and music hookup
+4. Character select and more drivers
+5. Second stage (Paris)
+6. Story mode skeleton (Calypso, one full driver story), sub-boss arrivals
+7. Vertical slice: polished, shareable build

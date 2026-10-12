@@ -1,7 +1,7 @@
 class_name Hud
 extends CanvasLayer
 ## Everything on screen: bars, weapons, target lock, kill feed, messages, help,
-## plus the gritty full-screen filter (grain, vignette, desaturation, damage flash).
+## lives, respawn countdown, plus a light full-screen filter (faint grain and vignette, damage flash).
 ## Runs while paused so it can handle pause / restart.
 
 signal restart_requested
@@ -9,9 +9,9 @@ signal restart_requested
 const POST_SHADER := """
 shader_type canvas_item;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
-uniform float grain = 0.07;
-uniform float vignette = 0.6;
-uniform float desaturate = 0.25;
+uniform float grain = 0.02;
+uniform float vignette = 0.25;
+uniform float desaturate = 0.0;
 uniform float damage = 0.0;
 
 float hash(vec2 p) {
@@ -36,6 +36,7 @@ SPACE  ............  handbrake (power slide)
 SHIFT  ............  turbo
 J or L-MOUSE  .....  machine guns
 K or R-MOUSE  .....  fire selected weapon
+                     (special: press again to mash / detonate)
 Q / E  ............  change weapon
 C  ................  jump  (energy)
 F  ................  freeze (energy)
@@ -77,6 +78,10 @@ var _title: Label
 var _sub: Label
 var _feed: VBoxContainer
 var _enemies: Label
+var _lives: Label
+var _countdown: Label
+var _notice: Label
+var _notice_tween: Tween
 var _help: Label
 var _message_tween: Tween
 var _damage_flash := 0.0
@@ -98,6 +103,7 @@ func bind(p: Vehicle, cam: Camera3D) -> void:
 	_driver.text = String(player.stats.get("driver", ""))
 	player.weapons_changed.connect(func(_v): _refresh_weapons())
 	player.damaged.connect(_on_player_damaged)
+	player.notice.connect(func(_v, text): show_notice(text))
 	_refresh_weapons()
 
 
@@ -133,6 +139,8 @@ func _build() -> void:
 	status.add_child(_player_name)
 	_driver = _label("", 16, Color(0.6, 0.58, 0.55))
 	status.add_child(_driver)
+	_lives = _label("", 22, Color(1.0, 0.85, 0.35), true)
+	status.add_child(_lives)
 	_health = _bar(status, "HEALTH", Color(0.85, 0.1, 0.08), 320)
 	_turbo = _bar(status, "TURBO", Color(1.0, 0.55, 0.1), 220)
 	_energy = _bar(status, "ENERGY", Color(0.25, 0.55, 1.0), 220)
@@ -183,6 +191,15 @@ func _build() -> void:
 	_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	center.add_child(_sub)
+	_countdown = _label("", 120, Color(1.0, 0.85, 0.35), true)
+	_countdown.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	center.add_child(_countdown)
+
+	# Lower center: short notices (taser link lost, teleported...).
+	_notice = _label("", 26, Color(0.75, 0.88, 1.0), true)
+	_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pin(_notice, 0.5, 1.0, Rect2(-400, -150, 800, 40))
+	root.add_child(_notice)
 
 
 ## Anchor a control to a screen point (0..1) with an offset rect in pixels from that point.
@@ -316,7 +333,7 @@ func _refresh_weapons() -> void:
 func _on_player_damaged(_v: Vehicle, amount: float, _attacker: Vehicle) -> void:
 	if amount <= 0.0:
 		return
-	_damage_flash = maxf(_damage_flash, clampf(amount / 25.0, 0.25, 1.0))
+	_damage_flash = maxf(_damage_flash, clampf(amount / 20.0, 0.08, 1.0))
 	_post.set_shader_parameter("damage", _damage_flash)
 
 
@@ -324,6 +341,26 @@ func _on_player_damaged(_v: Vehicle, amount: float, _attacker: Vehicle) -> void:
 
 func set_enemies_left(n: int) -> void:
 	_enemies.text = "ENEMIES LEFT: %d" % n
+
+
+## Spare lives (owner: 3 lives for the whole tournament, shown as 2, 1, 0 spare).
+func set_lives(spare: int) -> void:
+	_lives.text = "SPARE LIVES  %d" % spare
+
+
+## Big respawn countdown in the middle; -1 hides it.
+func set_countdown(seconds: int) -> void:
+	_countdown.text = str(seconds) if seconds >= 0 else ""
+
+
+func show_notice(text: String) -> void:
+	if _notice_tween:
+		_notice_tween.kill()
+	_notice.text = text
+	_notice.modulate.a = 1.0
+	_notice_tween = create_tween()
+	_notice_tween.tween_interval(1.4)
+	_notice_tween.tween_property(_notice, "modulate:a", 0.0, 0.6)
 
 
 func add_feed(text: String) -> void:

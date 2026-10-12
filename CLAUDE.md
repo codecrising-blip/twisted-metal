@@ -27,7 +27,7 @@ curl -sSL -o g.zip https://github.com/godotengine/godot/releases/download/4.3-st
 G=/tmp/godot/Godot_v4.3-stable_linux.x86_64
 cd <repo> && $G --headless --path . --import            # parse all scripts
 $G --headless --path . -s tests/smoke_test.gd           # gameplay tests, must print ALL TESTS PASSED
-# Screenshots (shots: gameplay | hero | enemies | overview):
+# Screenshots (shots: gameplay | hero | enemies | overview | roof | tunnel | cage | center | pit):
 xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --path . -s tests/screenshot.gd -- hero docs/screenshots/hero.png
 ```
 - Always run the smoke test before committing. Look at screenshots after visual changes.
@@ -37,16 +37,15 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
   owner sees. Forward+-only extras (volumetric fog, SSAO, SSR) switch on only if run with Forward+.
 - Screenshots render slowly, so physics runs many steps per frame: in `gameplay` shots the cars have
   driven further than in real time.
+- The headless smoke test takes about 20 s (it drives, fights and respawns in real time).
 
-## Owner play-test feedback (session 1) — to do next
-1. **Too easy:** health is too low and damage too high, so fights end too fast. Raise health, lower damage.
-2. **Getting stuck:** too many obstacles; hitting a wall stops the car and only reversing helps.
-   Wanted: Twisted Metal-style wall hits that deflect/slide the car left or right so it keeps moving.
-3. **Stage:** replace the cluttered Junkyard as the first stage with an arena like Twisted Metal 1's first
-   stage as the owner describes it: a **circular ring**, **breakable crates that hide weapons**, a
-   **ramp/jump in the middle** to reach health or a superior weapon, and **no annoying obstacles**.
-4. **Car models:** Sweet Tooth's model is too crude. Rebuild cars with much more detail, using the
-   owner's reference images in `docs/reference/` (see that folder's README).
+## Owner play-test feedback (session 1)
+1. ~~Too easy (health too low, damage too high)~~ — done in session 3 (chapter 1 numbers).
+2. ~~Getting stuck on walls~~ — done: TM wall rule (deflect/slide, never stop) + stuck helper.
+3. ~~Cluttered first stage~~ — replaced by the owner's later choice: TM2 Los Angeles, clean and big.
+   (The TM1 ring idea is dropped; breakable props that hide weapons live on in LA.)
+4. **Car models:** still to do. Sweet Tooth's model is too crude. Rebuild cars with much more detail, using
+   the owner's reference images in `docs/reference/` (see that folder's README).
 
 ## Story mode plan (owner's decisions, session 2)
 **Playable cast — vehicle version / driver version:**
@@ -114,17 +113,21 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 ## Code map
 ```
 scenes/main.tscn            single scene; everything is spawned from scripts/main.gd
-scripts/main.gd             match flow (spawn, win/lose, restart), lighting/environment, music loader
+scripts/main.gd             match flow (spawn, lives + 6 s respawn, win/lose, restart, fall-out rescue), music
 scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (primitive + material helpers)
-scripts/vehicles/           Vehicle (driving/combat/damage), Roster (stats), VehicleModels (car builders),
-                            PlayerController, AIDriver
-scripts/weapons/            WeaponData (all balance numbers), Projectile, Pickup
-scripts/arena/junkyard.gd   the Junkyard stage + spawn/pickup points
-scripts/fx/                 FxKit (fire/smoke/explosions), FlickerLight, Blinker
-scripts/ui/hud.gd           HUD + full-screen grain/vignette shader
-tests/                      smoke_test.gd (headless), screenshot.gd
+scripts/vehicles/           Vehicle (driving, wall rule, rams, states, combat), Roster (stats from SPD/ARM/HND/SPC),
+                            VehicleModels (car builders), PlayerController, AIDriver (specials, ramps, max 2 on player)
+scripts/weapons/            WeaponData (all balance numbers), Projectile, Pickup, Specials (fires specials),
+                            TaserLink, ChainBomb, FirePool
+scripts/arena/los_angeles.gd  stage 1 / test stage (TM2 Quake Zone): heightmap ground, roads, tunnels, cage...
+scripts/arena/junkyard.gd   the old prototype stage, now free play (`-- junkyard`)
+scripts/arena/breakable.gd  props that shatter/topple (stands, glass, palms, letters, tower legs)
+scripts/arena/teleporter.gd teleport pad
+scripts/fx/                 FxKit (fire/smoke/explosions), FlickerLight, Blinker, ZigLine (bolts, chains, cables)
+scripts/ui/hud.gd           HUD (bars, lives, respawn countdown, notices) + light grain/vignette shader
+tests/                      smoke_test.gd (headless, ~57 checks), screenshot.gd
 audio/music/                drop .ogg/.mp3 here; first file alphabetically plays in a loop
-docs/GDD.md                 game design document (living)
+docs/GDD.md                 game design document (living); docs/design/ = design bible (Arabic)
 ```
 
 ## Conventions
@@ -132,22 +135,34 @@ docs/GDD.md                 game design document (living)
 - Physics layers: 1 world, 2 vehicles, 3 projectiles (unused for bodies), 4 pickups.
 - Controllers fill `Vehicle.in_*` fields; one-shot actions use `want_*` flags. No controller = car coasts.
 - New car: stats in `Roster.CARS`, builder in `VehicleModels.build()`, special weapon in `WeaponData.DEFS`.
-- New stage: a script like `JunkyardArena` that exposes `build()`, `spawn_points`, `weapon_points`, `health_points`.
-- Models store metadata on the model node: `wheels`, `steer`, `wheel_radius`, `guns`, `launcher`, `top`.
+- New stage: a script like `LosAngelesArena` that exposes `build()` (adds its own WorldEnvironment and sun),
+  `title`, `subtitle`, `spawn_points` (0 = player), `respawn_points`, `weapon_points`, `health_points`,
+  `mega_points`, `ramps` ({foot, top} for the AI), `center`, `wander_half`, and `signal easter_egg(title, text)`.
+- Anything a projectile should damage has `projectile_hit(damage, shooter)`; anything a car can smash has
+  `vehicle_contact(vehicle, velocity_before) -> bool` (true = the car went through). See `Breakable`.
+- Specials with their own behaviour are nodes in the world registered with `Vehicle.set_live_special()`;
+  fire presses while one is live go to its `fire_again()` (taser mash, bomb detonation).
+- Models store metadata on the model node: `wheels`, `steer`, `wheel_radius`, `guns`, `launcher`, `top`, `lean`.
 - Keep balance numbers in `WeaponData` / `Roster`, not scattered in logic.
 
 ## Status
 **Milestone 1 — playable prototype (done):** Sweet Tooth vs Outlaw + Junkyard Dog (AI) in the Junkyard.
-Driving with handbrake slides and turbo, machine guns, homing/fire/power missiles, Laughing Ghost special,
-energy jump + freeze, health and weapon pickups, ramming, wrecks, win/lose/restart, pause, HUD, grain filter.
+
+**Milestone 2 — owner's fixes + LA test stage (done, session 3):** TM2 Los Angeles (big, bright, clean) with
+4 enemies (Outlaw, Junkyard Dog, Mr. Grimm, Spectre). Chapter 1 balance (health 200 + 16 x ARM, guns 0.55,
+homing 12, fire 14 + Burning, power 45, freeze 2 s + ice break + Grit, energy 2.5/s with 1.5 s pause,
+weight-based rams), 30% health pickups, wall deflection, 3 lives with 6 s respawn and spawn protection.
+Specials: Napalm Cone, Omni Taser (owner's Crazy 8 version), Chain Bomb, Reaper Skull (94), Ghost Missile.
+Not built yet from the design: Sweet Bot, the other energy moves (shield, mines, invisibility, rear moves),
+sub-boss arrivals, story, character select, detailed car models, sounds.
 
 **Next candidates (agree with owner first):**
-1. Owner play-test pass: driving feel, camera, difficulty, darkness level.
-2. Sound effects (engine, guns, explosions) — none yet. Music needs owner's tracks in `audio/music/`.
-3. More Black-style energy moves (shield, mines, napalm) and per-character second specials.
-4. Character select + more cars (Axel, Mr. Grimm, Thumper, Spectre, ...).
-5. Story mode skeleton: Calypso intro, per-character prologue/ending in Black's tone.
-6. Next stage (owner's pick from the list above).
+1. Owner play-test of the LA stage: driving feel, wall slide, damage/health, AI, the new specials.
+2. Detailed car models from `docs/reference/` (Sweet Tooth first), new Laughing Ghost look.
+3. Remaining energy moves and Sweet Bot; napalm pickup (needed for the Tokyo puzzle).
+4. Sound effects (engine, guns, explosions). Music needs the owner's tracks in `audio/music/`.
+5. Story skeleton, sub-boss arrival sequence (replays, silence, break-in), save after sub bosses.
+6. Next stage: Paris.
 
 ## Session log
 - **Session 1:** Created the project from an empty repo on `main`. Built milestone 1, the headless test
@@ -156,3 +171,9 @@ energy jump + freeze, health and weapon pickups, ramming, wrecks, win/lose/resta
   to read, HUD clipped on the right, Sweet Tooth's head blocking the chase camera (camera height per car).
   Owner's PC: game hung on a black screen and the editor crashed on open with Forward+; switched the
   project to the Compatibility renderer.
+- **Session 2:** Design bible chapters 1–3 (characters, stages, sub bosses) written and reviewed in Arabic.
+- **Session 3:** Chapter 4 (Calypso) saved. Owner's revisions recorded (`docs/design/05-owner-revisions-1.md`).
+  Built milestone 2 (see Status). Bugs met: a big "ground beyond the walls" plane cut through the crater
+  (now a frame around the map); decals use `mesh_height()` so they sit on the visible 2 m ground mesh;
+  chain bomb flew over car roofs (now thrown 1 m off the ground). Gotcha: GDScript can't infer types from
+  untyped `for x in [..]` loop variables (`var y := x * 2` fails) — type the loop variable.

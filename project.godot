@@ -5,8 +5,8 @@ config_version=5
 
 [application]
 
-config/name="Twisted Metal - Junkyard Prototype"
-config/description="Vehicular combat prototype: Sweet Tooth in the Junkyard."
+config/name="Twisted Metal"
+config/description="Vehicular combat: TM2 Los Angeles test stage, Sweet Tooth against four AI cars."
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.3", "GL Compatibility")
 config/icon="res://icon.svg"

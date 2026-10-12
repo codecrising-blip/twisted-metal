@@ -3,12 +3,22 @@ extends Node3D
 ## The Junkyard stage, built in code: fenced yard, crusher building with a roof ramp,
 ## crushed-car stacks forming lanes, a jump mound in the middle, a crane, a wrecked bus,
 ## burning barrels and sodium street lights. Fixed seed, so the layout is the same every run.
+## The first prototype stage; now a free-play map (run with `-- junkyard`).
+
+signal easter_egg(title: String, text: String)
 
 const HALF := 80.0 # yard is 160 x 160 m
 
+var title := "JUNKYARD"
+var subtitle := ""
 var spawn_points: Array[Transform3D] = []
+var respawn_points: Array[Transform3D] = []
 var weapon_points: Array[Vector3] = []
 var health_points: Array[Vector3] = []
+var mega_points: Array[Vector3] = []
+var ramps: Array[Dictionary] = []
+var center := Vector3.ZERO
+var wander_half := 60.0
 
 var _rng := RandomNumberGenerator.new()
 var _m := {} # materials
@@ -17,6 +27,7 @@ var _m := {} # materials
 func build() -> void:
 	_rng.seed = 1999
 	_materials()
+	_environment()
 	_ground()
 	_fence()
 	_outer_piles()
@@ -52,6 +63,47 @@ func _materials() -> void:
 	_m.cars = []
 	for c in car_colors:
 		_m.cars.append(MeshKit.grime(c, Color(0.18, 0.08, 0.04), 0.12, 0.85, 0.3, 0.4))
+
+
+## Night in the yard (the old Black-style look of the prototype).
+func _environment() -> void:
+	var env := Environment.new()
+	env.background_mode = Environment.BG_SKY
+	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color(0.025, 0.03, 0.05)
+	sky_mat.sky_horizon_color = Color(0.2, 0.12, 0.09)
+	sky_mat.ground_horizon_color = Color(0.12, 0.08, 0.07)
+	sky_mat.ground_bottom_color = Color(0.01, 0.01, 0.01)
+	sky_mat.sun_angle_max = 0.0
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	env.ambient_light_color = Color(0.26, 0.24, 0.27)
+	env.ambient_light_energy = 1.0
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.tonemap_exposure = 1.25
+	env.glow_enabled = true
+	env.glow_intensity = 0.7
+	env.glow_bloom = 0.08
+	env.glow_hdr_threshold = 1.2
+	env.fog_enabled = true
+	env.fog_light_color = Color(0.11, 0.1, 0.11)
+	env.fog_density = 0.008
+	env.fog_sky_affect = 0.5
+	env.adjustment_enabled = true
+	env.adjustment_saturation = 0.8
+	env.adjustment_contrast = 1.12
+	var we := WorldEnvironment.new()
+	we.environment = env
+	add_child(we)
+	var moon := DirectionalLight3D.new()
+	moon.light_color = Color(0.55, 0.62, 0.85)
+	moon.light_energy = 0.85
+	moon.shadow_enabled = true
+	moon.directional_shadow_max_distance = 120.0
+	moon.rotation_degrees = Vector3(-48, -35, 0)
+	add_child(moon)
 
 
 # ---------------------------------------------------------------- terrain & walls
@@ -416,7 +468,9 @@ func _points() -> void:
 		Transform3D(Basis(Vector3.UP, PI), Vector3(0, 0.05, -62)),
 		Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(62, 0.05, 0)),
 		Transform3D(Basis(Vector3.UP, -PI * 0.5), Vector3(-62, 0.05, -2)),
+		Transform3D(Basis.IDENTITY, Vector3(8, 0.05, 30)),
 	]
+	respawn_points = spawn_points.duplicate()
 	weapon_points = [
 		Vector3(-30, 0, 0), Vector3(30, 0, 0), Vector3(0, 0, 30), Vector3(0, 0, -30),
 		Vector3(-55, 0, 40), Vector3(58, 0, -50), Vector3(-60, 0, -22), Vector3(25, 0, 55),
