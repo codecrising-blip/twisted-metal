@@ -16,7 +16,7 @@ The owner designs and play-tests; Claude writes the code, models and levels.
 | Stages and characters | Twisted Metal 2 and Head-On (Junkyard, Amazonia 3000 B.C., Carnival, Los Angeles, Paris, ...) |
 | Music | Twisted Metal 4 style — **owner supplies the tracks** |
 | Story telling, tone, gameplay feel | Twisted Metal: Black (dark, grim, character stories) |
-| Visual style | **Black-style darkness** for cars and stages: night, fire light, fog, film grain |
+| Visual style | **TM2-style bright, readable lighting** (owner, session 3: "forget the Black darkness"). Stages are **big like the main series**, with space and texture. |
 | Art technique | All models and levels are built **procedurally in GDScript** from primitives (low-poly PS2-era look). No imported art yet. |
 
 ## Run, test, look
@@ -54,7 +54,7 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 |---|---|---|
 | Sweet Tooth — Needles Kane | TM 2012 truck (`TM2012SweetToothRender`) | Head-On (`Screen_shot_2012-02-05...`) |
 | Roadkill — Marcus Kane | TM1 | Head-On |
-| Outlaw — Jamie Roberts | TM2 Outlaw 2 (`TM2Outlaw2Render`) | TM2 |
+| Outlaw — Jamie Roberts (a woman) | TM2 Outlaw 2 (`TM2Outlaw2Render`) | TM2 (`TM2JamieRobertsPSX`) |
 | Axel | TM4 Super Axel | — |
 | Mr. Grimm | Black | Black |
 | Shadow — Raven | TM2 (exact TM2 design: purple hearse, black roof) | Black (Raven) |
@@ -84,6 +84,32 @@ Sub bosses appear right after the normal fight on that stage, 1-on-1.
 The owner deliberately mixes the best of every game (e.g. Manslaughter and Warhawk as sub bosses) — canon roles don't bind us.
 **Modeling:** the owner only provides front views; infer side/back to match the front and research references online.
 Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/` once approved.
+
+## Owner decisions (session 3) — full text in `docs/design/05-owner-revisions-1.md` (overrides chapters 1–4)
+- **Look:** TM2 lighting, not Black darkness. Big stages. **Test stage = TM2 Los Angeles (Quake Zone)**, also stage 1.
+- **Health pickup = 30% of max health** for every car (not a flat +50). Mega health: 60% proposed, unconfirmed.
+- **Lives:** 3 for the whole tournament (spare-life counter 2 → 0). Any loss costs a life; respawn after **6 s** in
+  the same fight. Save only after beating a sub boss; loading restores 3 lives. (Open: no save between Minion and
+  Calypso, otherwise reload-before-Calypso dodges the penalty.)
+- **Enemies per stage:** 4 in LA rising to 9 in Rome; each sub-boss stage has one fewer than the stage before.
+  Proposed: LA 4, Paris 5, Chernobyl 4, Egypt 6, Tokyo 6, London 5, Antarctica 7, Hong Kong 7, New York 6, Athens 8,
+  Rome 9, Amazonia 8.
+- **No end-of-stage climax events** for now. Easter eggs stay. Contract pages later.
+- **Sub-boss arrival:** 3 fast replays of the last kill, 4 s silence, camera to a known spot, the boss breaks in.
+  Warhawk: black "loading" screen while the player is moved to his New York zone (the crown), city burns, bridges
+  destroyed, blinding searchlight, rights read, 3 s silence, "Time's up", missile.
+- **Specials:** Sweet Tooth unchanged from ch1 (Laughing Ghost gets a new look, same job). Outlaw = Crazy 8-style
+  taser fired manually, grows with link time and fire-button mashing, breaks when the target drives too far.
+  Mr. Grimm = TM2 flaming skull, 3 hits kill a medium car. Shadow = Black's fast wall-climbing ghost, detonate by
+  pressing fire again. Mr. Slam bites super-heavy cars (big damage, no throw).
+- **Primeval:** pure chase fight in the London arena: turbo-rams constantly, spike projectile (power-missile damage,
+  loose homing, wobbles steering), then spike grab 2 s into a wall, heals 15% per spike hit. Never seeks health.
+- **Warhawk:** shield broken by destroying 5 cores on 5 bridge-less platforms around the crown, each guarded by
+  troops (MG, flashbang, RPG, spike net) and 2 flamethrower machines; each core −20% shield. No tankers.
+- **Tokyo:** follow the fan's cable to a high sealed cabinet behind a yellow electric net; only napalm at the peak of
+  a jump reaches it. **London:** the train kills (70 per hit) unless you escape to a ledge and turbo back.
+  **Antarctica:** no special weapon, no signs at the cracks.
+- The `.cht` file the owner sent is GameShark cheat codes, not game data. It confirms TM2 had 9 enemy slots and lives.
 
 ## Code map
 ```
