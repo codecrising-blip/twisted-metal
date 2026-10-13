@@ -57,10 +57,11 @@ const DEFS := {
 		"speed": 45.0, "chain": 25.0, "radius": 7.0, "damage": 30.0, "edge_damage": 15.0, "stuck_bonus": 10.0,
 		"fuse": 3.0, "cooldown": 1.0, "charges": 2, "recharge": 15.0,
 	},
-	# Mr. Grimm: TM2 flaming skull. Owner: three hits kill a medium car (280).
+	# Mr. Grimm: TM2 flaming skull. Owner (session 4): 65, the hardest single special hit but no
+	# instant kills (a medium car, 280, takes five).
 	"reaper_skull": {
 		"label": "Reaper Skull", "kind": "skull", "color": Color(1.0, 0.55, 0.15), "special": true,
-		"speed": 85.0, "damage": 94.0, "homing": 0.6, "life": 2.5, "cooldown": 3.0, "charges": 2, "recharge": 20.0,
+		"speed": 85.0, "damage": 65.0, "homing": 0.6, "life": 2.5, "cooldown": 3.0, "charges": 2, "recharge": 20.0,
 	},
 	# Spectre: ghost missile that flies through walls.
 	"ghost_missile": {
@@ -75,7 +76,7 @@ const PICKUP_WEAPONS := ["homing", "homing", "fire", "fire", "power"]
 
 ## Owner, session 3: a health pickup restores a share of max health, so armor matters all match.
 const HEALTH_PICKUP_RATIO := 0.30
-const MEGA_HEALTH_RATIO := 0.60 # proposal, waiting for the owner
+const MEGA_HEALTH_RATIO := 0.60 # confirmed by the owner (session 4)
 const HEALTH_RESPAWN := 30.0
 const MEGA_RESPAWN := 50.0
 const WEAPON_RESPAWN := 14.0

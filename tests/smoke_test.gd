@@ -227,7 +227,7 @@ func _run() -> void:
 	_check(o_hp2 - outlaw.health >= 35.0, "detonating a hooked bomb hits hard (%.1f)" % (o_hp2 - outlaw.health))
 	_check(not dog.has_live_special(), "bomb is gone after the blast")
 
-	# Mr. Grimm's skull: three hits kill a medium car.
+	# Mr. Grimm's skull: the hardest single special hit (65).
 	_place(outlaw, -20, 20, 0)
 	await _frames(3)
 	outlaw.health = outlaw.max_health
@@ -235,7 +235,7 @@ func _run() -> void:
 	var o_hp3 := outlaw.health
 	Projectile.spawn(main, "reaper_skull", outlaw.aim_point() + Vector3(0, 0, 8), Vector3(0, 0, -1), grimm, outlaw)
 	await _frames(12)
-	_check(absf((o_hp3 - outlaw.health) - 94.0) < 0.5, "Reaper Skull hits for 94 (3 kill a medium car)")
+	_check(absf((o_hp3 - outlaw.health) - 65.0) < 0.5, "Reaper Skull hits for 65")
 
 	# Spectre's ghost missile flies through the burnt building's wall.
 	var spectre: Vehicle = main.enemies.filter(func(e: Vehicle): return e.car_id == "spectre")[0]

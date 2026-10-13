@@ -48,7 +48,7 @@ Saving only after a sub boss.
 Specials built: **Sweet Tooth: Napalm Cone** (lobbed where the target will be, fire pool),
 **Outlaw: Omni Taser** (Crazy 8-style: fired by hand, mash to strengthen, breaks at range),
 **Junkyard Dog: Chain Bomb** (straight throw on the chain, press again to detonate, hooks cars),
-**Mr. Grimm: Reaper Skull** (TM2 flaming skull, 94: three kill a medium car),
+**Mr. Grimm: Reaper Skull** (TM2 flaming skull, 65: the hardest single special hit, no instant kills),
 **Spectre: Ghost Missile** (through walls). Health = 200 + 16 x Armor (216-360).
 
 ## Drivers (roster of 18, see CLAUDE.md)

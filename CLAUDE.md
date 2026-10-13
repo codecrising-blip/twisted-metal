@@ -86,10 +86,10 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 
 ## Owner decisions (session 3) — full text in `docs/design/05-owner-revisions-1.md` (overrides chapters 1–4)
 - **Look:** TM2 lighting, not Black darkness. Big stages. **Test stage = TM2 Los Angeles (Quake Zone)**, also stage 1.
-- **Health pickup = 30% of max health** for every car (not a flat +50). Mega health: 60% proposed, unconfirmed.
+- **Health pickup = 30% of max health** for every car (not a flat +50). Mega health: 60% (confirmed session 4).
 - **Lives:** 3 for the whole tournament (spare-life counter 2 → 0). Any loss costs a life; respawn after **6 s** in
-  the same fight. Save only after beating a sub boss; loading restores 3 lives. (Open: no save between Minion and
-  Calypso, otherwise reload-before-Calypso dodges the penalty.)
+  the same fight. Save only after beating a sub boss; loading restores 3 lives — also after Minion, before Calypso
+  (owner, session 4: Minion and Calypso are hard enough).
 - **Enemies per stage:** 4 in LA rising to 9 in Rome; each sub-boss stage has one fewer than the stage before.
   Proposed: LA 4, Paris 5, Chernobyl 4, Egypt 6, Tokyo 6, London 5, Antarctica 7, Hong Kong 7, New York 6, Athens 8,
   Rome 9, Amazonia 8.
@@ -99,7 +99,7 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   destroyed, blinding searchlight, rights read, 3 s silence, "Time's up", missile.
 - **Specials:** Sweet Tooth unchanged from ch1 (Laughing Ghost gets a new look, same job). Outlaw = Crazy 8-style
   taser fired manually, grows with link time and fire-button mashing, breaks when the target drives too far.
-  Mr. Grimm = TM2 flaming skull, 3 hits kill a medium car. Shadow = Black's fast wall-climbing ghost, detonate by
+  Mr. Grimm = TM2 flaming skull, **65** (session 4; was 94). Shadow = Black's fast wall-climbing ghost, detonate by
   pressing fire again. Mr. Slam bites super-heavy cars (big damage, no throw).
 - **Primeval:** pure chase fight in the London arena: turbo-rams constantly, spike projectile (power-missile damage,
   loose homing, wobbles steering), then spike grab 2 s into a wall, heals 15% per spike hit. Never seeks health.
@@ -109,6 +109,20 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   a jump reaches it. **London:** the train kills (70 per hit) unless you escape to a ledge and turbo back.
   **Antarctica:** no special weapon, no signs at the cracks.
 - The `.cht` file the owner sent is GameShark cheat codes, not game data. It confirms TM2 had 9 enemy slots and lives.
+
+## Owner decisions (session 4) — full text in `docs/design/06-owner-revisions-2.md` (wins over 05)
+- **Warhawk:** platforms reached by energy jumps (no bridges), a hit at the wrong moment can drop you to your death
+  (wanted). Gap must be jumpable by the heaviest/slowest car: **16 m** (Slam ~24 m, Darkside ~27 m at top speed
+  without turbo). Spike net = a line on the ground in front of the RPG unit, lasts 12 s, effect **2 s**.
+  Each platform: 3 fronts (left, right, front) of 12 MG troops firing together every 2.5 s: one full front = 14,
+  all three = 42. Fight may run 6–9 min; the owner picks its music.
+- **Primeval:** if he rams a wall and misses, he is stuck 4 s (attack window), then chases again. Invisibility
+  (not invincibility) breaks his lock and lets you hit his back.
+- **London train:** warning before it comes (red light, horn, on-screen sign, 3 s). **Antarctica:** slippery ice,
+  white snow; a cracking area shows pulsing light-blue cracks for 6 s, then the ice block falls.
+- **Calypso:** don't raise him for now; the owner is still deciding.
+- **TM2 source code:** not public (Sony's, never released); not needed — we write everything in Godot. Useful
+  inputs instead: top-down map shots, gameplay video frames, the owner's memories, side/back car images.
 
 ## Code map
 ```
@@ -152,7 +166,7 @@ docs/GDD.md                 game design document (living); docs/design/ = design
 4 enemies (Outlaw, Junkyard Dog, Mr. Grimm, Spectre). Chapter 1 balance (health 200 + 16 x ARM, guns 0.55,
 homing 12, fire 14 + Burning, power 45, freeze 2 s + ice break + Grit, energy 2.5/s with 1.5 s pause,
 weight-based rams), 30% health pickups, wall deflection, 3 lives with 6 s respawn and spawn protection.
-Specials: Napalm Cone, Omni Taser (owner's Crazy 8 version), Chain Bomb, Reaper Skull (94), Ghost Missile.
+Specials: Napalm Cone, Omni Taser (owner's Crazy 8 version), Chain Bomb, Reaper Skull (65), Ghost Missile.
 Test aid: pause menu keys 1-5 pick the player's driver (`main.gd` static `player_car`), the rest are AI.
 Not built yet from the design: Sweet Bot, the other energy moves (shield, mines, invisibility, rear moves),
 sub-boss arrivals, story, character select, detailed car models, sounds.
@@ -178,3 +192,5 @@ sub-boss arrivals, story, character select, detailed car models, sounds.
   (now a frame around the map); decals use `mesh_height()` so they sit on the visible 2 m ground mesh;
   chain bomb flew over car roofs (now thrown 1 m off the ground). Gotcha: GDScript can't infer types from
   untyped `for x in [..]` loop variables (`var y := x * 2` fails) — type the loop variable.
+- **Session 4:** Owner answered the open questions (`06-owner-revisions-2.md`). Grimm's skull 94 → 65, mega
+  health 60% confirmed.
