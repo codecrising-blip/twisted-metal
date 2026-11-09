@@ -132,8 +132,9 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 - **Minion:** must be harder than Warhawk. No shield. Patriot missiles with freeze at long range, all-round milling
   saws at close range (~54/s, Grimm dies in 4 s), heals on lava. The fight is holding mid range on the lava.
   Lava heal is **1%/s** (final). Lightning drops him ~5 s for a combo worth ~20% of his health. Four wooden bridges
-  link the pillars to the top center; 3 Patriots break one. If he hasn't seen you for 30 s he floods every stone
-  road with lava (15 Patriot strikes on his lava; stops when he sees you or you attack).
+  link the pillars to the top center; 3 Patriots break one (never rebuilt). The top platform (lightning + full health)
+  breaks after 6 Patriots: no more lightning. If he hasn't seen you for 20 s, a hellfire siren opens the gates of
+  hell and lava floods every stone road for at least 2 minutes while he hunts you anywhere, even on top.
   Patriot freeze 1.5 s then 2 s freeze immunity; the ice breaks on the 2nd Patriot. After freezing you he rushes in
   with the saws if close, else fires 2-3 more Patriots. Lava heal 2%/s. Hidden counter: the top gate's lightning hits
   the HIGHEST car; get down into the lava with him so it hits him, and rain turns that lava to obsidian.
