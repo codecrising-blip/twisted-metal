@@ -13,6 +13,7 @@ and Warhawk fights, Outlaw/Grimm/Shadow/Slam special changes, Tokyo/London/Antar
 | 4. Final boss: Calypso | [04-calypso.md](04-calypso.md) | Reviewed draft (vehicle choice pending) |
 | Owner revisions 1 | [05-owner-revisions-1.md](05-owner-revisions-1.md) | **Authoritative** |
 | Owner revisions 2 | [06-owner-revisions-2.md](06-owner-revisions-2.md) | **Authoritative** (wins over 05) |
+| Calypso: owner's plan | [08-calypso-owner-plan.md](08-calypso-owner-plan.md) | **Authoritative** over ch4 (proposal in progress) |
 | Owner revisions 3: sub bosses | [07-owner-revisions-3.md](07-owner-revisions-3.md) | **Authoritative** (wins over 05, 06 and ch3) |
 
 Written in Arabic for the owner; names of characters, stages and weapons stay in English.

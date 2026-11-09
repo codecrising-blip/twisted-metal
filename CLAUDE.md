@@ -120,7 +120,9 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   (not invincibility) breaks his lock and lets you hit his back.
 - **London train:** warning before it comes (red light, horn, on-screen sign, 3 s). **Antarctica:** slippery ice,
   white snow; a cracking area shows pulsing light-blue cracks for 6 s, then the ice block falls.
-- **Calypso:** don't raise him for now; the owner is still deciding.
+- **Calypso (session 5):** the owner's plan replaces ch4: see `docs/design/08-calypso-owner-plan.md` (TM2 face/voice,
+  blimp, tankers, 4-5 phases: contract seal reads inputs, timed loss, ghosts of contestants and sub bosses, energy-attack
+  and turbo curses, nuke in your car (2 s to shield), time rewind that breaks his ring, then a raw brawl).
 - **Unity/Unreal:** the owner plans to move engines later, on a new laptop (current: i5-5200U, 8 GB, Intel HD 5500,
   no Vulkan on Windows, so Godot must stay on Compatibility). Keep building in Godot until then.
 
