@@ -131,10 +131,15 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 - **Primeval:** freeze lasts only 1 s on him, then he chases at once.
 - **Minion:** must be harder than Warhawk. No shield. Patriot missiles with freeze at long range, all-round milling
   saws at close range (~54/s, Grimm dies in 4 s), heals on lava. The fight is holding mid range on the lava.
+  Lava heal is **1%/s** (final). Lightning drops him ~5 s for a combo worth ~20% of his health. Four wooden bridges
+  link the pillars to the top center; 3 Patriots break one. If he hasn't seen you for 30 s he floods every stone
+  road with lava (15 Patriot strikes on his lava; stops when he sees you or you attack).
   Patriot freeze 1.5 s then 2 s freeze immunity; the ice breaks on the 2nd Patriot. After freezing you he rushes in
   with the saws if close, else fires 2-3 more Patriots. Lava heal 2%/s. Hidden counter: the top gate's lightning hits
   the HIGHEST car; get down into the lava with him so it hits him, and rain turns that lava to obsidian.
-- **All attacks:** warnings are very short (~0.3 s); dodging = constant movement with sharp turns.
+- **All attacks:** warnings are very short (~0.3 s lock tone; the missile itself is the real warning; homing tuned so
+  sharp turns can dodge). **Weapon cooldowns are per weapon** (code): switching and firing another weapon is instant,
+  so combos work; only the same weapon waits for its reload.
 - **Manslaughter** stays immune to normal freeze; frost circle marks each nitrogen machine's reach.
 - **TM2 source code:** not public (Sony's, never released); not needed — we write everything in Godot. Useful
   inputs instead: top-down map shots, gameplay video frames, the owner's memories, side/back car images.

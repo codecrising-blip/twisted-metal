@@ -76,7 +76,7 @@ var _wheels: Array = []
 var _steer_pivots: Array = []
 var _wheel_radius := 0.5
 var _gun_cooldown := 0.0
-var _weapon_cooldown := 0.0
+var _weapon_cooldowns := {} # weapon id -> seconds left. Per weapon: switching and firing another is instant (combos)
 var _gun_index := 0
 var _special_timer := 0.0
 var _target_timer := 0.0
@@ -206,7 +206,10 @@ func _clear_inputs() -> void:
 func _tick(delta: float) -> void:
 	_clock += delta
 	_gun_cooldown -= delta
-	_weapon_cooldown -= delta
+	for id in _weapon_cooldowns.keys():
+		_weapon_cooldowns[id] -= delta
+		if _weapon_cooldowns[id] <= 0.0:
+			_weapon_cooldowns.erase(id)
 	_wall_cooldown -= delta
 	_wall_contact -= delta
 	if _energy_pause > 0.0:
@@ -490,14 +493,16 @@ func _fire_guns() -> void:
 
 
 func _fire_selected() -> void:
-	if weapon_order.is_empty() or _weapon_cooldown > 0.0:
+	if weapon_order.is_empty():
 		return
 	selected = clampi(selected, 0, weapon_order.size() - 1)
 	var id := weapon_order[selected]
+	if _weapon_cooldowns.has(id):
+		return
 	if ammo.get(id, 0) <= 0:
 		return
 	ammo[id] -= 1
-	_weapon_cooldown = WeaponData.get_def(id).get("cooldown", 0.5)
+	_weapon_cooldowns[id] = float(WeaponData.get_def(id).get("cooldown", 0.5))
 	if id == special_id:
 		Specials.fire(self, id)
 	else:

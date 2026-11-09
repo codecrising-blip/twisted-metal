@@ -100,6 +100,21 @@ func _run() -> void:
 	await _tap("weapon_next")
 	_check(player.selected == wrapi(sel + 1, 0, player.weapon_order.size()), "weapon cycling selects the next weapon")
 
+	# Combos: right after a power missile, switching to another weapon fires at once;
+	# the same weapon has to wait for its own reload.
+	player.add_ammo("power", 2)
+	player.add_ammo("fire", 3)
+	player._weapon_cooldowns.clear()
+	player.selected = player.weapon_order.find("power")
+	player._fire_selected()
+	var p_left: int = player.ammo["power"]
+	player._fire_selected()
+	_check(player.ammo["power"] == p_left, "the same weapon waits for its reload")
+	player.selected = player.weapon_order.find("fire")
+	var f_left: int = player.ammo["fire"]
+	player._fire_selected()
+	_check(player.ammo["fire"] == f_left - 1, "switching weapons fires instantly (combos)")
+
 	# Energy jump, and the pause in energy regen after spending.
 	_place(player, -60, 60, 0)
 	await _frames(30)
@@ -205,7 +220,7 @@ func _run() -> void:
 	await _frames(2)
 	outlaw.ammo["omni_taser"] = 2
 	outlaw.selected = 0
-	outlaw._weapon_cooldown = 0.0
+	outlaw._weapon_cooldowns.clear()
 	outlaw._fire_selected()
 	await _frames(3)
 	_check(outlaw.ammo["omni_taser"] == 1 and not outlaw.has_live_special(), "firing the taser with nobody in range wastes the charge")
@@ -256,7 +271,7 @@ func _run() -> void:
 	var n_hp := outlaw.health
 	player.ammo["napalm_cone"] = 2
 	player.selected = 0
-	player._weapon_cooldown = 0.0
+	player._weapon_cooldowns.clear()
 	player._fire_selected()
 	await _frames(100)
 	_check(n_hp - outlaw.health >= 15.0, "Napalm Cone lands on the target (%.1f)" % (n_hp - outlaw.health))
