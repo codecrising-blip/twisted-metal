@@ -135,6 +135,7 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   link the pillars to the top center; 3 Patriots break one (never rebuilt). The top platform (lightning + full health)
   breaks after 6 Patriots: no more lightning. If he hasn't seen you for 20 s, a hellfire siren opens the gates of
   hell and lava floods every stone road for at least 2 minutes while he hunts you anywhere, even on top.
+  Once the siren starts there is no stopping it. He shells bridges/top only while you are on them or firing from them.
   Patriot freeze 1.5 s then 2 s freeze immunity; the ice breaks on the 2nd Patriot. After freezing you he rushes in
   with the saws if close, else fires 2-3 more Patriots. Lava heal 2%/s. Hidden counter: the top gate's lightning hits
   the HIGHEST car; get down into the lava with him so it hits him, and rain turns that lava to obsidian.
