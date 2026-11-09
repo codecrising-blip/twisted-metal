@@ -201,6 +201,11 @@ Test aid: pause menu keys 1-5 pick the player's driver (`main.gd` static `player
 Not built yet from the design: Sweet Bot, the other energy moves (shield, mines, invisibility, rear moves),
 sub-boss arrivals, story, character select, detailed car models, sounds.
 
+**Agreed next step (session 5):** a quality preview: rebuild **Sweet Tooth and Outlaw only**, with much more
+detail (our own designs carrying each character's idea and colors, not copies), in **Los Angeles**, with the best
+graphics the owner's Intel HD 5500 can run (plus a high-quality setting for stronger PCs). Owner also wants, later:
+main menu, car select, stage select, world map, opponent preview.
+
 **Next candidates (agree with owner first):**
 1. Owner play-test of the LA stage: driving feel, wall slide, damage/health, AI, the new specials.
 2. Detailed car models from `docs/reference/` (Sweet Tooth first), new Laughing Ghost look.
