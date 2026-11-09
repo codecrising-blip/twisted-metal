@@ -121,6 +121,17 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 - **London train:** warning before it comes (red light, horn, on-screen sign, 3 s). **Antarctica:** slippery ice,
   white snow; a cracking area shows pulsing light-blue cracks for 6 s, then the ice block falls.
 - **Calypso:** don't raise him for now; the owner is still deciding.
+- **Unity/Unreal:** the owner plans to move engines later, on a new laptop (current: i5-5200U, 8 GB, Intel HD 5500,
+  no Vulkan on Windows, so Godot must stay on Compatibility). Keep building in Godot until then.
+
+## Owner decisions (session 5) — sub bosses, full text in `docs/design/07-owner-revisions-3.md` (wins over 05/06)
+- **Manslaughter:** fight inside a cooling tower; 4 liquid-nitrogen machines (shoot one while he is near: frozen,
+  double damage); he reloads by ramming rock piles; after 2 machines are gone, nuclear rain makes the rocks acidic.
+  Kill = 4 nitrogen windows + 1 raw-fight share; each wasted machine adds another raw share.
+- **Primeval:** freeze lasts only 1 s on him, then he chases at once.
+- **Minion:** must be harder than Warhawk. No shield. Patriot missiles with freeze at long range, all-round milling
+  saws at close range (~54/s, Grimm dies in 4 s), heals on lava. The fight is holding mid range on the lava.
+  Shrine lightning (ch3) explained to the owner; its role in the new design is undecided.
 - **TM2 source code:** not public (Sony's, never released); not needed — we write everything in Godot. Useful
   inputs instead: top-down map shots, gameplay video frames, the owner's memories, side/back car images.
 
