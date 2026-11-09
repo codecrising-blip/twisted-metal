@@ -1,0 +1,75 @@
+class_name GraphicsSettings
+extends RefCounted
+## Two graphics levels, switched with G in the pause menu and saved in user://settings.cfg.
+##   LOW  (default) made for the owner's laptop: Intel HD 5500, OpenGL / Compatibility renderer.
+##        2x MSAA, 2048 shadow map with 2 splits, shadows to 120 m, fewer particles,
+##        car headlight beams off (it is daytime in LA; every extra light costs a pass on old GPUs).
+##   HIGH for stronger PCs: 4x MSAA, 4096 soft shadows with 4 splits to 220 m, full particles,
+##        headlight beams on; with the Forward+ renderer also SSAO, SSIL and SSR.
+## `-- high` or `-- low` on the command line overrides the saved choice for one run.
+
+const PATH := "user://settings.cfg"
+const HEADLIGHT_GROUP := &"headlight_beam"
+
+static var high := false
+static var _loaded := false
+
+
+static func load_saved() -> void:
+	if _loaded:
+		return
+	_loaded = true
+	var cfg := ConfigFile.new()
+	if cfg.load(PATH) == OK:
+		high = cfg.get_value("graphics", "high", false)
+	var args := OS.get_cmdline_user_args()
+	if "high" in args:
+		high = true
+	elif "low" in args:
+		high = false
+
+
+static func save() -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(PATH)
+	cfg.set_value("graphics", "high", high)
+	cfg.save(PATH)
+
+
+static func label() -> String:
+	return "HIGH" if high else "LOW"
+
+
+## Particle count multiplier for FxKit.
+static func particles() -> float:
+	return 1.0 if high else 0.6
+
+
+static func toggle(tree: SceneTree) -> void:
+	high = not high
+	save()
+	apply(tree)
+
+
+## Applies the level to the viewport, every sun, every WorldEnvironment and every headlight beam.
+static func apply(tree: SceneTree) -> void:
+	load_saved()
+	var vp := tree.root
+	vp.msaa_3d = Viewport.MSAA_4X if high else Viewport.MSAA_2X
+	RenderingServer.directional_shadow_atlas_set_size(4096 if high else 2048, true)
+	RenderingServer.directional_soft_shadow_filter_set_quality(
+		RenderingServer.SHADOW_QUALITY_SOFT_HIGH if high else RenderingServer.SHADOW_QUALITY_SOFT_LOW)
+	for n in vp.find_children("*", "DirectionalLight3D", true, false):
+		var sun := n as DirectionalLight3D
+		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if high else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+		sun.directional_shadow_max_distance = 220.0 if high else 120.0
+		sun.shadow_blur = 1.4 if high else 1.0
+	var forward_plus := RenderingServer.get_rendering_device() != null
+	for n in vp.find_children("*", "WorldEnvironment", true, false):
+		var env := (n as WorldEnvironment).environment
+		if env and forward_plus:
+			env.ssao_enabled = true
+			env.ssil_enabled = high
+			env.ssr_enabled = high
+	for n in tree.get_nodes_in_group(HEADLIGHT_GROUP):
+		(n as Light3D).visible = high

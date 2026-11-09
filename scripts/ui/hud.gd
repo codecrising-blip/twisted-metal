@@ -282,18 +282,25 @@ func _handle_input() -> void:
 	if Input.is_action_just_pressed("pause") and not game_over:
 		get_tree().paused = not get_tree().paused
 		if get_tree().paused:
-			show_message("PAUSED", "ESC to resume   ENTER to restart\n\n" + _driver_menu())
+			_show_pause()
 		else:
 			clear_message()
 	if Input.is_action_just_pressed("restart") and (game_over or get_tree().paused):
 		get_tree().paused = false
 		restart_requested.emit()
+	if get_tree().paused and not game_over and Input.is_action_just_pressed("toggle_graphics"):
+		GraphicsSettings.toggle(get_tree())
+		_show_pause()
 	if game_over or get_tree().paused:
 		for i in mini(drivers.size(), 5):
 			if Input.is_action_just_pressed("pick_%d" % (i + 1)):
 				get_tree().paused = false
 				driver_requested.emit(i)
 				return
+
+
+func _show_pause() -> void:
+	show_message("PAUSED", "ESC to resume   ENTER to restart   G graphics: %s\n\n%s" % [GraphicsSettings.label(), _driver_menu()])
 
 
 func _driver_menu() -> String:

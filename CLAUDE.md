@@ -27,7 +27,8 @@ curl -sSL -o g.zip https://github.com/godotengine/godot/releases/download/4.3-st
 G=/tmp/godot/Godot_v4.3-stable_linux.x86_64
 cd <repo> && $G --headless --path . --import            # parse all scripts
 $G --headless --path . -s tests/smoke_test.gd           # gameplay tests, must print ALL TESTS PASSED
-# Screenshots (shots: gameplay | hero | enemies | overview | roof | tunnel | cage | center | pit):
+# Screenshots (shots: gameplay | hero | duel | enemies | overview | roof | tunnel | cage | center | pit,
+#   or car:<id>:<front34|rear34|side|front|top|low> for one car alone). Add `-- full` for all five cars:
 xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --path . -s tests/screenshot.gd -- hero docs/screenshots/hero.png
 ```
 - Always run the smoke test before committing. Look at screenshots after visual changes.
@@ -38,6 +39,9 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 - Screenshots render slowly, so physics runs many steps per frame: in `gameplay` shots the cars have
   driven further than in real time.
 - The headless smoke test takes about 20 s (it drives, fights and respawns in real time).
+- After adding a new `class_name` script, run `--import` once or other scripts can't find the class.
+- The game starts in the **preview match** (Sweet Tooth vs Outlaw only). `-- full` = all five cars (tests use it).
+  `-- high` / `-- low` force a graphics level for one run.
 
 ## Owner play-test feedback (session 1)
 1. ~~Too easy (health too low, damage too high)~~ — done in session 3 (chapter 1 numbers).
@@ -158,9 +162,13 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 ```
 scenes/main.tscn            single scene; everything is spawned from scripts/main.gd
 scripts/main.gd             match flow (spawn, lives + 6 s respawn, win/lose, restart, fall-out rescue), music
-scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (primitive + material helpers)
+scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (simple primitives),
+                            MeshBuilder (detailed models merged per material: chamfered boxes, lofts, lathes),
+                            MatKit (generated paint/rust/chrome/rubber textures), GraphicsSettings (LOW/HIGH)
 scripts/vehicles/           Vehicle (driving, wall rule, rams, states, combat), Roster (stats from SPD/ARM/HND/SPC),
-                            VehicleModels (car builders), PlayerController, AIDriver (specials, ramps, max 2 on player)
+                            VehicleModels (dispatch + simple prototype cars), HeroModels (detailed Sweet Tooth
+                            and Outlaw), VehicleFx (gatling spin, muzzle flash, turbo flames, mascot spring,
+                            tire smoke), PlayerController, AIDriver (specials, ramps, max 2 on player)
 scripts/weapons/            WeaponData (all balance numbers), Projectile, Pickup, Specials (fires specials),
                             TaserLink, ChainBomb, FirePool
 scripts/arena/los_angeles.gd  stage 1 / test stage (TM2 Quake Zone): heightmap ground, roads, tunnels, cage...
@@ -169,7 +177,7 @@ scripts/arena/breakable.gd  props that shatter/topple (stands, glass, palms, let
 scripts/arena/teleporter.gd teleport pad
 scripts/fx/                 FxKit (fire/smoke/explosions), FlickerLight, Blinker, ZigLine (bolts, chains, cables)
 scripts/ui/hud.gd           HUD (bars, lives, respawn countdown, notices) + light grain/vignette shader
-tests/                      smoke_test.gd (headless, ~57 checks), screenshot.gd
+tests/                      smoke_test.gd (headless, ~65 checks), screenshot.gd
 audio/music/                drop .ogg/.mp3 here; first file alphabetically plays in a loop
 docs/GDD.md                 game design document (living); docs/design/ = design bible (Arabic)
 ```
@@ -186,7 +194,13 @@ docs/GDD.md                 game design document (living); docs/design/ = design
   `vehicle_contact(vehicle, velocity_before) -> bool` (true = the car went through). See `Breakable`.
 - Specials with their own behaviour are nodes in the world registered with `Vehicle.set_live_special()`;
   fire presses while one is live go to its `fire_again()` (taser mash, bomb detonation).
-- Models store metadata on the model node: `wheels`, `steer`, `wheel_radius`, `guns`, `launcher`, `top`, `lean`.
+- Models store metadata on the model node: `wheels`, `steer`, `wheel_radius`, `guns`, `launcher`, `top`, `lean`,
+  and optionally `gun_spinners`, `exhaust` + `exhaust_dir`, `bobble` (read by `VehicleFx`).
+- Detailed models: build with `MeshBuilder` (one mesh per material = few draw calls on the HD 5500) and
+  `MatKit` materials (triplanar, no UVs needed). MeshBuilder decides triangle winding itself; hand-built
+  SurfaceTool meshes must be clockwise seen from the visible side, or two-sided materials light them from behind
+  (that made LA's roads pitch black until session 5).
+- Car models are **our own designs** carrying each character's idea and colors, never copies of the originals.
 - Keep balance numbers in `WeaponData` / `Roster`, not scattered in logic.
 
 ## Status
@@ -201,14 +215,17 @@ Test aid: pause menu keys 1-5 pick the player's driver (`main.gd` static `player
 Not built yet from the design: Sweet Bot, the other energy moves (shield, mines, invisibility, rear moves),
 sub-boss arrivals, story, character select, detailed car models, sounds.
 
-**Agreed next step (session 5):** a quality preview: rebuild **Sweet Tooth and Outlaw only**, with much more
-detail (our own designs carrying each character's idea and colors, not copies), in **Los Angeles**, with the best
-graphics the owner's Intel HD 5500 can run (plus a high-quality setting for stronger PCs). Owner also wants, later:
-main menu, car select, stage select, world map, opponent preview.
+**Quality preview (done, session 5):** Sweet Tooth vs Outlaw, 1-on-1 in Los Angeles, rebuilt in detail as our
+own designs. Sweet Tooth = armored ice-cream truck (plow with spikes, twin gatlings, chrome stacks, serving window,
+roof mortar) with an original mascot on a spring, **"the Scoop"**: a strawberry scoop with a carved wicked face in a
+waffle cone (replaces the old clown head; no flaming head). Outlaw = armored police interceptor (push bar, hood guns,
+light bar, taser coil on the roof). Effects: spinning gatlings + muzzle flash, turbo flames, mascot sway, tire smoke.
+Graphics: LOW (default, owner's laptop) / HIGH, G in the pause menu. LA roads fixed (were pitch black).
+Owner also wants, later: main menu, car select, stage select, world map, opponent preview.
 
 **Next candidates (agree with owner first):**
 1. Owner play-test of the LA stage: driving feel, wall slide, damage/health, AI, the new specials.
-2. Detailed car models from `docs/reference/` (Sweet Tooth first), new Laughing Ghost look.
+2. Owner's verdict on the preview cars; then the same detail for the other cars, new Laughing Ghost look.
 3. Remaining energy moves and Sweet Bot; napalm pickup (needed for the Tokyo puzzle).
 4. Sound effects (engine, guns, explosions). Music needs the owner's tracks in `audio/music/`.
 5. Story skeleton, sub-boss arrival sequence (replays, silence, break-in), save after sub bosses.
@@ -229,3 +246,7 @@ main menu, car select, stage select, world map, opponent preview.
   untyped `for x in [..]` loop variables (`var y := x * 2` fails) — type the loop variable.
 - **Session 4:** Owner answered the open questions (`06-owner-revisions-2.md`). Grimm's skull 94 → 65, mega
   health 60% confirmed.
+- **Session 5:** Sub-boss and Calypso designs finished (`07`, `08`, master summary). Built the quality preview
+  (see Status). Bugs met: SurfaceTool `append_from()` silently drops non-indexed parts once the merged mesh is
+  indexed (MeshBuilder now indexes every part); LA road strips were wound the wrong way, so the two-sided asphalt
+  was lit from below and looked black; `get_meta(key, null)` prints an error when the key is missing.

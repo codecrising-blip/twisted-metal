@@ -1,17 +1,23 @@
 extends Node3D
 ## One stage of the tournament: Sweet Tooth (player) against the AI. Last car running wins.
+## Right now it runs the quality preview: Sweet Tooth vs Outlaw only (`-- full` for all five).
 ## The player has 3 lives (owner, session 3): a wreck costs one and you come back after 6 seconds
 ## in the same fight; the last one lost is game over. Stage 1 = TM2 Los Angeles with 4 enemies.
 ## Run with `-- junkyard` after the project path to play the old Junkyard instead.
 
-## Drivers in this test build. You play one (pick it in the pause menu), the AI drives the rest.
-const DRIVERS := ["sweet_tooth", "outlaw", "junkyard_dog", "mr_grimm", "spectre"]
+## Quality preview (owner, session 5): only the two detailed cars, one on one in Los Angeles.
+## You play one (pick it in the pause menu), the AI drives the other.
+const PREVIEW_DRIVERS := ["sweet_tooth", "outlaw"]
+## The whole test roster (the other three still have their simple prototype models).
+## Run with `-- full` after the project path; the smoke test uses it too.
+const FULL_DRIVERS := ["sweet_tooth", "outlaw", "junkyard_dog", "mr_grimm", "spectre"]
 const START_LIVES := 3
 const RESPAWN_DELAY := 6.0
 const FALL_LIMIT := -25.0 # below this a car fell out of the world: put it back
 const MUSIC_DIR := "res://audio/music"
 
 static var player_car := "sweet_tooth" # survives scene reloads
+static var full_roster := false # true = FULL_DRIVERS (tests, `-- full`)
 
 var state := "playing" # playing | won | lost
 var lives := START_LIVES # counts the life in use; spare lives = lives - 1
@@ -22,11 +28,15 @@ var camera: ChaseCamera
 var hud: Hud
 var music: AudioStreamPlayer
 
+var drivers: Array = PREVIEW_DRIVERS
 var _respawn_timer := -1.0
 
 
 func _ready() -> void:
 	InputSetup.setup()
+	GraphicsSettings.load_saved()
+	if full_roster or "full" in OS.get_cmdline_user_args():
+		drivers = FULL_DRIVERS
 	arena = JunkyardArena.new() if "junkyard" in OS.get_cmdline_user_args() else LosAngelesArena.new()
 	arena.name = "Arena"
 	add_child(arena)
@@ -36,7 +46,7 @@ func _ready() -> void:
 	player = _spawn(player_car, arena.spawn_points[0], true)
 	player.controller = PlayerController.new()
 	player.protect()
-	var enemy_cars: Array = DRIVERS.filter(func(id: String): return id != player_car)
+	var enemy_cars: Array = drivers.filter(func(id: String): return id != player_car)
 	for i in enemy_cars.size():
 		var e := _spawn(enemy_cars[i], arena.spawn_points[(i + 1) % arena.spawn_points.size()], false)
 		var brain := AIDriver.new()
@@ -45,6 +55,7 @@ func _ready() -> void:
 		e.auto_target = false
 		enemies.append(e)
 	_spawn_pickups()
+	GraphicsSettings.apply(get_tree())
 
 	camera = ChaseCamera.new()
 	camera.name = "ChaseCamera"
@@ -58,7 +69,7 @@ func _ready() -> void:
 	hud.bind(player, camera)
 	hud.restart_requested.connect(_restart)
 	hud.driver_requested.connect(_pick_driver)
-	hud.drivers.assign(DRIVERS.map(func(id: String): return String(Roster.get_car(id).get("name", id))))
+	hud.drivers.assign(drivers.map(func(id: String): return String(Roster.get_car(id).get("name", id))))
 	hud.set_enemies_left(enemies.size())
 	hud.set_lives(lives - 1)
 	var stage_line: String = arena.title + ("  -  " + arena.subtitle if arena.subtitle != "" else "")
@@ -206,5 +217,5 @@ func _restart() -> void:
 
 
 func _pick_driver(index: int) -> void:
-	player_car = DRIVERS[index]
+	player_car = drivers[index]
 	_restart()

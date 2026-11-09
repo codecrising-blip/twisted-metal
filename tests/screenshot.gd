@@ -11,6 +11,8 @@ extends SceneTree
 ##   cage       the caged super health on its deck, and the overpass
 ##   center     the fire pit, the burnt building and the power tower
 ##   pit        close view of the fire pit
+##   duel       the player and the first AI car face to face (preview: Sweet Tooth vs Outlaw)
+##   car:<id>:<angle>  one car model on its own; angle = front34 | rear34 | side | front | top | low
 
 func _initialize() -> void:
 	_run.call_deferred()
@@ -67,11 +69,54 @@ func _run() -> void:
 				_place(cam, Vector3(40, 22, 60), Vector3(-5, 0, -10), 65.0)
 			"pit":
 				_place(cam, Vector3(0, 12, 34), Vector3(0, -1, 0), 60.0)
+			"duel":
+				var c := player.global_position
+				var e: Vehicle = main.enemies[0]
+				player.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(90.0)), LosAngelesArena.ground(c.x + 5.5, c.z, 0.05))
+				e.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(-90.0)), LosAngelesArena.ground(c.x - 5.5, c.z + 0.8, 0.05))
+				await _frames(10)
+				_place(cam, c + Vector3(-1.5, 3.4, 12.5), c + Vector3(0, 1.4, 0), 55.0)
+			_:
+				if shot.begins_with("car:"):
+					await _car_shot(main, cam, shot.split(":"))
 	await _frames(15)
 	await RenderingServer.frame_post_draw
 	root.get_viewport().get_texture().get_image().save_png(out)
 	print("saved ", out)
 	quit()
+
+
+## Shows one car model alone on open ground (other cars moved far away) from a set angle.
+func _car_shot(main: Node, cam: Camera3D, parts: PackedStringArray) -> void:
+	var id := parts[1] if parts.size() > 1 else "sweet_tooth"
+	var angle := parts[2] if parts.size() > 2 else "front34"
+	var player: Vehicle = main.player
+	var base := player.global_position
+	for v: Vehicle in [player] + main.enemies:
+		v.global_position += Vector3(0, -200, 0)
+		v.visible = false
+	var model := VehicleModels.build(id)
+	main.add_child(model)
+	model.global_position = LosAngelesArena.ground(base.x, base.z, 0.0)
+	model.rotation.y = deg_to_rad(150.0)
+	await _frames(10)
+	var c := model.global_position
+	var fwd := -model.global_basis.z
+	var right := model.global_basis.x
+	var look := c + Vector3(0, 1.2, 0)
+	match angle:
+		"front34":
+			_place(cam, c + fwd * 6.8 + right * -5.2 + Vector3(0, 2.4, 0), look, 50.0)
+		"rear34":
+			_place(cam, c - fwd * 7.0 + right * 5.0 + Vector3(0, 3.0, 0), look, 50.0)
+		"side":
+			_place(cam, c + right * 9.5 + Vector3(0, 1.6, 0), look, 45.0)
+		"front":
+			_place(cam, c + fwd * 8.5 + Vector3(0, 1.8, 0), look, 45.0)
+		"top":
+			_place(cam, c + fwd * 3.0 + right * -4.0 + Vector3(0, 8.5, 0), c + Vector3(0, 1.5, 0), 55.0)
+		"low":
+			_place(cam, c + fwd * 4.6 + right * -2.8 + Vector3(0, 0.7, 0), c + Vector3(0, 1.4, 0), 60.0)
 
 
 func _place(cam: Camera3D, pos: Vector3, look: Vector3, fov: float) -> void:

@@ -47,6 +47,8 @@ func _park(main: Node) -> void:
 
 
 func _run() -> void:
+	var main_script: GDScript = load("res://scripts/main.gd")
+	main_script.full_roster = true # these checks fight all five cars
 	var main: Node = await _new_game()
 	var player: Vehicle = main.player
 	_check(main.arena is LosAngelesArena, "stage 1 is Los Angeles")
@@ -331,11 +333,34 @@ func _run() -> void:
 	# Driver pick (pause menu): play as Outlaw, and Sweet Tooth joins the AI.
 	main.queue_free()
 	await _frames(3)
-	var main_script: GDScript = load("res://scripts/main.gd")
 	main_script.player_car = "outlaw"
 	main = await _new_game()
 	_check(main.player.car_id == "outlaw" and main.enemies.any(func(e: Vehicle): return e.car_id == "sweet_tooth"), "pick a driver: play Outlaw, Sweet Tooth joins the AI")
 	main_script.player_car = "sweet_tooth"
+
+	# Quality preview: only the two detailed cars, one on one.
+	main.queue_free()
+	await _frames(3)
+	main_script.full_roster = false
+	main = await _new_game()
+	_check(main.enemies.size() == 1 and main.enemies[0].car_id == "outlaw", "preview match: Sweet Tooth vs Outlaw only")
+	var fx: VehicleFx = main.player.get_node("Fx")
+	_check(fx != null and not (main.player.model.get_meta("gun_spinners", []) as Array).is_empty(), "Sweet Tooth has spinning gatlings")
+	var spinner: Node3D = main.player.model.get_meta("gun_spinners")[0]
+	var spin_before := spinner.transform.basis
+	main.player._fire_guns()
+	await _frames(5)
+	_check(not spinner.transform.basis.is_equal_approx(spin_before), "firing the guns spins the gatling barrels")
+	_check(main.player.model.has_meta("bobble"), "the Scoop mascot sits on its spring")
+	var was_high := GraphicsSettings.high
+	GraphicsSettings.high = true
+	GraphicsSettings.apply(self)
+	var beams := get_nodes_in_group(GraphicsSettings.HEADLIGHT_GROUP)
+	_check(not beams.is_empty() and beams.all(func(n: Light3D): return n.visible), "graphics HIGH turns the headlight beams on")
+	GraphicsSettings.high = false
+	GraphicsSettings.apply(self)
+	_check(beams.all(func(n: Light3D): return not n.visible), "graphics LOW turns them off (owner's laptop)")
+	GraphicsSettings.high = was_high
 
 	print("")
 	if _failures.is_empty():

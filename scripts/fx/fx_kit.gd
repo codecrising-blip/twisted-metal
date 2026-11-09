@@ -73,7 +73,7 @@ static func _grow_curve() -> Curve:
 static func fire(scale := 1.0, amount := 32) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
 	p.mesh = particle_mesh(true)
-	p.amount = amount
+	p.amount = maxi(4, int(amount * GraphicsSettings.particles()))
 	p.lifetime = 0.7
 	p.local_coords = false
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
@@ -93,7 +93,7 @@ static func fire(scale := 1.0, amount := 32) -> CPUParticles3D:
 static func smoke(scale := 1.0, amount := 20) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
 	p.mesh = particle_mesh(false)
-	p.amount = amount
+	p.amount = maxi(4, int(amount * GraphicsSettings.particles()))
 	p.lifetime = 2.2
 	p.local_coords = false
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE

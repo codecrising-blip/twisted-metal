@@ -72,6 +72,8 @@ var special_charges := 2
 
 var model: Node3D
 var _visual: Node3D
+var _fx: VehicleFx
+var _boosting := false
 var _wheels: Array = []
 var _steer_pivots: Array = []
 var _wheel_radius := 0.5
@@ -135,6 +137,10 @@ func setup(id: String, player: bool) -> void:
 	_wheels = model.get_meta("wheels", [])
 	_steer_pivots = model.get_meta("steer", [])
 	_wheel_radius = model.get_meta("wheel_radius", 0.5)
+	_fx = VehicleFx.new()
+	_fx.name = "Fx"
+	add_child(_fx)
+	_fx.setup(model)
 
 	var top: Vector3 = model.get_meta("top", Vector3(0, 2, 0))
 	_smoke = FxKit.smoke(0.8, 24)
@@ -257,6 +263,7 @@ func _drive(delta: float) -> void:
 
 	var top: float = stats.max_speed
 	var boosting := in_turbo and turbo > 0.0 and throttle > 0.1 and not frozen
+	_boosting = boosting
 	if boosting:
 		top *= TURBO_MULT
 		turbo = maxf(0.0, turbo - TURBO_DRAIN * delta)
@@ -490,6 +497,7 @@ func _fire_guns() -> void:
 			dir = to_t.normalized()
 	dir = (dir + Vector3(randf_range(-1, 1), randf_range(-0.5, 0.5), randf_range(-1, 1)) * 0.012).normalized()
 	Projectile.spawn(get_parent(), "guns", from, dir, self, null)
+	_fx.gun_fired(_gun_index)
 
 
 func _fire_selected() -> void:
@@ -633,6 +641,7 @@ func _die() -> void:
 	frozen_time = 0.0
 	burn_time = 0.0
 	_burn_fx.emitting = false
+	_fx.stop()
 	_ice.visible = false
 	_visual.visible = true
 	FxKit.explosion(get_parent(), global_position + Vector3.UP * 1.5, 2.6)
@@ -671,6 +680,7 @@ func _wreck_physics(delta: float) -> void:
 # ---------------------------------------------------------------- visuals
 
 func _animate(delta: float) -> void:
+	_fx.update(delta, self, velocity, _boosting, in_handbrake and is_on_floor() and absf(speed) > 8.0)
 	var spin := speed * delta / _wheel_radius
 	for w in _wheels:
 		(w as Node3D).rotate_x(-spin)

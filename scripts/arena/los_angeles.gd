@@ -361,7 +361,7 @@ func _drape(points: PackedVector3Array, width: float, lift: float, mat: Material
 	var segs := count if closed else count - 1
 	for i in segs:
 		var j := (i + 1) % count
-		for p: Vector3 in [left[i], right[i], left[j], right[i], right[j], left[j]]:
+		for p: Vector3 in [left[i], left[j], right[i], right[i], left[j], right[j]]: # clockwise from above = front face
 			st.set_normal(_normal_at(p.x, p.z))
 			st.set_uv(Vector2(p.x, p.z) * 0.1)
 			st.add_vertex(p)

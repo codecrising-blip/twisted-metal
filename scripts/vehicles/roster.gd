@@ -19,14 +19,14 @@ const CARS := {
 		"name": "Sweet Tooth", "driver": "Needles Kane",
 		"spd": 4, "arm": 8, "hnd": 4, "spc": 8, "class": "heavy",
 		"special": "napalm_cone", "freeze_cost": 35.0, # perk: Brain Freeze
-		"size": Vector3(2.4, 2.0, 5.6), "camera": [6.2, 12.5],
+		"size": Vector3(2.5, 2.6, 6.3), "camera": [6.4, 13.0],
 		"tagline": "He laughs louder than the engine.",
 	},
 	"outlaw": {
 		"name": "Outlaw", "driver": "Jamie Roberts",
 		"spd": 7, "arm": 6, "hnd": 6, "spc": 5, "class": "medium",
 		"special": "omni_taser", "brake_mult": 1.3, # perk: Interceptor
-		"size": Vector3(2.2, 1.8, 4.8),
+		"size": Vector3(2.2, 1.6, 5.0),
 		"tagline": "She stopped telling them it was about justice.",
 	},
 	"junkyard_dog": {

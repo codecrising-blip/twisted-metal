@@ -1,6 +1,7 @@
 class_name VehicleModels
 extends RefCounted
-## Low-poly vehicle models built from primitives.
+## Low-poly vehicle models built from primitives. Sweet Tooth and Outlaw are the detailed
+## preview models in HeroModels; the rest are still the simple prototype builds.
 ## Convention: the car faces -Z, Y is up, wheels touch y = 0.
 ## Each model stores metadata the Vehicle script reads:
 ##   "wheels"   spin pivots (rotate around X)
@@ -15,9 +16,9 @@ extends RefCounted
 static func build(id: String) -> Node3D:
 	match id:
 		"sweet_tooth":
-			return sweet_tooth()
+			return HeroModels.sweet_tooth()
 		"outlaw":
-			return outlaw()
+			return HeroModels.outlaw()
 		"junkyard_dog":
 			return junkyard_dog()
 		"mr_grimm":
@@ -25,7 +26,7 @@ static func build(id: String) -> Node3D:
 		"spectre":
 			return spectre()
 	push_error("Unknown vehicle model: %s" % id)
-	return sweet_tooth()
+	return HeroModels.sweet_tooth()
 
 
 # ---------------------------------------------------------------- shared parts
@@ -71,6 +72,8 @@ static func _headlights(m: Node3D, points: Array, spot_pos: Vector3, round := fa
 	spot.spot_angle = 32.0
 	spot.spot_attenuation = 0.8
 	spot.rotation_degrees = Vector3(-6, 0, 0)
+	spot.add_to_group(GraphicsSettings.HEADLIGHT_GROUP)
+	spot.visible = GraphicsSettings.high
 	m.add_child(spot)
 
 
@@ -94,172 +97,6 @@ static func _guns(m: Node3D, mounts: Array) -> void:
 # Cone pointing toward -Z (spikes on bumpers).
 static func _spike(m: Node3D, pos: Vector3, mat: Material, length := 0.45) -> void:
 	MeshKit.cylinder(m, 0.1, length, pos, mat, Vector3(-90, 0, 0), 8, 0.0)
-
-
-# ---------------------------------------------------------------- Sweet Tooth
-
-static func sweet_tooth() -> Node3D:
-	var m := _new_model(0.55)
-	var cream := MeshKit.grime(Color(0.86, 0.82, 0.74), Color(0.42, 0.36, 0.3), 0.09, 0.85, 0.1)
-	var pink := MeshKit.mat(Color(0.85, 0.22, 0.5), 0.6)
-	var dark_metal := MeshKit.grime(Color(0.16, 0.15, 0.14), Color(0.05, 0.05, 0.05), 0.2, 0.6, 0.7)
-	var chrome := MeshKit.mat(Color(0.55, 0.55, 0.58), 0.25, 1.0)
-	var glass := MeshKit.mat(Color(0.03, 0.05, 0.08), 0.08, 0.6)
-	var rust := MeshKit.grime(Color(0.45, 0.2, 0.08), Color(0.15, 0.06, 0.03), 0.3, 1.0)
-
-	for side in [-1.0, 1.0]:
-		_wheel(m, Vector3(1.12 * side, 0.55, -1.85), 0.55, 0.5, true)
-		_wheel(m, Vector3(1.12 * side, 0.55, 1.75), 0.55, 0.5, false)
-
-	# Chassis, rear freezer box, cab.
-	MeshKit.box(m, Vector3(2.0, 0.4, 5.3), Vector3(0, 0.8, 0), dark_metal)
-	MeshKit.box(m, Vector3(2.4, 2.0, 3.5), Vector3(0, 2.0, 0.95), cream)
-	MeshKit.box(m, Vector3(2.3, 1.45, 1.75), Vector3(0, 1.72, -1.68), cream)
-	MeshKit.box(m, Vector3(2.05, 0.62, 0.08), Vector3(0, 2.05, -2.57), glass, Vector3(-10, 0, 0))
-	MeshKit.box(m, Vector3(1.4, 0.45, 0.06), Vector3(0, 1.25, -2.58), chrome)
-	for i in 5:
-		MeshKit.box(m, Vector3(0.05, 0.42, 0.08), Vector3(-0.56 + i * 0.28, 1.25, -2.6), dark_metal)
-
-	for side in [-1.0, 1.0]:
-		MeshKit.box(m, Vector3(0.06, 0.55, 1.0), Vector3(1.16 * side, 2.05, -1.7), glass)
-		# Pink candy stripes.
-		MeshKit.box(m, Vector3(0.04, 0.28, 3.5), Vector3(1.215 * side, 1.45, 0.95), pink)
-		MeshKit.box(m, Vector3(0.04, 0.12, 3.5), Vector3(1.215 * side, 2.82, 0.95), pink)
-		MeshKit.box(m, Vector3(0.04, 0.2, 1.75), Vector3(1.165 * side, 1.3, -1.68), pink)
-		# Rust patches.
-		MeshKit.box(m, Vector3(0.03, 0.5, 0.7), Vector3(1.22 * side, 1.25, 2.2), rust)
-		MeshKit.box(m, Vector3(0.03, 0.35, 0.5), Vector3(1.22 * side, 2.5, -0.4), rust)
-
-	# Serving window with a striped awning (right side).
-	MeshKit.box(m, Vector3(0.06, 0.85, 1.5), Vector3(1.215, 2.2, 0.7), MeshKit.mat(Color(0.02, 0.02, 0.02)))
-	var stripe_red := MeshKit.mat(Color(0.7, 0.05, 0.08), 0.7)
-	var stripe_white := MeshKit.mat(Color(0.8, 0.78, 0.72), 0.7)
-	for i in 4:
-		MeshKit.box(m, Vector3(0.6, 0.06, 0.42), Vector3(1.45, 2.75, 0.07 + i * 0.42), stripe_red if i % 2 == 0 else stripe_white, Vector3(0, 0, -20))
-
-	# Ice cream cone sign (left side).
-	MeshKit.sphere(m, 0.33, Vector3(-1.23, 2.35, 1.0), pink, Vector3(0.15, 1, 1), 10)
-	MeshKit.prism(m, Vector3(0.6, 0.8, 0.06), Vector3(-1.23, 1.85, 1.0), MeshKit.mat(Color(0.75, 0.55, 0.25)), Vector3(0, 90, 180), 0.5)
-
-	# Bumpers, spikes, lights.
-	MeshKit.box(m, Vector3(2.5, 0.38, 0.3), Vector3(0, 0.85, -2.7), chrome)
-	MeshKit.box(m, Vector3(2.4, 0.3, 0.25), Vector3(0, 0.85, 2.75), chrome)
-	for x in [-0.9, -0.3, 0.3, 0.9]:
-		_spike(m, Vector3(x, 0.85, -3.05), chrome)
-	_headlights(m, [Vector3(-0.82, 1.3, -2.58), Vector3(0.82, 1.3, -2.58)], Vector3(0, 1.3, -2.7))
-	_taillights(m, [Vector3(-0.95, 1.3, 2.72), Vector3(0.95, 1.3, 2.72)])
-	_guns(m, [Vector3(-0.75, 0.95, -2.75), Vector3(0.75, 0.95, -2.75)])
-
-	_clown_head(m, Vector3(0, 3.0, 0.7))
-
-	m.set_meta("launcher", Vector3(0, 2.6, -2.9))
-	m.set_meta("top", Vector3(0, 3.0, 1.5))
-	return m
-
-
-## The giant clown head on the roof, with burning hair. Sits on `base` (roof height).
-static func _clown_head(m: Node3D, base: Vector3) -> void:
-	var face := MeshKit.grime(Color(0.93, 0.91, 0.86), Color(0.6, 0.55, 0.5), 0.12, 0.7)
-	var black := MeshKit.mat(Color(0.015, 0.015, 0.015), 0.9)
-	var red := MeshKit.mat(Color(0.75, 0.04, 0.06), 0.4)
-	var metal := MeshKit.mat(Color(0.2, 0.2, 0.2), 0.5, 0.8)
-	var c := base + Vector3(0, 0.95, 0) # head center
-
-	MeshKit.cylinder(m, 0.5, 0.3, base + Vector3(0, 0.15, 0), metal)
-	MeshKit.sphere(m, 0.8, c, face, Vector3(1.0, 1.05, 0.95), 16)
-	var front := c.z - 0.74
-
-	for side in [-1.0, 1.0]:
-		# Hollow eyes with a red glow deep inside.
-		MeshKit.sphere(m, 0.16, Vector3(0.3 * side, c.y + 0.2, front + 0.08), black, Vector3(1.3, 0.8, 0.5), 10)
-		MeshKit.sphere(m, 0.05, Vector3(0.3 * side, c.y + 0.2, front + 0.02), MeshKit.emissive(Color(1.0, 0.1, 0.05), 6.0), Vector3.ONE, 6)
-		# Angry brows: inner ends low.
-		MeshKit.box(m, Vector3(0.42, 0.07, 0.06), Vector3(0.3 * side, c.y + 0.43, front + 0.06), black, Vector3(0, 0, 20.0 * side))
-		# Cheek paint.
-		MeshKit.sphere(m, 0.14, Vector3(0.48 * side, c.y - 0.1, front + 0.16), red, Vector3(1, 0.7, 0.4), 8)
-
-	MeshKit.sphere(m, 0.17, Vector3(0, c.y, front - 0.06), red, Vector3.ONE, 10)
-	# Wide grin with teeth.
-	MeshKit.box(m, Vector3(0.95, 0.24, 0.1), Vector3(0, c.y - 0.33, front + 0.06), red)
-	MeshKit.box(m, Vector3(0.8, 0.12, 0.1), Vector3(0, c.y - 0.33, front + 0.03), black)
-	for i in 6:
-		MeshKit.box(m, Vector3(0.1, 0.1, 0.06), Vector3(-0.3 + i * 0.12, c.y - 0.29, front), MeshKit.mat(Color(0.9, 0.88, 0.8)))
-
-	# Burning hair: flame cones plus real fire particles and a flickering light.
-	var flame := MeshKit.emissive(Color(1.0, 0.45, 0.05), 3.0)
-	for i in 7:
-		var a := -PI * 0.5 + i * PI / 6.0
-		var p := c + Vector3(cos(a) * 0.55, 0.6, sin(a) * 0.35 + 0.1)
-		MeshKit.cylinder(m, 0.2, 0.7, p, flame, Vector3(sin(a) * 25.0, 0, -cos(a) * 25.0), 6, 0.0)
-	var fire := FxKit.fire(1.0, 36)
-	fire.position = c + Vector3(0, 0.7, 0.1)
-	fire.emission_sphere_radius = 0.5
-	m.add_child(fire)
-	fire.emitting = true
-	var glow := FlickerLight.new()
-	glow.light_color = Color(1.0, 0.5, 0.15)
-	glow.base_energy = 2.2
-	glow.omni_range = 9.0
-	glow.position = c + Vector3(0, 1.2, 0)
-	m.add_child(glow)
-
-
-# ---------------------------------------------------------------- Outlaw
-
-static func outlaw() -> Node3D:
-	var m := _new_model(0.5)
-	var black := MeshKit.grime(Color(0.07, 0.07, 0.08), Color(0.02, 0.02, 0.02), 0.15, 0.4, 0.5)
-	var white := MeshKit.grime(Color(0.85, 0.85, 0.83), Color(0.5, 0.5, 0.48), 0.15, 0.5)
-	var glass := MeshKit.mat(Color(0.03, 0.05, 0.08), 0.08, 0.6)
-	var chrome := MeshKit.mat(Color(0.5, 0.5, 0.52), 0.3, 1.0)
-	var gold := MeshKit.mat(Color(0.85, 0.65, 0.2), 0.3, 1.0)
-
-	for side in [-1.0, 1.0]:
-		_wheel(m, Vector3(1.05 * side, 0.5, -1.55), 0.5, 0.45, true)
-		_wheel(m, Vector3(1.05 * side, 0.5, 1.5), 0.5, 0.45, false)
-
-	MeshKit.box(m, Vector3(2.2, 0.85, 4.7), Vector3(0, 1.0, 0), black)
-	MeshKit.box(m, Vector3(2.0, 0.85, 2.7), Vector3(0, 1.85, 0.35), black)
-	MeshKit.box(m, Vector3(1.85, 0.6, 0.06), Vector3(0, 1.9, -1.03), glass, Vector3(-25, 0, 0))
-	MeshKit.box(m, Vector3(1.85, 0.6, 0.06), Vector3(0, 1.9, 1.72), glass, Vector3(15, 0, 0))
-	for side in [-1.0, 1.0]:
-		MeshKit.box(m, Vector3(0.04, 0.6, 2.0), Vector3(1.11 * side, 1.05, -0.1), white)
-		MeshKit.sphere(m, 0.16, Vector3(1.14 * side, 1.12, -0.1), gold, Vector3(0.2, 1, 1), 6)
-		MeshKit.box(m, Vector3(0.04, 0.55, 2.3), Vector3(1.01 * side, 1.9, 0.35), glass)
-
-	# Bull bar.
-	MeshKit.box(m, Vector3(2.0, 0.12, 0.12), Vector3(0, 1.25, -2.45), chrome)
-	MeshKit.box(m, Vector3(2.0, 0.12, 0.12), Vector3(0, 0.75, -2.45), chrome)
-	for x in [-0.6, 0.6]:
-		MeshKit.box(m, Vector3(0.12, 0.6, 0.12), Vector3(x, 1.0, -2.45), chrome)
-
-	# Light bar: dim lenses always on, bright lenses + lights blink.
-	MeshKit.box(m, Vector3(1.5, 0.15, 0.4), Vector3(0, 2.35, 0.0), black)
-	var blinker := Blinker.new()
-	blinker.period = 0.3
-	m.add_child(blinker)
-	for i in 2:
-		var color := Color(1.0, 0.05, 0.05) if i == 0 else Color(0.1, 0.3, 1.0)
-		var x := -0.38 if i == 0 else 0.38
-		MeshKit.box(m, Vector3(0.6, 0.16, 0.34), Vector3(x, 2.48, 0), MeshKit.emissive(color, 0.4))
-		var bright := MeshKit.box(m, Vector3(0.64, 0.18, 0.36), Vector3(x, 2.48, 0), MeshKit.emissive(color, 6.0))
-		var light := OmniLight3D.new()
-		light.light_color = color
-		light.light_energy = 3.0
-		light.omni_range = 7.0
-		light.position = Vector3(x, 2.8, 0)
-		m.add_child(light)
-		if i == 0:
-			blinker.group_a.append_array([bright, light])
-		else:
-			blinker.group_b.append_array([bright, light])
-
-	_headlights(m, [Vector3(-0.75, 1.15, -2.36), Vector3(0.75, 1.15, -2.36)], Vector3(0, 1.2, -2.5))
-	_taillights(m, [Vector3(-0.8, 1.15, 2.36), Vector3(0.8, 1.15, 2.36)])
-	_guns(m, [Vector3(-0.85, 1.25, -2.0), Vector3(0.85, 1.25, -2.0)])
-	m.set_meta("launcher", Vector3(0, 2.5, -1.4))
-	m.set_meta("top", Vector3(0, 2.0, -1.8))
-	return m
 
 
 # ---------------------------------------------------------------- Junkyard Dog
