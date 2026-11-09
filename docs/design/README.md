@@ -5,6 +5,8 @@
 wherever they disagree** (TM2-style bright lighting instead of Black darkness, lives, enemy counts, new Primeval
 and Warhawk fights, Outlaw/Grimm/Shadow/Slam special changes, Tokyo/London/Antarctica changes).
 
+**Start here: [00-master-summary.md](00-master-summary.md)** — everything agreed so far on one page (Arabic).
+
 | Chapter | File | Status |
 |---|---|---|
 | 1. Characters: stats, specials, energy moves | [01-characters.md](01-characters.md) + [01b-roster-update.md](01b-roster-update.md) | Reviewed draft + addendum (Warthog, Junkyard Dog, driver changes) |

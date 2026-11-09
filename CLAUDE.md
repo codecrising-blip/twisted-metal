@@ -125,7 +125,10 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   and turbo curses, nuke in your car (2 s to shield), time rewind that breaks his ring, then a raw brawl).
   Final structure: 4 phases (ghost floor with hidden respawn panels; engine floor with tankers, 4 engines, turbo curse;
   Calypso cheating; raw fight after the ring breaks). Vehicle: a metal devil beast styled after the TM4 carnival wagon,
-  train-like scream when it accelerates.
+  train-like scream when it accelerates. Ring-break line (final): "HAHAHAHAHAHAHAHAHA... DID YOU THINK THE RING MADE
+  ME WHO I AM? I AM CALYPSO... AND I'LL TAKE YOUR SOUL WITH MY OWN HANDS." Engine floor: treadmills, burning fuel
+  spills, permanent electric floors (jump them; shock like Outlaw's taser). "Soul pull" trick archived.
+- **Design summary:** `docs/design/00-master-summary.md` is the one-page overview of everything agreed (Arabic).
 - **Unity/Unreal:** the owner plans to move engines later, on a new laptop (current: i5-5200U, 8 GB, Intel HD 5500,
   no Vulkan on Windows, so Godot must stay on Compatibility). Keep building in Godot until then.
 
