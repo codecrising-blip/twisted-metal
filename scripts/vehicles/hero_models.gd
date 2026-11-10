@@ -504,6 +504,8 @@ static func _cone_sign(m: Node3D, base: Vector3, size := 1.0) -> void:
 	glow.base_energy = 0.8
 	glow.omni_range = 4.0
 	glow.position = sc + Vector3(0, 0.7, 0)
+	glow.add_to_group(GraphicsSettings.EXTRA_LIGHT_GROUP)
+	glow.visible = GraphicsSettings.high
 	m.add_child(glow)
 
 
@@ -687,6 +689,8 @@ static func outlaw() -> Node3D:
 		light.light_color = color
 		light.light_energy = 1.4
 		light.omni_range = 4.5
+		light.add_to_group(GraphicsSettings.EXTRA_LIGHT_GROUP)
+		light.visible = GraphicsSettings.high
 		light.position = Vector3(x, 2.0, -0.05)
 		holder.add_child(light)
 		if i == 0:
@@ -718,6 +722,8 @@ static func outlaw() -> Node3D:
 	coil_light.speed = 30.0
 	coil_light.omni_range = 3.5
 	coil_light.position = cbase + Vector3(0, 0.95, 0)
+	coil_light.add_to_group(GraphicsSettings.EXTRA_LIGHT_GROUP)
+	coil_light.visible = GraphicsSettings.high
 	m.add_child(coil_light)
 
 	_headlight_beam(m, Vector3(0, 0.95, -2.7))

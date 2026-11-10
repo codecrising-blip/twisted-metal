@@ -10,7 +10,6 @@ var active := true
 var bob := true
 
 var _visual: Node3D
-var _light: OmniLight3D
 var _respawn := 0.0
 var _t := 0.0
 
@@ -67,13 +66,6 @@ func _build() -> void:
 		color = WeaponData.get_def(kind).get("color", Color.WHITE)
 		MeshKit.box(_visual, Vector3(0.8, 0.8, 0.8), Vector3.ZERO, MeshKit.emissive(color, 2.2), Vector3(45, 0, 45))
 		MeshKit.box(_visual, Vector3(1.15, 0.12, 1.15), Vector3(0, -0.9, 0), MeshKit.mat(Color(0.1, 0.1, 0.1), 0.5, 0.6))
-	if _light == null:
-		_light = OmniLight3D.new()
-		_light.omni_range = 5.0
-		_light.light_energy = 1.5
-		_light.position = Vector3.UP * 1.3
-		add_child(_light)
-	_light.light_color = color
 
 
 func _process(delta: float) -> void:
@@ -90,7 +82,6 @@ func _process(delta: float) -> void:
 			_build()
 		active = true
 		_visual.visible = true
-		_light.visible = true
 
 
 func _on_body_entered(body: Node3D) -> void:
@@ -117,4 +108,3 @@ func _on_body_entered(body: Node3D) -> void:
 	else:
 		_respawn = WeaponData.WEAPON_RESPAWN
 	_visual.visible = false
-	_light.visible = false

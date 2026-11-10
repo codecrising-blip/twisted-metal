@@ -45,6 +45,12 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
   `xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --path . -s tests/bake_backdrop.gd -- /tmp/faces 2048`
   then `python3 tests/cube_to_panorama.py /tmp/faces assets/backdrops/los_angeles_city.jpg 6144`. Keep the `.import`
   next to the jpg on VRAM compression with mipmaps (uncompressed it would cost ~100 MB of video memory).
+- **Performance budget (owner's HD 5500 lagged, worst near the power tower):** keep draw calls low. Merge static
+  pieces with MeshBuilder (`_solid()` / `_solid_box_mb()` in LA add colliders to one shared body), share one mesh
+  between repeated props (palms, stands, lamps), no dynamic lights on pickups/missiles on LOW, decorative lights in
+  `GraphicsSettings.EXTRA_LIGHT_GROUP` (HIGH only). Measure with a quick script using
+  `RenderingServer.get_rendering_info(RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)` at a few camera spots.
+  After the pass: 1706 -> 597 mesh nodes, 45 -> 16 lights, worst view ~2500 -> ~1070 draw calls. F3 = FPS counter.
 - The game starts in the **preview match** (Sweet Tooth vs Outlaw only). `-- full` = all five cars (tests use it).
   `-- high` / `-- low` force a graphics level for one run.
 

@@ -406,6 +406,7 @@ func _stain_mat() -> StandardMaterial3D:
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.roughness = 0.35
 	m.disable_receive_shadows = false
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_meshes.stain = m
 	return m
 
@@ -426,21 +427,29 @@ func _road_marks() -> void:
 		var q := p + Vector3(-dir.z, 0, dir.x) * 3.0
 		mb.cylinder(iron, 0.38, 0.03, MeshBuilder.at(_ground_at(q.x, q.z) + Vector3(0, 0.05, 0)), 14)
 	mb.commit(self, false)
-	# Oil stains and tire marks as soft dark patches lying on the road.
+	# Oil stains and tire marks as soft dark patches lying on the road: all in one mesh.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in 44:
 		var k := _rng.randi_range(0, pts.size() - 1)
 		var p := pts[k]
 		var dir := (pts[(k + 1) % pts.size()] - p).normalized()
 		p += Vector3(-dir.z, 0, dir.x) * _rng.randf_range(-6.0, 6.0)
 		var g := LosAngelesArena.on_mesh(p.x, p.z, 0.1)
-		var qm := QuadMesh.new()
-		qm.orientation = PlaneMesh.FACE_Y
 		var long := i % 3 == 0
-		qm.size = Vector2(0.5, _rng.randf_range(6.0, 12.0)) if long else Vector2.ONE * _rng.randf_range(1.0, 3.2)
-		var mi := MeshInstance3D.new()
-		mi.mesh = qm
-		mi.material_override = _stain_mat()
-		mi.position = g
-		mi.rotation.y = atan2(-dir.x, -dir.z) + (_rng.randf_range(-0.2, 0.2) if long else _rng.randf() * TAU)
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(mi)
+		var size := Vector2(0.5, _rng.randf_range(6.0, 12.0)) if long else Vector2.ONE * _rng.randf_range(1.0, 3.2)
+		var yaw := atan2(-dir.x, -dir.z) + (_rng.randf_range(-0.2, 0.2) if long else _rng.randf() * TAU)
+		var basis := Basis(Vector3.UP, yaw)
+		var ax := basis * Vector3(size.x * 0.5, 0, 0)
+		var az := basis * Vector3(0, 0, size.y * 0.5)
+		var c := [g - ax - az, g + ax - az, g + ax + az, g - ax + az]
+		var uv := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+		for idx: int in [0, 1, 2, 0, 2, 3]:
+			st.set_normal(Vector3.UP)
+			st.set_uv(uv[idx])
+			st.add_vertex(c[idx])
+	var stains := MeshInstance3D.new()
+	stains.mesh = st.commit()
+	stains.material_override = _stain_mat()
+	stains.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(stains)

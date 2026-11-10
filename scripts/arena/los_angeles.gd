@@ -228,6 +228,43 @@ static func road_distance(x: float, z: float) -> float:
 	return sqrt(best)
 
 
+# ---------------------------------------------------------------- merged geometry helpers
+
+var _solid_body: StaticBody3D
+
+
+## One shared collider for merged static geometry (draw calls are the HD 5500's bottleneck, so
+## the visible parts are merged with MeshBuilder and only box shapes are added here).
+func _solid(size: Vector3, xf: Transform3D) -> void:
+	if _solid_body == null:
+		_solid_body = StaticBody3D.new()
+		_solid_body.name = "MergedColliders"
+		_solid_body.collision_layer = 1
+		_solid_body.collision_mask = 0
+		add_child(_solid_body)
+	var shape := CollisionShape3D.new()
+	var b := BoxShape3D.new()
+	b.size = size
+	shape.shape = b
+	shape.transform = xf
+	_solid_body.add_child(shape)
+
+
+## Box (visual + collider) in arena space, merged into mb.
+func _solid_box_mb(mb: MeshBuilder, mat: Material, size: Vector3, xf: Transform3D, bevel := 0.0) -> void:
+	mb.box(mat, size, xf, bevel)
+	_solid(size, xf)
+
+
+## A straight beam from a to b (square section t) into mb.
+static func _beam(mb: MeshBuilder, mat: Material, a: Vector3, b: Vector3, t: float) -> void:
+	if a.distance_to(b) < 0.01:
+		return
+	var dir := (b - a).normalized()
+	var basis := Basis.looking_at(dir, Vector3.UP if absf(dir.y) < 0.98 else Vector3.RIGHT)
+	mb.box(mat, Vector3(t, t, a.distance_to(b)), Transform3D(basis, (a + b) * 0.5), 0.0)
+
+
 # ---------------------------------------------------------------- look
 
 func _materials() -> void:
@@ -408,7 +445,7 @@ func _terrain() -> void:
 			var jd := maxi(j - 1, 0)
 			var ju := mini(j + 1, n - 1)
 			gnorm[gj * gn + gi] = Vector3(data[j * n + il] - data[j * n + ir], 2.0, data[jd * n + i] - data[ju * n + i]).normalized()
-	var cells := 16 # per chunk side (32 m)
+	var cells := 40 # per chunk side (80 m): few big meshes = few draw calls
 	for cx in g / cells:
 		for cz in g / cells:
 			# Two surfaces per chunk: the battleground top (darker slabs) and the low ground.
@@ -723,17 +760,20 @@ func _storefront(on_wall: Vector3, inward: Vector3, width: float, height: float,
 	node.basis = Basis.looking_at(inward, Vector3.UP)
 	add_child(node)
 	var paint := MeshKit.grime(color, color.darkened(0.35), 0.08, 0.9, 0.0, 0.25)
-	MeshKit.solid_box(node, Vector3(width, height, 2.0), Vector3(0, height * 0.5, -1.0), paint)
+	var mb := MeshBuilder.new()
+	mb.box(paint, Vector3(width, height, 2.0), MeshBuilder.at(Vector3(0, height * 0.5, -1.0)), 0.0)
+	_solid(Vector3(width, height, 2.0), node.transform * MeshBuilder.at(Vector3(0, height * 0.5, -1.0)))
 	var n_win := int(width / 5.0)
 	for i in n_win:
 		var x := -width * 0.5 + 2.5 + i * 5.0
 		if absf(x) < 2.0:
 			continue
-		MeshKit.box(node, Vector3(3.2, 2.6, 0.1), Vector3(x, 2.2, -2.02), _m.window)
+		mb.box(_m.window, Vector3(3.2, 2.6, 0.1), MeshBuilder.at(Vector3(x, 2.2, -2.02)), 0.0)
 		if height > 9.0:
-			MeshKit.box(node, Vector3(2.4, 1.8, 0.1), Vector3(x, 6.6, -2.02), _m.window)
-	MeshKit.box(node, Vector3(2.4, 3.2, 0.1), Vector3(0, 1.6, -2.02), _m.dark)
-	MeshKit.box(node, Vector3(width - 1.0, 0.3, 2.2), Vector3(0, 4.0, -3.0), MeshKit.mat(sign_color.darkened(0.45), 0.7), Vector3(-12, 0, 0))
+			mb.box(_m.window, Vector3(2.4, 1.8, 0.1), MeshBuilder.at(Vector3(x, 6.6, -2.02)), 0.0)
+	mb.box(_m.dark, Vector3(2.4, 3.2, 0.1), MeshBuilder.at(Vector3(0, 1.6, -2.02)), 0.0)
+	mb.box(MeshKit.mat(sign_color.darkened(0.45), 0.7), Vector3(width - 1.0, 0.3, 2.2), MeshBuilder.at(Vector3(0, 4.0, -3.0), Vector3(-12, 0, 0)), 0.0)
+	mb.commit(node)
 	var l := Label3D.new()
 	l.text = sign
 	l.font_size = 300
@@ -755,11 +795,12 @@ func _tunnels() -> void:
 	var width := TUNNEL_Z1 - TUNNEL_Z0
 	var zc := (TUNNEL_Z0 + TUNNEL_Z1) * 0.5
 	MeshKit.solid_box(self, Vector3(length, 1.0, width), Vector3(0, ROOF_Y - 0.5, zc), _m.deck)
+	var mb := MeshBuilder.new()
 	for z: float in [cz - 9.0, cz + 9.0]:
 		for i in 8:
-			MeshKit.box(self, Vector3(4.0, 0.04, 0.25), Vector3(-28 + i * 8.0, ROOF_Y + 0.02, z), _m.white_line)
+			mb.box(_m.white_line, Vector3(4.0, 0.04, 0.25), MeshBuilder.at(Vector3(-28 + i * 8.0, ROOF_Y + 0.02, z)), 0.0)
 	for z: float in [TUNNEL_Z0 + 0.6, TUNNEL_Z1 - 0.6]:
-		MeshKit.box(self, Vector3(length, 0.05, 0.6), Vector3(0, ROOF_Y + 0.03, z), _m.yellow_line)
+		mb.box(_m.yellow_line, Vector3(length, 0.05, 0.6), MeshBuilder.at(Vector3(0, ROOF_Y + 0.03, z)), 0.0)
 	# Freeway sign at the roof's east end, facing west along the deck (keeps the view north clear).
 	var sign_post := Vector3(TUNNEL_X - 1.5, ROOF_Y, zc)
 	for dz: float in [-4.5, 4.5]:
@@ -779,11 +820,11 @@ func _tunnels() -> void:
 		var thick := 2.0 if wall_z == cz else 1.0
 		for i in 9:
 			var x := -TUNNEL_X + i * 8.0
-			MeshKit.solid_box(self, Vector3(1.4, ROOF_Y - 1.0, thick + 0.4), Vector3(x, (ROOF_Y - 1.0) * 0.5, wall_z), _m.concrete_dark)
+			_solid_box_mb(mb, _m.concrete_dark, Vector3(1.4, ROOF_Y - 1.0, thick + 0.4), MeshBuilder.at(Vector3(x, (ROOF_Y - 1.0) * 0.5, wall_z)))
 		for i in 8:
 			var xc := -TUNNEL_X + 4.0 + i * 8.0
 			if wall_z == TUNNEL_Z1 - 0.5 and i in ramp_bays:
-				MeshKit.solid_box(self, Vector3(6.6, ROOF_Y - 1.0, thick), Vector3(xc, (ROOF_Y - 1.0) * 0.5, wall_z), _m.concrete_dark)
+				_solid_box_mb(mb, _m.concrete_dark, Vector3(6.6, ROOF_Y - 1.0, thick), MeshBuilder.at(Vector3(xc, (ROOF_Y - 1.0) * 0.5, wall_z)))
 			else:
 				_glass_panel(Vector3(xc, 0, wall_z), thick)
 	# Divider noses: wedges that deflect cars into one tube or the other.
@@ -793,11 +834,13 @@ func _tunnels() -> void:
 		var nose := MeshKit.prism(self, Vector3(2.4, 5.0, ROOF_Y - 1.0), Vector3(s * (TUNNEL_X + 2.5), (ROOF_Y - 1.0) * 0.5, cz), _m.concrete_dark)
 		nose.basis = Basis(Vector3(0, 0, 1), Vector3(s, 0, 0), Vector3(0, s, 0))
 		MeshKit.solid_mesh(self, nose)
-		MeshKit.box(self, Vector3(0.1, 0.6, 2.6), Vector3(s * (TUNNEL_X + 0.1), 2.0, cz), MeshKit.mat(Color(0.95, 0.75, 0.1), 0.7))
+		mb.box(_m.hazard, Vector3(0.1, 0.6, 2.6), MeshBuilder.at(Vector3(s * (TUNNEL_X + 0.1), 2.0, cz)), 0.0)
 	for z: float in [(TUNNEL_Z0 + cz) * 0.5, (cz + TUNNEL_Z1) * 0.5]:
 		for x: float in [-20.0, 0.0, 20.0]:
-			MeshKit.box(self, Vector3(6.0, 0.1, 1.0), Vector3(x, ROOF_Y - 1.06, z), MeshKit.emissive(Color(1.0, 0.95, 0.8), 3.0))
+			mb.box(_tunnel_lamp(), Vector3(6.0, 0.1, 1.0), MeshBuilder.at(Vector3(x, ROOF_Y - 1.06, z)), 0.0)
 			var l := OmniLight3D.new()
+			l.add_to_group(GraphicsSettings.EXTRA_LIGHT_GROUP)
+			l.visible = GraphicsSettings.high
 			l.light_color = Color(1.0, 0.92, 0.78)
 			l.light_energy = 1.6
 			l.omni_range = 15.0
@@ -815,13 +858,22 @@ func _tunnels() -> void:
 		for k in 4:
 			var t := (k + 0.5) / 4.0
 			var z := lerpf(z0, z1, t)
-			MeshKit.box(self, Vector3(9.0, 0.05, 1.2), Vector3(x, PLAT_H + (ROOF_Y - PLAT_H) * t + 0.06, z), _m.yellow_line, Vector3(rad_to_deg(atan((ROOF_Y - PLAT_H) / run)), 0, 0))
+			mb.box(_m.yellow_line, Vector3(9.0, 0.05, 1.2), MeshBuilder.at(Vector3(x, PLAT_H + (ROOF_Y - PLAT_H) * t + 0.06, z), Vector3(rad_to_deg(atan((ROOF_Y - PLAT_H) / run)), 0, 0)), 0.0)
 		ramps.append({"foot": Vector3(x, PLAT_H, z0 + 10.0), "top": Vector3(x, ROOF_Y, z1 - 8.0)})
+	mb.commit(self)
 	# Teleporter on the roof: straight into the cage with the super health.
 	var tp := Teleporter.new()
 	add_child(tp)
 	tp.global_position = Vector3(-TUNNEL_X + 8.0, ROOF_Y, TUNNEL_Z0 + 8.0)
 	tp.destination = Transform3D(Basis(Vector3.UP, PI), DECK_CENTER + Vector3(0, DECK_Y + 0.1, -9))
+
+
+var _tunnel_lamp_mat: StandardMaterial3D
+
+func _tunnel_lamp() -> StandardMaterial3D:
+	if _tunnel_lamp_mat == null:
+		_tunnel_lamp_mat = MeshKit.emissive(Color(1.0, 0.95, 0.8), 3.0)
+	return _tunnel_lamp_mat
 
 
 func _glass_panel(at: Vector3, thick: float) -> void:
@@ -855,6 +907,7 @@ func _overpass_and_cage() -> void:
 		[Vector3(-15, 0, 15), Vector3(-6.5, 0, 15)],
 		[Vector3(6.5, 0, 15), Vector3(15, 0, 15)],
 	]
+	var cage := MeshBuilder.new()
 	for run in runs:
 		var a: Vector3 = c + run[0]
 		var b: Vector3 = c + run[1]
@@ -865,8 +918,9 @@ func _overpass_and_cage() -> void:
 		var posts := int(a.distance_to(b) / 5.0) + 1
 		for k in posts:
 			var p := a.lerp(b, float(k) / maxf(1.0, posts - 1))
-			MeshKit.cylinder(self, 0.12, fence_h + 0.4, p + Vector3.UP * (DECK_Y + (fence_h + 0.4) * 0.5), _m.steel, Vector3.ZERO, 6)
-		MeshKit.box(self, size + Vector3(0.1, -fence_h + 0.12, 0.1), mid + Vector3.UP * (DECK_Y + fence_h), _m.steel)
+			cage.cylinder(_m.steel, 0.12, fence_h + 0.4, MeshBuilder.at(p + Vector3.UP * (DECK_Y + (fence_h + 0.4) * 0.5)), 6)
+		cage.box(_m.steel, size + Vector3(0.1, -fence_h + 0.12, 0.1), MeshBuilder.at(mid + Vector3.UP * (DECK_Y + fence_h)), 0.0)
+	cage.commit(self)
 	var warn := Label3D.new()
 	warn.text = "CALYPSO PROPERTY\nKEEP OUT"
 	warn.font_size = 120
@@ -935,9 +989,9 @@ func _fire_pit() -> void:
 	column.lifetime = 1.4
 	add_child(column)
 	column.emitting = true
-	for k in 6:
-		var a := k * TAU / 6.0
-		var f := FxKit.fire(2.2, 40)
+	for k in 3:
+		var a := k * TAU / 3.0 + 0.5
+		var f := FxKit.fire(2.4, 40)
 		f.position = ground(cos(a) * 3.5, sin(a) * 3.5, 0.3)
 		f.emission_sphere_radius = 1.0
 		add_child(f)
@@ -952,11 +1006,13 @@ func _fire_pit() -> void:
 	light.omni_range = 14.0
 	light.position = bottom + Vector3.UP * 4.0
 	add_child(light)
+	var slabs := MeshBuilder.new()
 	for k in 10:
 		var a := _rng.randf_range(0, TAU)
 		var r := _rng.randf_range(8.0, 18.0)
 		var p := ground(cos(a) * r, sin(a) * r, 0.1)
-		MeshKit.box(self, Vector3(_rng.randf_range(2, 4), 0.3, _rng.randf_range(1.5, 3)), p, _m.concrete_dark, Vector3(_rng.randf_range(-6, 6), _rng.randf_range(0, 180), _rng.randf_range(-6, 6)))
+		slabs.box(_m.concrete_dark, Vector3(_rng.randf_range(2, 4), 0.3, _rng.randf_range(1.5, 3)), MeshBuilder.at(p, Vector3(_rng.randf_range(-6, 6), _rng.randf_range(0, 180), _rng.randf_range(-6, 6))), 0.08)
+	slabs.commit(self)
 
 
 ## Burnt-out building you can drive through (north and south doors, 10 m wide).
@@ -967,20 +1023,22 @@ func _burnt_building(c: Vector3) -> void:
 	var door := 10.0
 	var side := (w - door) * 0.5
 	var b := c.y
-	MeshKit.solid_box(self, Vector3(1.0, h, d), c + Vector3(-w * 0.5 + 0.5, h * 0.5, 0), _m.brick)
-	MeshKit.solid_box(self, Vector3(1.0, h * 0.8, d), c + Vector3(w * 0.5 - 0.5, h * 0.4, 0), _m.brick)
+	var mb := MeshBuilder.new()
+	_solid_box_mb(mb, _m.brick, Vector3(1.0, h, d), MeshBuilder.at(c + Vector3(-w * 0.5 + 0.5, h * 0.5, 0)))
+	_solid_box_mb(mb, _m.brick, Vector3(1.0, h * 0.8, d), MeshBuilder.at(c + Vector3(w * 0.5 - 0.5, h * 0.4, 0)))
 	for s: float in [-1.0, 1.0]:
 		var z := c.z + s * (d * 0.5 - 0.5)
-		MeshKit.solid_box(self, Vector3(side, h, 1.0), Vector3(c.x - w * 0.5 + side * 0.5, b + h * 0.5, z), _m.brick)
-		MeshKit.solid_box(self, Vector3(side, h * 0.85, 1.0), Vector3(c.x + w * 0.5 - side * 0.5, b + h * 0.425, z), _m.brick)
-		MeshKit.solid_box(self, Vector3(door, h - 6.0, 1.0), Vector3(c.x, b + 6.0 + (h - 6.0) * 0.5, z), _m.brick)
-		MeshKit.box(self, Vector3(door + 0.4, 0.6, 1.2), Vector3(c.x, b + 6.0, z), _m.char)
+		_solid_box_mb(mb, _m.brick, Vector3(side, h, 1.0), MeshBuilder.at(Vector3(c.x - w * 0.5 + side * 0.5, b + h * 0.5, z)))
+		_solid_box_mb(mb, _m.brick, Vector3(side, h * 0.85, 1.0), MeshBuilder.at(Vector3(c.x + w * 0.5 - side * 0.5, b + h * 0.425, z)))
+		_solid_box_mb(mb, _m.brick, Vector3(door, h - 6.0, 1.0), MeshBuilder.at(Vector3(c.x, b + 6.0 + (h - 6.0) * 0.5, z)))
+		mb.box(_m.char, Vector3(door + 0.4, 0.6, 1.2), MeshBuilder.at(Vector3(c.x, b + 6.0, z)), 0.0)
 		for k in 3:
 			var x := c.x - w * 0.5 + 2.0 + k * 3.2 if k < 2 else c.x + w * 0.5 - 3.0
-			MeshKit.box(self, Vector3(1.8, 2.2, 1.1), Vector3(x, b + 9.0, z), _m.dark)
-			MeshKit.box(self, Vector3(2.0, 1.5, 1.12), Vector3(x, b + 10.8, z), _m.char)
-	MeshKit.solid_box(self, Vector3(w, 0.6, d), c + Vector3(0, 6.3, 0), _m.char) # first floor
-	MeshKit.box(self, Vector3(w * 0.6, 0.5, d * 0.7), c + Vector3(-3, h - 0.3, -1), _m.char, Vector3(0, 0, -8))
+			mb.box(_m.dark, Vector3(1.8, 2.2, 1.1), MeshBuilder.at(Vector3(x, b + 9.0, z)), 0.0)
+			mb.box(_m.char, Vector3(2.0, 1.5, 1.12), MeshBuilder.at(Vector3(x, b + 10.8, z)), 0.0)
+	_solid_box_mb(mb, _m.char, Vector3(w, 0.6, d), MeshBuilder.at(c + Vector3(0, 6.3, 0))) # first floor
+	mb.box(_m.char, Vector3(w * 0.6, 0.5, d * 0.7), MeshBuilder.at(c + Vector3(-3, h - 0.3, -1), Vector3(0, 0, -8)), 0.0)
+	mb.commit(self)
 	var smoke := FxKit.smoke(2.5, 24)
 	smoke.position = c + Vector3(2, h + 1.0, 0)
 	add_child(smoke)
@@ -994,6 +1052,8 @@ func _burnt_building(c: Vector3) -> void:
 	glow.base_energy = 2.0
 	glow.omni_range = 12.0
 	glow.position = c + Vector3(-5, 4.0, 0)
+	glow.add_to_group(GraphicsSettings.EXTRA_LIGHT_GROUP)
+	glow.visible = GraphicsSettings.high
 	add_child(glow)
 
 
@@ -1004,6 +1064,7 @@ func _power_tower() -> void:
 	_tower_upper.position = at
 	add_child(_tower_upper)
 	var top := 30.0
+	var tb := MeshBuilder.new() # the upper body: one mesh per material, falls as one piece
 	var corners := [Vector3(-1, 0, -1), Vector3(1, 0, -1), Vector3(-1, 0, 1), Vector3(1, 0, 1)]
 	for k in corners:
 		var s: Vector3 = k
@@ -1015,10 +1076,12 @@ func _power_tower() -> void:
 		leg.position = at + s * 5.0
 		add_child(leg)
 		leg.add_box_shape(Vector3(1.4, 9.0, 1.4), Vector3(-s.x * 0.7, 4.5, -s.z * 0.7))
-		MeshKit.box(leg.visual, Vector3(1.8, 0.7, 1.8), Vector3(0, 0.35, 0), _m.concrete)
-		_member(leg.visual, Vector3(0, 0.6, 0), Vector3(-s.x * 1.4, 9.0, -s.z * 1.4), 0.45, _m.steel)
+		var lb := MeshBuilder.new()
+		lb.box(_m.concrete, Vector3(1.8, 0.7, 1.8), MeshBuilder.at(Vector3(0, 0.35, 0)), 0.05)
+		_beam(lb, _m.steel, Vector3(0, 0.6, 0), Vector3(-s.x * 1.4, 9.0, -s.z * 1.4), 0.45)
+		lb.commit(leg.visual)
 		leg.broken.connect(_on_tower_leg_broken)
-		_member(_tower_upper, s * 3.6 + Vector3.UP * 9.0, s * 1.2 + Vector3.UP * top, 0.4, _m.steel)
+		_beam(tb, _m.steel, s * 3.6 + Vector3.UP * 9.0, s * 1.2 + Vector3.UP * top, 0.4)
 	for level in 5:
 		var y0 := 9.0 + level * 4.2
 		var y1 := y0 + 4.2
@@ -1027,14 +1090,15 @@ func _power_tower() -> void:
 		for f in 4:
 			var a := Vector3(-1, 0, -1).rotated(Vector3.UP, f * PI * 0.5)
 			var b := Vector3(-1, 0, -1).rotated(Vector3.UP, (f + 1) * PI * 0.5)
-			_member(_tower_upper, a * r0 + Vector3.UP * y0, b * r1 + Vector3.UP * y1, 0.15, _m.steel)
-			_member(_tower_upper, b * r0 + Vector3.UP * y0, a * r1 + Vector3.UP * y1, 0.15, _m.steel)
+			_beam(tb, _m.steel, a * r0 + Vector3.UP * y0, b * r1 + Vector3.UP * y1, 0.15)
+			_beam(tb, _m.steel, b * r0 + Vector3.UP * y0, a * r1 + Vector3.UP * y1, 0.15)
 	for y: float in [21.0, 26.0]:
 		var arm := 8.0 if y < 25.0 else 6.0
-		_member(_tower_upper, Vector3(-arm, y, 0), Vector3(arm, y, 0), 0.4, _m.steel)
+		_beam(tb, _m.steel, Vector3(-arm, y, 0), Vector3(arm, y, 0), 0.4)
 		for x: float in [-arm + 0.5, arm - 0.5]:
 			for k in 3:
-				MeshKit.cylinder(_tower_upper, 0.22, 0.25, Vector3(x, y - 0.6 - k * 0.3, 0), MeshKit.mat(Color(0.3, 0.45, 0.6), 0.2, 0.3))
+				tb.cylinder(_insulator(), 0.22, 0.25, MeshBuilder.at(Vector3(x, y - 0.6 - k * 0.3, 0)), 8)
+	tb.commit(_tower_upper)
 	# Power lines running off over the wall toward the city.
 	var line_mat := MeshKit.mat(Color(0.1, 0.1, 0.1), 0.6)
 	for x: float in [-7.5, 7.5, -5.5, 5.5]:
@@ -1057,6 +1121,14 @@ func _power_tower() -> void:
 		sign.position = at + Vector3(0, 6.0, 4.0 + 0.05 * face)
 		sign.rotation_degrees.y = 0.0 if face > 0.0 else 180.0
 		add_child(sign)
+
+
+var _insulator_mat: StandardMaterial3D
+
+func _insulator() -> StandardMaterial3D:
+	if _insulator_mat == null:
+		_insulator_mat = MeshKit.mat(Color(0.3, 0.45, 0.6), 0.2, 0.3)
+	return _insulator_mat
 
 
 func _member(parent: Node3D, a: Vector3, b: Vector3, t: float, mat: Material) -> MeshInstance3D:
@@ -1099,7 +1171,7 @@ func _hot_dog_stands() -> void:
 		_hot_dog_stand(ground(p.x, p.z), s[1])
 
 
-## Stand with a giant hot dog on the roof. Breaks into a weapon.
+## Stand with a giant hot dog on the roof. Breaks into a weapon. All stands share one mesh.
 func _hot_dog_stand(pos: Vector3, yaw: float) -> void:
 	var b := Breakable.new()
 	b.health = 12.0
@@ -1109,21 +1181,9 @@ func _hot_dog_stand(pos: Vector3, yaw: float) -> void:
 	b.rotation_degrees.y = yaw
 	add_child(b)
 	b.add_box_shape(Vector3(4.2, 3.0, 3.0), Vector3(0, 1.5, 0))
-	var v := b.visual
-	var cart := MatKit.plain(MatKit.paint(Color(0.7, 0.67, 0.6), 0.7, 0.5, 0.75, 1.5, 0.6, 130))
-	var stripe := MatKit.plain(MatKit.paint(Color(0.48, 0.1, 0.08), 0.7, 0.4, 0.6, 1.5, 0.6, 131))
-	MeshKit.box(v, Vector3(4.0, 2.4, 2.8), Vector3(0, 1.2, 0), cart)
-	MeshKit.box(v, Vector3(4.04, 0.4, 2.84), Vector3(0, 0.5, 0), stripe)
-	MeshKit.box(v, Vector3(2.6, 1.0, 0.1), Vector3(0, 1.6, -1.42), _m.dark)
-	for i in 6:
-		MeshKit.box(v, Vector3(0.66, 0.22, 3.3), Vector3(-1.66 + i * 0.66, 2.55, 0), stripe if i % 2 == 0 else cart, Vector3(10, 0, 0))
-	var bun := MatKit.plain(MatKit.paint(Color(0.66, 0.46, 0.26), 0.6, 0.0, 0.6, 1.0, 0.8, 132))
-	var sausage := MatKit.plain(MatKit.paint(Color(0.42, 0.16, 0.1), 0.5, 0.0, 0.5, 1.0, 0.6, 133))
-	for s: float in [-1.0, 1.0]:
-		MeshKit.sphere(v, 0.6, Vector3(0, 3.25, s * 0.32), bun, Vector3(3.4, 0.7, 0.75), 12)
-	MeshKit.sphere(v, 0.45, Vector3(0, 3.55, 0), sausage, Vector3(5.0, 0.9, 0.9), 12)
-	for i in 7:
-		MeshKit.box(v, Vector3(0.5, 0.06, 0.1), Vector3(-1.5 + i * 0.5, 3.96, 0.1 * (1 if i % 2 == 0 else -1)), MeshKit.mat(Color(0.7, 0.58, 0.12), 0.6), Vector3(0, 30.0 * (1 if i % 2 == 0 else -1), 0))
+	var mi := MeshInstance3D.new()
+	mi.mesh = _stand_mesh()
+	b.visual.add_child(mi)
 	var l := Label3D.new()
 	l.text = "HOT DOGS"
 	l.font_size = 90
@@ -1132,7 +1192,34 @@ func _hot_dog_stand(pos: Vector3, yaw: float) -> void:
 	l.modulate = Color(0.5, 0.08, 0.06)
 	l.position = Vector3(0, 2.15, -1.48)
 	l.rotation_degrees.y = 180.0
-	v.add_child(l)
+	b.visual.add_child(l)
+
+
+var _stand_mesh_cache: ArrayMesh
+
+func _stand_mesh() -> ArrayMesh:
+	if _stand_mesh_cache:
+		return _stand_mesh_cache
+	var mb := MeshBuilder.new()
+	var cart := MatKit.paint(Color(0.7, 0.67, 0.6), 0.7, 0.5, 0.75, 1.5, 0.6, 130)
+	var stripe := MatKit.paint(Color(0.48, 0.1, 0.08), 0.7, 0.4, 0.6, 1.5, 0.6, 131)
+	var bun := MatKit.paint(Color(0.66, 0.46, 0.26), 0.6, 0.0, 0.6, 1.0, 0.8, 132)
+	var sausage := MatKit.paint(Color(0.42, 0.16, 0.1), 0.5, 0.0, 0.5, 1.0, 0.6, 133)
+	var mustard := MatKit.flat(Color(0.7, 0.58, 0.12), 0.6)
+	var dark := MatKit.flat(Color(0.06, 0.06, 0.07), 0.8)
+	mb.box(cart, Vector3(4.0, 2.4, 2.8), MeshBuilder.at(Vector3(0, 1.2, 0)), 0.06)
+	mb.box(stripe, Vector3(4.04, 0.4, 2.84), MeshBuilder.at(Vector3(0, 0.5, 0)), 0.03)
+	mb.box(dark, Vector3(2.6, 1.0, 0.1), MeshBuilder.at(Vector3(0, 1.6, -1.42)), 0.0)
+	for i in 6:
+		mb.box(stripe if i % 2 == 0 else cart, Vector3(0.66, 0.22, 3.3), MeshBuilder.at(Vector3(-1.66 + i * 0.66, 2.55, 0), Vector3(10, 0, 0)), 0.02)
+	for s: float in [-1.0, 1.0]:
+		mb.sphere(bun, 0.6, MeshBuilder.at(Vector3(0, 3.25, s * 0.32), Vector3.ZERO, Vector3(3.4, 0.7, 0.75)), 14, 8)
+	mb.sphere(sausage, 0.45, MeshBuilder.at(Vector3(0, 3.55, 0), Vector3.ZERO, Vector3(5.0, 0.9, 0.9)), 14, 8)
+	for i in 7:
+		var flip := 1.0 if i % 2 == 0 else -1.0
+		mb.box(mustard, Vector3(0.5, 0.06, 0.1), MeshBuilder.at(Vector3(-1.5 + i * 0.5, 3.96, 0.1 * flip), Vector3(0, 30.0 * flip, 0)), 0.0)
+	_stand_mesh_cache = mb.build_mesh(0.6)
+	return _stand_mesh_cache
 
 
 ## Palms along both edges of the road, on the low ground. They topple when hit.
@@ -1170,29 +1257,75 @@ func _palm(pos: Vector3) -> void:
 	b.health = 15.0
 	b.debris_color = Color(0.45, 0.36, 0.24)
 	b.position = pos
+	b.rotation.y = _rng.randf() * TAU
 	add_child(b)
 	b.add_box_shape(Vector3(1.0, 5.0, 1.0), Vector3(0, 2.5, 0))
-	var v := b.visual
-	var trunk := MeshKit.grime(Color(0.5, 0.4, 0.28), Color(0.32, 0.25, 0.18), 0.3, 0.95)
-	var frond := MeshKit.mat(Color(0.24, 0.42, 0.16), 0.8)
-	frond.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var height := _rng.randf_range(11.0, 16.0)
-	var lean := Vector3(_rng.randf_range(-1, 1), 0, _rng.randf_range(-1, 1)).normalized() * _rng.randf_range(0.5, 2.0)
-	var segs := 5
+	var mi := MeshInstance3D.new()
+	mi.mesh = _palm_mesh(_rng.randi() % 3)
+	var s := _rng.randf_range(0.85, 1.15)
+	mi.scale = Vector3(s, s, s)
+	b.visual.add_child(mi)
+
+
+var _palm_meshes := {}
+
+## Three palm variants, each one mesh: a thick ringed trunk with a gentle lean, a crown of
+## drooping two-part fronds, a few dead ones hanging below, a cluster of dates.
+func _palm_mesh(variant: int) -> ArrayMesh:
+	if _palm_meshes.has(variant):
+		return _palm_meshes[variant]
+	var r := RandomNumberGenerator.new()
+	r.seed = 300 + variant
+	var bark := MatKit.paint(Color(0.4, 0.33, 0.24), 0.2, 0.0, 0.6, 0.5, 0.95, 150)
+	var ring := MatKit.paint(Color(0.3, 0.24, 0.17), 0.2, 0.0, 0.6, 0.5, 0.95, 151)
+	var leaf := MatKit.paint(Color(0.22, 0.32, 0.14), 0.1, 0.0, 0.5, 1.0, 0.8, 152)
+	leaf.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var dead := MatKit.paint(Color(0.42, 0.34, 0.2), 0.1, 0.0, 0.5, 1.0, 0.9, 153)
+	dead.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var mb := MeshBuilder.new()
+	var height := 11.0 + variant * 2.0
+	var lean := Vector3(r.randf_range(0.8, 1.8), 0, 0)
+	var segs := 7
 	var prev := Vector3.ZERO
 	for k in segs:
 		var t := float(k + 1) / segs
 		var p := Vector3.UP * height * t + lean * t * t
-		_member(v, prev, p, lerpf(0.75, 0.45, t), trunk)
+		var rad := lerpf(0.42, 0.27, t)
+		var dir := p - prev
+		mb.cylinder(bark, rad, dir.length() + 0.05, MeshBuilder.along((prev + p) * 0.5, dir), 8, rad * 0.94, false)
+		mb.torus(ring, rad, 0.05, MeshBuilder.along(p, dir), 8, 4)
 		prev = p
-	for k in 9:
-		var pivot := Node3D.new()
-		pivot.position = prev
-		pivot.rotation = Vector3(deg_to_rad(_rng.randf_range(-40, -20)), k * TAU / 9.0 + _rng.randf_range(-0.2, 0.2), 0)
-		v.add_child(pivot)
-		MeshKit.box(pivot, Vector3(1.0, 0.06, 4.6), Vector3(0, 0, -2.3), frond)
-	for k in 3:
-		MeshKit.sphere(v, 0.28, prev + Vector3(cos(k * 2.1) * 0.5, -0.4, sin(k * 2.1) * 0.5), MeshKit.mat(Color(0.35, 0.25, 0.12)), Vector3.ONE, 8)
+	var top := prev
+	mb.sphere(bark, 0.42, MeshBuilder.at(top), 8, 5)
+	for k in 14:
+		var yaw := TAU * k / 14.0 + r.randf_range(-0.15, 0.15)
+		var out := Vector3(cos(yaw), 0, sin(yaw))
+		var rise := r.randf_range(0.15, 0.45) if k % 2 == 0 else r.randf_range(-0.05, 0.2)
+		var a := top
+		var b := top + out * 2.6 + Vector3.UP * rise * 2.6
+		var c := b + out * 2.4 + Vector3.DOWN * r.randf_range(1.0, 1.8)
+		for part in 2:
+			var p0 := a if part == 0 else b
+			var p1 := b if part == 0 else c
+			var w := 1.05 if part == 0 else 0.75
+			var mid := (p0 + p1) * 0.5
+			var fwd := (p1 - p0).normalized()
+			var side := fwd.cross(Vector3.UP).normalized()
+			var up := side.cross(fwd)
+			var basis := Basis(side, up, -fwd)
+			mb.box(leaf, Vector3(w, 0.04, p0.distance_to(p1) + 0.1), Transform3D(basis.rotated(fwd, 0.25 * (1.0 if k % 2 == 0 else -1.0)), mid), 0.0)
+	for k in 4:
+		var yaw := TAU * k / 4.0 + 0.4
+		var out := Vector3(cos(yaw), 0, sin(yaw))
+		var a := top + Vector3.DOWN * 0.3
+		var b := a + out * 0.8 + Vector3.DOWN * 2.4
+		var fwd := (b - a).normalized()
+		var side := fwd.cross(Vector3.UP).normalized()
+		mb.box(dead, Vector3(0.7, 0.04, a.distance_to(b)), Transform3D(Basis(side, side.cross(fwd), -fwd), (a + b) * 0.5), 0.0)
+	for k in 5:
+		mb.sphere(ring, 0.16, MeshBuilder.at(top + Vector3(cos(k * 1.3) * 0.4, -0.5 - (k % 2) * 0.2, sin(k * 1.3) * 0.4)), 6, 4)
+	_palm_meshes[variant] = mb.build_mesh(0.3)
+	return _palm_meshes[variant]
 
 
 # ---------------------------------------------------------------- beyond the wall
@@ -1246,11 +1379,13 @@ func _hollywood_sign() -> void:
 		add_child(letter)
 		letter.add_box_shape(Vector3(5 * cell, 7 * cell, 1.2), Vector3(0, 3.5 * cell, 0))
 		var rows: Array = glyphs[word[i]]
+		var lmb := MeshBuilder.new()
 		for r in 7:
 			var row: String = rows[r]
 			for col in 5:
 				if row[col] == "1":
-					MeshKit.box(letter.visual, Vector3(cell, cell, 0.6), Vector3((col - 2) * cell, (6 - r + 0.5) * cell, 0), _m.white)
+					lmb.box(_m.white, Vector3(cell, cell, 0.6), MeshBuilder.at(Vector3((col - 2) * cell, (6 - r + 0.5) * cell, 0)), 0.0)
+		lmb.commit(letter.visual)
 		letter.broken.connect(_on_letter_broken)
 		_letters_left += 1
 

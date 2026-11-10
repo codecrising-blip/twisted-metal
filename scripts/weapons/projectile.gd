@@ -104,6 +104,8 @@ func _add_trail(p: CPUParticles3D) -> void:
 
 
 func _add_light(color: Color, energy: float, light_range: float) -> void:
+	if not GraphicsSettings.high:
+		return # LOW: a moving light per missile is too costly on old GPUs; the trail still glows
 	var l := OmniLight3D.new()
 	l.light_color = color
 	l.light_energy = energy

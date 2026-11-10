@@ -82,6 +82,7 @@ var _countdown: Label
 var _notice: Label
 var _notice_tween: Tween
 var _help: Label
+var _fps: Label
 var _message_tween: Tween
 var _damage_flash := 0.0
 
@@ -171,6 +172,11 @@ func _build() -> void:
 	root.add_child(_help)
 	get_tree().create_timer(14.0, true).timeout.connect(func(): _help.visible = false)
 
+	# Top-left corner: frames per second (F3), so the owner can tell how fast it runs.
+	_fps = _label("", 16, Color(0.75, 1.0, 0.75))
+	_pin(_fps, 0.0, 0.0, Rect2(8, 4, 160, 22))
+	root.add_child(_fps)
+
 	# Center: big messages.
 	var center := VBoxContainer.new()
 	_pin(center, 0.5, 0.5, Rect2(-500, -160, 1000, 260))
@@ -253,6 +259,10 @@ func _process(delta: float) -> void:
 func _handle_input() -> void:
 	if Input.is_action_just_pressed("toggle_help"):
 		_help.visible = not _help.visible
+	if Input.is_action_just_pressed("toggle_fps"):
+		_fps.visible = not _fps.visible
+	if _fps.visible:
+		_fps.text = "FPS %d" % Engine.get_frames_per_second()
 	if Input.is_action_just_pressed("pause") and not game_over:
 		get_tree().paused = not get_tree().paused
 		if get_tree().paused:

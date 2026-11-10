@@ -41,6 +41,8 @@ func _ready() -> void:
 	light.light_energy = 3.0
 	light.omni_range = 10.0
 	light.position = Vector3.UP * 2.0
+	light.add_to_group(GraphicsSettings.EXTRA_LIGHT_GROUP)
+	light.visible = GraphicsSettings.high
 	add_child(light)
 
 
