@@ -1,12 +1,12 @@
 class_name LaCity
 extends Node3D
-## The city around the Los Angeles arena (owner, session 5: "a city below the battleground, which
-## is a little higher than the city"). The arena is a plateau at y = 0, held up by concrete retaining
-## walls; the streets run CITY_Y below it out to the haze. Built for the Intel HD 5500:
-##   - every building is one instance of a single MultiMesh (one draw call for ~5000 buildings);
-##     windows, floors and roofs are drawn by a small shader, not by geometry
+## The city around the Los Angeles arena, used ONLY to bake the stage backdrop
+## (tests/bake_backdrop.gd renders it into assets/backdrops/los_angeles_city.jpg). In the game the
+## city is that one panorama image on the sky (owner, session 5: the background should cost almost
+## nothing; the modeling goes into the stage). The arena is a plateau at y = 0; the streets run
+## CITY_Y below it out to the haze.
+##   - buildings are one MultiMesh; windows, floors and roofs are drawn by a small shader
 ##   - the street grid is one generated texture tiled once per block
-##   - palms, freeway pillars and roof clutter are MultiMeshes too; nothing out here casts shadows
 ## Layout: low stucco blocks next to the plateau (their roofs stay below it, so the view is open),
 ## mid-rise further out, a downtown of towers to the north-east, two elevated freeways, mountains.
 
@@ -14,7 +14,7 @@ const CITY_Y := -22.0
 const BLOCK := 80.0 # street centerline spacing
 const STREET := 18.0
 const SIDEWALK := 3.0
-const PLATEAU := 132.0 # outer face of the retaining walls
+const PLATEAU := 168.0 # the arena's plateau reaches this far (keep buildings out)
 const REACH := 1500.0
 const DOWNTOWN := Vector2(560, -820)
 const FREEWAY_Z := 410.0 # east-west freeway (south of the arena)
@@ -30,7 +30,6 @@ func build() -> void:
 	_rng.seed = 2026
 	_concrete = _panel_concrete()
 	_ground()
-	_retaining_walls()
 	_buildings()
 	_freeways()
 	_palms()
@@ -313,9 +312,6 @@ func _buildings() -> void:
 							var rs := Vector3(_rng.randf_range(2.0, 5.0), _rng.randf_range(1.2, 2.6), _rng.randf_range(2.0, 4.0))
 							var rp := Vector3(px + _rng.randf_range(-size.x, size.x) * 0.3, CITY_Y + h + rs.y * 0.5, pz + _rng.randf_range(-size.z, size.z) * 0.3)
 							roofs.append(Transform3D(Basis.from_scale(rs), rp))
-	# The building that carries the HOLLYWOOD sign, just north of the arena (its roof at y 6.5).
-	xforms.append(Transform3D(Basis.from_scale(Vector3(104, 28.5, 24)), Vector3(-60, CITY_Y + 14.25, -150)))
-	colors.append(Color(0.6, 0.58, 0.54, 0.0))
 	_building_mat = _make_building_material()
 	_multimesh(BoxMesh.new(), xforms, colors, _building_mat)
 	var roof_mat := MatKit.plain(MatKit.flat(Color(0.5, 0.5, 0.48), 0.9))

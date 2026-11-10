@@ -18,6 +18,7 @@ The owner designs and play-tests; Claude writes the code, models and levels.
 | Story telling, tone, gameplay feel | Twisted Metal: Black (dark, grim, character stories) |
 | Visual style | **TM2-style bright, readable lighting** (owner, session 3: "forget the Black darkness"). Stages are **big like the main series**, with space and texture. |
 | Art technique | All models and levels are built **procedurally in GDScript** from primitives (low-poly PS2-era look). No imported art yet. |
+| Backdrops | What lies **outside** a stage is a pre-rendered **panorama image** on the sky (owner, session 5: "the background should be minimal, even a photo"), never 3D. All modeling effort goes into the playable stage. |
 
 ## Run, test, look
 Godot 4.3 binary is not in the repo. In a fresh cloud session:
@@ -40,6 +41,10 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
   driven further than in real time.
 - The headless smoke test takes about 20 s (it drives, fights and respawns in real time).
 - After adding a new `class_name` script, run `--import` once or other scripts can't find the class.
+- **Rebake the LA backdrop** after changing `scripts/arena/la_city.gd` (needs xvfb, about a minute):
+  `xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --path . -s tests/bake_backdrop.gd -- /tmp/faces 2048`
+  then `python3 tests/cube_to_panorama.py /tmp/faces assets/backdrops/los_angeles_city.jpg 6144`. Keep the `.import`
+  next to the jpg on VRAM compression with mipmaps (uncompressed it would cost ~100 MB of video memory).
 - The game starts in the **preview match** (Sweet Tooth vs Outlaw only). `-- full` = all five cars (tests use it).
   `-- high` / `-- low` force a graphics level for one run.
 
@@ -171,9 +176,9 @@ scripts/vehicles/           Vehicle (driving, wall rule, rams, states, combat), 
                             tire smoke), PlayerController, AIDriver (specials, ramps, max 2 on player)
 scripts/weapons/            WeaponData (all balance numbers), Projectile, Pickup, Specials (fires specials),
                             TaserLink, ChainBomb, FirePool
-scripts/arena/los_angeles.gd  stage 1 / test stage (TM2 Quake Zone): heightmap ground, roads, tunnels, cage...
-scripts/arena/la_city.gd    the city below the LA plateau: retaining walls, street grid texture, ~2200 buildings
-                            in one MultiMesh (windows drawn by a shader), freeways, palms, mountains, smoke
+scripts/arena/los_angeles.gd  stage 1 / test stage (TM2 Quake Zone): heightmap (raised battleground, ramps, crater,
+                            road hills), spline road, tunnels, cage, tower, sign; spot() = named places for tests
+scripts/arena/la_city.gd    BAKE ONLY: the 3D city rendered into the LA backdrop panorama (not built in the game)
 scripts/arena/la_props.gd   LA street furniture: toppling street lights, burnt wrecks, billboards, power lines,
                             traffic lights, barriers, dumpsters, containers, rubble, manholes, stains
 scripts/arena/junkyard.gd   the old prototype stage, now free play (`-- junkyard`)
@@ -184,7 +189,8 @@ scripts/ui/hud.gd           HUD layout (target, feed, messages, help, countdown,
 scripts/ui/hud_status.gd    bottom-left panel: name, lives, segmented health (trail), turbo, energy, state chips
 scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, ammo), other weapons as chips
 scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickups, walls/road from radar_lines()
-tests/                      smoke_test.gd (headless, ~65 checks), screenshot.gd
+tests/                      smoke_test.gd (headless, ~65 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py
+assets/backdrops/           stage backdrops (equirectangular panoramas shown as the sky)
 audio/music/                drop .ogg/.mp3 here; first file alphabetically plays in a loop
 docs/GDD.md                 game design document (living); docs/design/ = design bible (Arabic)
 ```
@@ -236,11 +242,16 @@ blimp too close, HUD weak, radar missing. Pass 2 (current):
 - **Outlaw** = armored police interceptor: real wheel openings, black steel wheels, louvered steel over the
   windshield, mesh on side windows, bullet strikes, twin hood guns in an armored box, low light bar, caged taser
   coil on the trunk.
-- **LA** is a plateau above the city: retaining walls drop 22 m to a street grid with ~2200 buildings, freeways,
-  palms and smog, mountains far away; the outer wall is a low barrier + chain-link fence (collider still 8 m);
-  HOLLYWOOD sign on a scaffold on a building north of the arena; blimp far over the city. Inside: toppling street
-  lights, wrecks, billboards, power lines, traffic lights, barriers, dumpsters, containers, rubble, stains;
-  gritty concrete/asphalt; muted grading (saturation 0.9).
+- **LA layout (owner, session 5, third pass; this is the current stage):** walls at +-155 (bigger map).
+  A raised **battleground** in the middle, `PLAT_H` = 5 m (about three Outlaws stacked), 200 x 184 m rounded square,
+  retaining walls with hazard-painted edges; open edges are drops. **Four ramps** up from the road. A **wavy road
+  loop** (Catmull-Rom through `ROAD_CTRL`) around it with **three jump hills** (3 m). Twin tunnels on the north
+  straight with ramps from the battleground onto their roof (teleporter to the cage). On the battleground: pit of
+  fire (crater), burnt building, power tower, the cage deck + overpass, barrier rows and wrecks as cover.
+  Outer wall = rusted steel barrier + chain-link fence (collider 8 m). Beyond it: the city as one baked panorama
+  on the sky (`assets/backdrops/los_angeles_city.jpg`); HOLLYWOOD on a scaffold past the north wall; blimp far
+  away. Owner's verdict on the previous pass: the 3D city was wasted effort and the stage itself was a plain
+  square; background must be minimal (an image is enough).
 - **HUD**: status panel, weapons panel, radar (see code map).
 - Effects: spinning gatlings + muzzle flash, turbo flames, tire smoke. Graphics: LOW (default) / HIGH, G in pause.
 Owner also wants, later: main menu, car select, stage select, world map, opponent preview.
@@ -275,3 +286,8 @@ Owner also wants, later: main menu, car select, stage select, world map, opponen
   Second pass (owner: "goofy, toy-like, school backyard"): serious rebuild of both cars, LA city + props, new HUD
   and radar. Gotchas: a procedural window grid shimmers far away (fade it with `fwidth`); distant mountains turn
   white in fog (their material uses `disable_fog`); MatKit materials need vertex colors (see Conventions).
+  Third pass (owner: "a full 3D city for a background, and the stage left a plain square"): city baked into a
+  panorama, LA rebuilt (raised battleground, ramps, wavy road, hills). Gotchas: `const X := SomeClassName` is not
+  a constant expression in 4.3 (write the class name out); Godot's panorama reads u = 0 at north (-Z) growing
+  east, v = 0 straight up (tests/cube_to_panorama.py follows that); AI wandering now aims at `arena.ground()` and
+  climbs ramps in two steps when a ramp starts up on a plateau (`AIDriver._lower_ramp`).

@@ -11,6 +11,8 @@ extends SceneTree
 ##   cage       the caged super health on its deck, and the overpass
 ##   center     the fire pit, the burnt building and the power tower
 ##   pit        close view of the fire pit
+##   hill       one of the three jump hills on the road
+##   ramp       a ramp up to the raised battleground
 ##   duel       the player and the first AI car face to face (preview: Sweet Tooth vs Outlaw)
 ##   car:<id>:<angle>  one car model on its own; angle = front34 | rear34 | side | front | top | low
 
@@ -58,17 +60,31 @@ func _run() -> void:
 				await _frames(10)
 				_place(cam, base + Vector3(0, 3.6, 12.5), base + Vector3(0, 1.0, 0), 60.0)
 			"overview":
-				_place(cam, Vector3(150, 135, 185), Vector3(-5, 0, 5), 62.0)
+				# From up here the backdrop (baked at ground level) would look wrong: plain sky instead.
+				for we in main.find_children("*", "WorldEnvironment", true, false):
+					(we as WorldEnvironment).environment.sky.sky_material = LosAngelesArena.sky_material()
+				_place(cam, Vector3(205, 170, 245), Vector3(-5, 0, 5), 62.0)
 			"roof":
-				_place(cam, Vector3(-80, 13.5, 20), Vector3(-62, 12, -145), 65.0)
+				_place(cam, Vector3(12, 13.5, -114), Vector3(-10, 16, -180), 65.0)
 			"tunnel":
-				_place(cam, Vector3(-79, 3.0, 45), Vector3(-80, 2.5, 0), 70.0)
+				_place(cam, Vector3(-46, 3.0, -121), Vector3(0, 2.5, -121), 70.0)
 			"cage":
-				_place(cam, Vector3(85, 24, 20), Vector3(51, 4, -45), 60.0)
+				_place(cam, Vector3(92, 28, 10), Vector3(55, 9, -42), 60.0)
 			"center":
-				_place(cam, Vector3(40, 22, 60), Vector3(-5, 0, -10), 65.0)
+				_place(cam, Vector3(60, 30, 95), Vector3(-5, 5, -10), 65.0)
 			"pit":
-				_place(cam, Vector3(0, 12, 34), Vector3(0, -1, 0), 60.0)
+				_place(cam, Vector3(0, 17, 36), Vector3(0, 4, 0), 60.0)
+			"hill":
+				var hill: Dictionary = LosAngelesArena.hills()[1]
+				var hp: Vector2 = hill.p
+				var hd: Vector2 = hill.d
+				var eye := Vector3(hp.x - hd.x * 38.0 - hd.y * 14.0, 6.0, hp.y - hd.y * 38.0 + hd.x * 14.0)
+				_place(cam, eye, Vector3(hp.x, 1.5, hp.y), 60.0)
+			"ramp":
+				var rp: Dictionary = LosAngelesArena.ramp_list()[1]
+				var foot: Vector3 = rp.foot
+				var side: Vector3 = rp.side
+				_place(cam, foot + side * 26.0 + (rp.dir as Vector3) * 14.0 + Vector3(0, 9, 0), (Vector3(rp.top.x, 2.5, rp.top.z) + foot) * 0.5, 62.0)
 			"duel":
 				var c := player.global_position
 				var e: Vehicle = main.enemies[0]

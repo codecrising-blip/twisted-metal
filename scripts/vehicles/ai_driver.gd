@@ -98,11 +98,13 @@ func _choose_goal(v: Vehicle) -> Vector3:
 	if is_instance_valid(v.target) and not v.target.is_dead:
 		# Lead the target a little.
 		return _via_ramp(v, v.target.global_position + v.target.velocity * 0.4)
-	_ramp_goal = {}
 	var half: float = arena.wander_half if arena else 60.0
 	if _wander == Vector3.ZERO or v.global_position.distance_to(_wander) < 8.0:
+		_ramp_goal = {}
 		_wander = Vector3(randf_range(-half, half), 0, randf_range(-half, half))
-	return _wander
+		if arena and arena.has_method("ground"):
+			_wander = arena.ground(_wander.x, _wander.z) # up on a deck or plateau: _via_ramp finds the way
+	return _via_ramp(v, _wander)
 
 
 ## Something up on a roof or deck: drive to the foot of the nearest ramp, then up it.
@@ -125,7 +127,27 @@ func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
 	var foot: Vector3 = _ramp_goal.foot
 	if not _ramp_goal.climbing and Vector2(v.global_position.x - foot.x, v.global_position.z - foot.z).length() < 8.0:
 		_ramp_goal.climbing = true
+	if not _ramp_goal.climbing and foot.y > v.global_position.y + 3.5:
+		return _lower_ramp(v, foot) # that ramp starts up on a plateau: get up there first
 	return _ramp_goal.top if _ramp_goal.climbing else foot
+
+
+## Route to a ramp that climbs to `level` (its top at that height): foot first, then up.
+func _lower_ramp(v: Vehicle, level: Vector3) -> Vector3:
+	var best: Dictionary = {}
+	var best_d := INF
+	for r: Dictionary in arena.ramps:
+		if absf(r.top.y - level.y) > 2.0 or r.foot.y > v.global_position.y + 2.0:
+			continue
+		var d: float = v.global_position.distance_to(r.foot) + (r.top as Vector3).distance_to(level)
+		if d < best_d:
+			best_d = d
+			best = r
+	if best.is_empty():
+		return level
+	var on_slope: bool = v.global_position.y > best.foot.y + 0.8
+	var near_foot := Vector2(v.global_position.x - best.foot.x, v.global_position.z - best.foot.z).length() < 8.0
+	return best.top if (on_slope or near_foot) else best.foot
 
 
 func _nearest_health(v: Vehicle) -> Pickup:

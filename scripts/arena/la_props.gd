@@ -5,15 +5,16 @@ extends Node3D
 ## wrecks, billboards for Calypso's contest, power poles with sagging wires, traffic lights, jersey
 ## barriers, dumpsters, a shipping container stack, rubble, manholes and oil stains.
 ## Each kind of prop is built once into one mesh and reused, so it stays cheap on the HD 5500.
-## Solid props share one StaticBody3D with a box per prop. Places avoid the road, spawns, pickups,
-## ramps, storefronts and the existing stands and palms.
+## Solid props share one StaticBody3D with a box per prop. Every place is checked against the
+## layout (road, ramps, hills, battleground edge, tunnels) by _free().
+
 
 var _rng := RandomNumberGenerator.new()
 var _body: StaticBody3D
 var _meshes := {}
 
 
-func build() -> void:
+func build(_arena: Node3D = null) -> void:
 	_rng.seed = 4242
 	_body = StaticBody3D.new()
 	_body.name = "PropColliders"
@@ -54,6 +55,27 @@ static func _ground_at(x: float, z: float) -> Vector3:
 	return LosAngelesArena.on_mesh(x, z)
 
 
+## True if a prop of this radius fits here: off the road, away from ramps, hills, the tunnels,
+## the battleground's cliff edge and the walls.
+static func _free(p: Vector3, radius: float, road_gap := 2.0) -> bool:
+	if LosAngelesArena.road_distance(p.x, p.z) < LosAngelesArena.ROAD_W * 0.5 + road_gap + radius:
+		return false
+	if absf(LosAngelesArena.edge_distance(p.x, p.z)) < 4.0 + radius:
+		return false
+	for rp: Dictionary in LosAngelesArena.ramp_list():
+		var mid: Vector3 = (Vector3(rp.top.x, 0, rp.top.z) + rp.foot) * 0.5
+		if Vector2(p.x - mid.x, p.z - mid.z).length() < LosAngelesArena.RAMP_L * 0.5 + 8.0 + radius:
+			return false
+	for hill: Dictionary in LosAngelesArena.hills():
+		if Vector2(p.x, p.z).distance_to(hill.p) < 18.0 + radius:
+			return false
+	if absf(p.x) < LosAngelesArena.TUNNEL_X + 10.0 and p.z < LosAngelesArena.TUNNEL_Z1 + 30.0:
+		return false
+	if absf(p.x) > LosAngelesArena.HALF - 3.0 - radius or absf(p.z) > LosAngelesArena.HALF - 3.0 - radius:
+		return false
+	return absf(p.x) + absf(p.z) < 2.0 * LosAngelesArena.HALF - LosAngelesArena.WALL_CHAMFER - 5.0 - radius
+
+
 # ---------------------------------------------------------------- materials
 
 func _steel() -> StandardMaterial3D:
@@ -87,27 +109,30 @@ func _lamp_mesh() -> ArrayMesh:
 	return _meshes.lamp
 
 
-## Lamps along the outer edge of the ring road, facing the road. They topple when a car hits them.
+## Lamps along the road edges, arm over the road. They topple when a car hits them.
 func _street_lights() -> void:
-	var h := LosAngelesArena.ROAD_H
-	var edge := h + LosAngelesArena.ROAD_W * 0.5 + 2.0
-	for t: float in [-60.0, -36.0, -12.0, 12.0, 36.0, 60.0]:
-		for side in 4:
-			var basis := Basis(Vector3.UP, side * PI * 0.5)
-			var pos := basis * Vector3(t, 0, edge)
-			if side == 3 and absf(t) < 40.0:
-				continue # the tunnels cross the road on the west side
-			if pos.distance_to(Vector3(20, 0, 110)) < 8.0 or pos.distance_to(Vector3(110, 0, 30)) < 8.0:
-				continue
-			var lamp := Breakable.new()
-			lamp.style = Breakable.Style.TOPPLE
-			lamp.health = 10.0
-			lamp.debris_color = Color(0.3, 0.32, 0.3)
-			lamp.position = _ground_at(pos.x, pos.z)
-			lamp.rotation.y = side * PI * 0.5 # arm reaches over the road
-			add_child(lamp)
-			lamp.add_box_shape(Vector3(0.5, 8.0, 0.5), Vector3(0, 4.0, 0))
-			_place(_lamp_mesh(), Vector3.ZERO, 0.0, lamp.visual)
+	var pts := LosAngelesArena.road_points()
+	var k := 4
+	var side := 1.0
+	while k < pts.size():
+		var p := pts[k]
+		var dir := (pts[(k + 1) % pts.size()] - pts[(k - 1 + pts.size()) % pts.size()]).normalized()
+		var across := Vector3(-dir.z, 0, dir.x)
+		var pos := p + across * side * (LosAngelesArena.ROAD_W * 0.5 + 1.6)
+		var toward_road := -across * side
+		k += 13
+		side = -side
+		if not _free(pos, 0.3, -1.4) or LosAngelesArena.road_distance(pos.x, pos.z) < LosAngelesArena.ROAD_W * 0.5 + 1.0:
+			continue
+		var lamp := Breakable.new()
+		lamp.style = Breakable.Style.TOPPLE
+		lamp.health = 10.0
+		lamp.debris_color = Color(0.3, 0.32, 0.3)
+		lamp.position = _ground_at(pos.x, pos.z)
+		lamp.basis = Basis.looking_at(toward_road, Vector3.UP) # arm (local -Z) reaches over the road
+		add_child(lamp)
+		lamp.add_box_shape(Vector3(0.5, 8.0, 0.5), Vector3(0, 4.0, 0))
+		_place(_lamp_mesh(), Vector3.ZERO, 0.0, lamp.visual)
 
 
 # ---------------------------------------------------------------- wrecks
@@ -145,9 +170,14 @@ func _wreck_mesh(variant: int) -> ArrayMesh:
 
 
 func _wrecks() -> void:
-	var spots := [[Vector3(104, 0, -104), 35.0], [Vector3(-104, 0, 106), -50.0], [Vector3(62, 0, 112), 80.0],
-		[Vector3(20, 0, -110), 10.0], [Vector3(108, 0, 58), 170.0], [Vector3(-44, 0, -30), 120.0],
-		[Vector3(-108, 0, -104), -20.0]]
+	# On the battleground they are cover; out on the low ground they are just wrecks.
+	var candidates := [[Vector3(28, 0, 66), 20.0], [Vector3(-68, 0, 18), 75.0], [Vector3(12, 0, -68), 160.0],
+		[Vector3(-28, 0, -24), 120.0], [Vector3(130, 0, -128), 35.0], [Vector3(-118, 0, 128), -50.0],
+		[Vector3(104, 0, 128), 80.0], [Vector3(-140, 0, -110), -20.0], [Vector3(140, 0, 30), 170.0]]
+	var spots: Array = []
+	for c in candidates:
+		if _free(c[0], 2.5):
+			spots.append(c)
 	for i in spots.size():
 		var p: Vector3 = spots[i][0]
 		var yaw: float = spots[i][1]
@@ -167,9 +197,9 @@ func _wrecks() -> void:
 
 func _billboards() -> void:
 	var boards := [
-		[Vector3(-10, 0, -117), 180.0, "CALYPSO'S CONTEST", "WIN ONE WISH. ANY WISH.", Color(0.75, 0.12, 0.1)],
-		[Vector3(112, 0, -40), 90.0, "LAST ONE DRIVING", "GETS EVERYTHING", Color(0.85, 0.65, 0.1)],
-		[Vector3(-117, 0, 98), -90.0, "QUAKE ZONE", "NO ENTRY  -  BY ORDER OF THE CITY", Color(0.15, 0.35, 0.6)],
+		[Vector3(-60, 0, LosAngelesArena.HALF - 5.0), 0.0, "CALYPSO'S CONTEST", "WIN ONE WISH. ANY WISH.", Color(0.65, 0.12, 0.1)],
+		[Vector3(LosAngelesArena.HALF - 5.0, 0, -62), 90.0, "LAST ONE DRIVING", "GETS EVERYTHING", Color(0.75, 0.58, 0.12)],
+		[Vector3(-LosAngelesArena.HALF + 5.0, 0, -78), -90.0, "QUAKE ZONE", "NO ENTRY  -  BY ORDER OF THE CITY", Color(0.15, 0.32, 0.55)],
 	]
 	var steel := _steel()
 	var dark := _dark()
@@ -212,7 +242,7 @@ func _power_lines() -> void:
 	var dark := _dark()
 	var wire := MatKit.flat(Color(0.03, 0.03, 0.03), 0.8)
 	var mb := MeshBuilder.new()
-	var runs := [[Vector3(118, 0, -90), Vector3(118, 0, 0)], [Vector3(-90, 0, -118), Vector3(60, 0, -118)]]
+	var runs := [[Vector3(45, 0, -LosAngelesArena.HALF + 6.0), Vector3(122, 0, -LosAngelesArena.HALF + 6.0)], [Vector3(-LosAngelesArena.HALF + 6.0, 0, 75), Vector3(-LosAngelesArena.HALF + 6.0, 0, 128)]]
 	for run in runs:
 		var a: Vector3 = run[0]
 		var b: Vector3 = run[1]
@@ -220,7 +250,7 @@ func _power_lines() -> void:
 		var tops: Array[Vector3] = []
 		for k in count:
 			var p := a.lerp(b, float(k) / (count - 1))
-			if p.distance_to(Vector3(110, 0, 30)) < 6.0:
+			if LosAngelesArena.road_distance(p.x, p.z) < LosAngelesArena.ROAD_W * 0.5 + 2.0:
 				continue
 			var g := _ground_at(p.x, p.z)
 			mb.cylinder(wood, 0.16, 11.0, MeshBuilder.at(g + Vector3(0, 5.5, 0)), 7, 0.12)
@@ -250,9 +280,16 @@ func _traffic_lights() -> void:
 	var steel := _steel()
 	var mb := MeshBuilder.new()
 	var lamps := [MatKit.lamp(Color(0.9, 0.08, 0.05), 2.5), MatKit.lamp(Color(0.25, 0.2, 0.05), 0.2), MatKit.lamp(Color(0.05, 0.2, 0.08), 0.2)]
-	for corner: Vector3 in [Vector3(94, 0, 94), Vector3(-94, 0, 94), Vector3(94, 0, -94), Vector3(-94, 0, -94)]:
+	for f: float in [0.18, 0.47, 0.74, 0.93]:
+		var r := LosAngelesArena.road_at(f)
+		var dir: Vector3 = r.dir
+		var across := Vector3(-dir.z, 0, dir.x)
+		var outer := across if (r.p as Vector3).dot(across) > 0.0 else -across
+		var corner: Vector3 = r.p + outer * (LosAngelesArena.ROAD_W * 0.5 + 2.2)
+		if not _free(corner, 0.3, -1.6):
+			continue
 		var g := _ground_at(corner.x, corner.z)
-		var inward := -Vector3(corner.x, 0, corner.z).normalized()
+		var inward := -outer
 		mb.cylinder(steel, 0.14, 6.0, MeshBuilder.at(g + Vector3(0, 3.0, 0)), 8)
 		var arm_end := g + Vector3(0, 6.0, 0) + inward * 5.0
 		mb.cylinder(steel, 0.08, 5.0, MeshBuilder.along((g + Vector3(0, 6.0, 0) + arm_end) * 0.5, arm_end - g - Vector3(0, 6.0, 0)), 6)
@@ -294,9 +331,9 @@ func _dumpster_mesh() -> ArrayMesh:
 
 
 func _barriers_and_bins() -> void:
-	# Barrier rows parallel to the walls, out of the driving lines.
-	var rows := [[Vector3(-113, 0, -52), 0.0, 3], [Vector3(-113, 0, 40), 0.0, 3], [Vector3(80, 0, -112), 90.0, 4],
-		[Vector3(-50, 0, 112), 90.0, 3], [Vector3(112, 0, -80), 0.0, 3]]
+	# Barrier rows on the battleground (cover to fight around), plus a few along its edge.
+	var rows := [[Vector3(-46, 0, -6), 0.0, 4], [Vector3(36, 0, 22), 90.0, 4], [Vector3(-12, 0, 66), 90.0, 3],
+		[Vector3(64, 0, -6), 0.0, 3], [Vector3(-84, 0, -66), 0.0, 3], [Vector3(-36, 0, 76), 90.0, 3]]
 	for r in rows:
 		var start: Vector3 = r[0]
 		var yaw: float = r[1]
@@ -308,7 +345,11 @@ func _barriers_and_bins() -> void:
 			_place(_barrier_mesh(), g, yaw + _rng.randf_range(-4, 4))
 		var mid := start + dir * ((n - 1) * 3.05 * 0.5)
 		_solid(Vector3(0.75, 0.85, n * 3.05), _ground_at(mid.x, mid.z) + Vector3(0, 0.42, 0), yaw)
-	for spot in [[Vector3(-20, 0, 119), 0.0], [Vector3(-119, 0, 47), 90.0], [Vector3(119, 0, 52), -90.0], [Vector3(30, 0, 119), 5.0]]:
+	var h := LosAngelesArena.HALF
+	for spot in [[Vector3(-84, 0, h - 5.0), 0.0], [Vector3(52, 0, h - 5.0), 5.0], [Vector3(h - 5.0, 0, 84), -90.0],
+			[Vector3(-h + 5.0, 0, 70), 90.0], [Vector3(-h + 5.0, 0, -50), 90.0], [Vector3(84, 0, -h + 5.0), 180.0]]:
+		if LosAngelesArena.road_distance(spot[0].x, spot[0].z) < LosAngelesArena.ROAD_W * 0.5 + 2.5:
+			continue
 		var g := _ground_at(spot[0].x, spot[0].z)
 		_place(_dumpster_mesh(), g, spot[1])
 		_solid(Vector3(1.9, 1.5, 1.3), g + Vector3(0, 0.75, 0), spot[1])
@@ -317,7 +358,7 @@ func _barriers_and_bins() -> void:
 func _container_stack() -> void:
 	var colors := [Color(0.5, 0.18, 0.12), Color(0.15, 0.28, 0.4), Color(0.45, 0.4, 0.2)]
 	var mb := MeshBuilder.new()
-	var base := _ground_at(52, 70)
+	var base := _ground_at(-74, 46)
 	var dark := _dark()
 	for i in 3:
 		var paint := MatKit.paint(colors[i], 0.8, 0.85, 0.7, 2.0, 0.7, 100 + i)
@@ -346,7 +387,7 @@ func _rubble() -> void:
 		var r := _rng.randf_range(24.0, 34.0) if i < 50 else _rng.randf_range(4.0, 14.0)
 		var c := Vector3(cos(a) * r, 0, sin(a) * r)
 		if i >= 50:
-			c += Vector3(-30, 0, -45) # around the burnt building
+			c += Vector3(LosAngelesArena.BURNT_AT.x, 0, LosAngelesArena.BURNT_AT.z) # around the burnt building
 		var g := _ground_at(c.x, c.z)
 		var s := Vector3(_rng.randf_range(0.2, 0.55), _rng.randf_range(0.12, 0.35), _rng.randf_range(0.2, 0.6))
 		mb.box(conc, s, MeshBuilder.at(g + Vector3(0, s.y * 0.35, 0), Vector3(_rng.randf_range(-20, 20), _rng.randf_range(0, 360), _rng.randf_range(-20, 20))), 0.03)
@@ -370,35 +411,36 @@ func _stain_mat() -> StandardMaterial3D:
 
 
 func _road_marks() -> void:
-	var h := LosAngelesArena.ROAD_H
 	var iron := MatKit.steel(Color(0.12, 0.12, 0.12), 0.6, 0.4)
+	var pts := LosAngelesArena.road_points()
 	var mb := MeshBuilder.new()
-	for side in 4:
-		var basis := Basis(Vector3.UP, side * PI * 0.5)
-		for t: float in [-50.0, 5.0, 48.0]:
-			var p := basis * Vector3(t, 0, h + 3.0)
-			if side == 0 and absf(p.x) < 28.0:
-				continue # the humps
-			if side == 3 and absf(p.z) < 40.0:
-				continue
-			mb.cylinder(iron, 0.38, 0.03, MeshBuilder.at(_ground_at(p.x, p.z) + Vector3(0, 0.05, 0)), 14)
-	mb.commit(self, false)
-	# Oil stains and tire marks as soft dark patches lying on the ground.
-	for i in 40:
-		var side := i % 4
-		var basis := Basis(Vector3.UP, side * PI * 0.5)
-		var p := basis * Vector3(_rng.randf_range(-62, 62), 0, h + _rng.randf_range(-6.0, 6.0))
-		if side == 3 and absf(p.z) < 40.0:
+	for k in range(7, pts.size(), 23):
+		var p := pts[k]
+		var near_hill := false
+		for hill: Dictionary in LosAngelesArena.hills():
+			if Vector2(p.x, p.z).distance_to(hill.p) < 16.0:
+				near_hill = true
+		if near_hill:
 			continue
+		var dir := (pts[(k + 1) % pts.size()] - p).normalized()
+		var q := p + Vector3(-dir.z, 0, dir.x) * 3.0
+		mb.cylinder(iron, 0.38, 0.03, MeshBuilder.at(_ground_at(q.x, q.z) + Vector3(0, 0.05, 0)), 14)
+	mb.commit(self, false)
+	# Oil stains and tire marks as soft dark patches lying on the road.
+	for i in 44:
+		var k := _rng.randi_range(0, pts.size() - 1)
+		var p := pts[k]
+		var dir := (pts[(k + 1) % pts.size()] - p).normalized()
+		p += Vector3(-dir.z, 0, dir.x) * _rng.randf_range(-6.0, 6.0)
 		var g := LosAngelesArena.on_mesh(p.x, p.z, 0.1)
-		var q := QuadMesh.new()
-		q.orientation = PlaneMesh.FACE_Y
+		var qm := QuadMesh.new()
+		qm.orientation = PlaneMesh.FACE_Y
 		var long := i % 3 == 0
-		q.size = Vector2(0.5, _rng.randf_range(6.0, 12.0)) if long else Vector2.ONE * _rng.randf_range(1.0, 3.2)
+		qm.size = Vector2(0.5, _rng.randf_range(6.0, 12.0)) if long else Vector2.ONE * _rng.randf_range(1.0, 3.2)
 		var mi := MeshInstance3D.new()
-		mi.mesh = q
+		mi.mesh = qm
 		mi.material_override = _stain_mat()
 		mi.position = g
-		mi.rotation.y = basis.get_euler().y + (_rng.randf_range(-0.2, 0.2) if long else _rng.randf() * TAU)
+		mi.rotation.y = atan2(-dir.x, -dir.z) + (_rng.randf_range(-0.2, 0.2) if long else _rng.randf() * TAU)
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(mi)

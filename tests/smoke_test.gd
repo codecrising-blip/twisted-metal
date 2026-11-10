@@ -63,7 +63,7 @@ func _run() -> void:
 	_park(main)
 	var enemy_starts: Array = main.enemies.map(func(e: Vehicle): return e.global_position)
 
-	# Driving: the player starts on the south road facing east, toward the three humps.
+	# Driving: the player starts on the south road facing east.
 	var start := player.global_position
 	Input.action_press("accelerate")
 	await _frames(120)
@@ -158,9 +158,10 @@ func _run() -> void:
 	_check(absf((o_hp - outlaw.health) - expected) < 0.1, "ram damage follows the weight formula (%.1f)" % (o_hp - outlaw.health))
 	_check(absf((p_hp - player.health) - expected * 0.1) < 0.1, "the heavier rammer takes 10%% back")
 
-	# Wall slide: 45 degrees into the north wall keeps most of the speed and turns along it.
+	# Wall slide: 45 degrees into the south wall keeps most of the speed and turns along it.
 	player.health = player.max_health
-	_place(player, -40, -112, -45)
+	player.global_transform = main.arena.spot("south_wall_45")
+	player.velocity = Vector3.ZERO
 	player.speed = 30.0
 	Input.action_press("accelerate")
 	await _frames(70)
@@ -169,7 +170,8 @@ func _run() -> void:
 	_check(absf(player.speed) > 15.0, "a 45-degree wall hit keeps the car moving (%.1f m/s)" % player.speed)
 	_check(fwd.x > 0.85, "...and turns it along the wall")
 	# Square hit: bounces off and turns, never stops dead.
-	_place(player, 10, -112, 0)
+	player.global_transform = main.arena.spot("south_wall_90")
+	player.velocity = Vector3.ZERO
 	player.speed = 30.0
 	Input.action_press("accelerate")
 	await _frames(90)
@@ -218,7 +220,7 @@ func _run() -> void:
 	await _frames(3)
 	_check(not outlaw.has_live_special(), "taser link breaks when the target gets too far")
 	var charges: int = outlaw.ammo["omni_taser"]
-	_place(dog, 60, -60, 0)
+	_place(dog, 60, 70, 0)
 	await _frames(2)
 	outlaw.ammo["omni_taser"] = 2
 	outlaw.selected = 0
@@ -256,8 +258,9 @@ func _run() -> void:
 
 	# Spectre's ghost missile flies through the burnt building's wall.
 	var spectre: Vehicle = main.enemies.filter(func(e: Vehicle): return e.car_id == "spectre")[0]
-	_place(spectre, -52, -45, -90)
-	_place(dog, -32, -45, 90)
+	var bb := LosAngelesArena.BURNT_AT
+	_place(spectre, bb.x - 22.0, bb.z, -90)
+	_place(dog, bb.x - 2.0, bb.z, 90)
 	await _frames(3)
 	var g_hp := dog.health
 	Projectile.spawn(main, "ghost_missile", spectre.aim_point() + Vector3(2, 0, 0), Vector3(1, 0, 0), spectre, dog)
@@ -265,8 +268,8 @@ func _run() -> void:
 	_check(g_hp - dog.health >= 23.0, "ghost missile passes through walls")
 
 	# Napalm Cone lands on a parked target and sets it on fire.
-	_place(player, 60, 40, 90)
-	_place(outlaw, 30, 40, 90)
+	_place(player, 40, 70, 90)
+	_place(outlaw, 10, 70, 90)
 	player.target = outlaw
 	player.auto_target = false
 	await _frames(3)
@@ -286,13 +289,17 @@ func _run() -> void:
 	_check(dog.global_position.y > -5.0, "a car below the world is put back on the map")
 
 	# AI drives on its own.
+	var ai_starts: Array[Vector3] = []
 	for i in main.enemies.size():
 		(main.enemies[i] as Vehicle).controller = brains[i]
-		_place(main.enemies[i], [88.0, 40.0, -79.0, -30.0][i], [40.0, -88.0, -60.0, 40.0][i], [0.0, 90.0, 180.0, 0.0][i])
+		var t: Transform3D = main.arena.spawn_points[i + 1]
+		(main.enemies[i] as Vehicle).global_transform = t
+		(main.enemies[i] as Vehicle).velocity = Vector3.ZERO
+		ai_starts.append(t.origin)
 	await _frames(180)
 	var ai_moved := 0
 	for i in main.enemies.size():
-		if (main.enemies[i] as Vehicle).global_position.distance_to(Vector3([88.0, 40.0, -79.0, -30.0][i], 0, [40.0, -88.0, -60.0, 40.0][i])) > 6.0:
+		if (main.enemies[i] as Vehicle).global_position.distance_to(ai_starts[i]) > 6.0:
 			ai_moved += 1
 	_check(ai_moved >= 3, "AI enemies drive around (%d of 4)" % ai_moved)
 
