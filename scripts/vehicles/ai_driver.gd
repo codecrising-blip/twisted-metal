@@ -1,24 +1,27 @@
 class_name AIDriver
 extends RefCounted
-## Enemy brain, tuned to the owner's play-test 1 (TM-style dogfights, no magnet):
-##   CHASE     the target drives away or shows its side: follow with a gap (never glued to the
-##             bumper) and shoot; no handbrake drifts around it.
-##   FACE-OFF  the target turns to face us: hold the line and fight head-on from the front at about
-##             STANDOFF meters (back off if it comes too close), instead of sliding round behind it.
-##   RETREAT   only when badly hurt: break away (drifting allowed) and look for health.
+## Enemy brain, tuned to the owner's play-tests (aimed at a 7/10 fight, TM style):
+##   HUNT     far away: drive at the target, hunt it with long-range missiles; grab weapons and
+##            turbo on the way when low on them.
+##   CHASE    the target runs: follow it with turbo, missiles, and the special from behind.
+##   ATTACK   attack runs: come at the target from the front, aiming beside it on a side picked at
+##            random each run (sometimes switched mid-run as a feint, never in answer to the
+##            player's steering), swing round toward its back; keep driving past, then drift round
+##            and come again. The player's counter is to turn into it or ram it. No circling.
+##   RETREAT  only when badly hurt: break away (drifting) and look for health.
 ## Also: dodges walls with feeler rays, backs out when stuck, takes ramps to reach high targets.
 ## Story rule (design 1.5): at most two AI cars go after the player at the same time.
 
 const WORLD_MASK := 1
 const MAX_ON_PLAYER := 2
-const STANDOFF := 17.0 # head-on fights hold about this far
-const CHASE_GAP := 15.0 # following distance behind a fleeing target
-const FACING := deg_to_rad(40.0) # the target "faces us" when we are inside this cone of its nose
-const RETREAT_AT := 0.35 # share of max health
+const RETREAT_AT := 0.3 # share of max health
+const HUNT_RANGE := 55.0 # attack runs start inside this distance
+const SPECIAL_RANGE := 8.0 # close-range specials (Outlaw's taser) only this close (owner)
 
-var aggression := 1.0 # 0.5 easy .. 1.5 hard
+var aggression := 1.2 # 0.5 easy .. 1.5 hard; 1.2 = the owner's 7/10
 var arena: Node3D # stage: ramps, wander area
-var mode := "wander" # chase | faceoff | retreat | wander (tests and debugging read it)
+var mode := "wander" # hunt | chase | attack | retreat | detour | wander (tests and debugging read it)
+var phase := "approach" # attack run: approach | pass | turn
 
 var _retarget := 0.0
 var _weapon_timer := 2.0
@@ -30,6 +33,11 @@ var _reverse := 0.0
 var _reverse_steer := 1.0
 var _wander := Vector3.ZERO
 var _ramp_goal: Dictionary = {}
+var _side := 1.0 # attack run: pass on the target's right (1) or left (-1)
+var _feinted := false
+var _phase_t := 0.0
+var _drift := false
+var drifts := 0 # handbrake turns started (tests)
 
 
 func drive(v: Vehicle, delta: float) -> void:
@@ -40,7 +48,8 @@ func drive(v: Vehicle, delta: float) -> void:
 		_retarget = 0.6
 		v.target = _choose_target(v)
 
-	var plan := _plan(v)
+	_drift = false
+	var plan := _plan(v, delta)
 	var goal: Vector3 = plan.goal
 	var throttle: float = plan.throttle
 	var to := goal - v.global_position
@@ -49,28 +58,28 @@ func drive(v: Vehicle, delta: float) -> void:
 	var fwd := v.flat_forward()
 	var angle := fwd.signed_angle_to(to.normalized(), Vector3.UP) if dist > 0.1 else 0.0
 	# signed_angle_to around UP is positive to the left; steer is positive to the right.
-	var steer := clampf(-angle * 2.0, -1.0, 1.0)
-	if mode == "faceoff" and absf(angle) > 0.6:
-		throttle = maxf(throttle, 0.55) # turn the nose back onto the target
-	# Handbrake only to break away when hurt, or for a U-turn far from the fight. No drifting
-	# circles around the target.
-	var handbrake := absf(angle) > 1.3 and v.speed > 14.0 and (mode == "retreat" or (mode == "wander" and absf(angle) > 2.2))
+	var steer := clampf(-angle * 2.2, -1.0, 1.0)
+	# Sharp turns at speed: lift off and drift round instead of a wide arc (a wide arc at full speed
+	# runs off the battleground edge or past a ramp foot). Drift turns are part of attack runs too.
+	if absf(angle) > 1.0 and v.speed > 15.0 and phase != "pass":
+		throttle = minf(throttle, 0.35)
+	var handbrake := (_drift and absf(angle) > 0.8 and v.speed > 10.0) or (absf(angle) > 1.4 and v.speed > 12.0)
+	if handbrake and not v.in_handbrake:
+		drifts += 1
 
 	steer = clampf(steer + _avoid(v, fwd), -1.0, 1.0)
-	if v.speed < -0.5:
-		steer = -steer # backing up: the nose turns the other way
 
-	# Stuck against something: back out, turning the other way.
+	# Stuck against something (a corner, a wall, a car): back out, turning the other way.
 	if _reverse > 0.0:
 		_reverse -= delta
 		throttle = -1.0
 		steer = _reverse_steer
 		handbrake = false
-	elif absf(v.speed) < 2.0 and throttle > 0.3:
-		_stuck += delta
-		if _stuck > 1.2:
+	elif Vector2(v.velocity.x, v.velocity.z).length() < 2.0 and throttle > 0.3:
+		_stuck += delta # pushing against a wall, a corner or a car without moving
+		if _stuck > 0.7:
 			_stuck = 0.0
-			_reverse = 1.0
+			_reverse = 1.1
 			_reverse_steer = -signf(steer) if absf(steer) > 0.1 else (1.0 if randf() < 0.5 else -1.0)
 	else:
 		_stuck = 0.0
@@ -78,21 +87,22 @@ func drive(v: Vehicle, delta: float) -> void:
 	v.in_throttle = throttle
 	v.in_steer = steer
 	v.in_handbrake = handbrake
-	# Turbo never refills by itself: save it for escaping or closing a long gap.
-	var far := dist > 70.0 and mode == "chase"
-	v.in_turbo = (mode == "retreat" or far or not _ramp_goal.is_empty()) and absf(angle) < 0.25 and v.turbo > 25.0
+	# Turbo never refills by itself: spend it on chasing a runner, closing a long gap or escaping.
+	var want_turbo: bool = plan.get("turbo", false) or not _ramp_goal.is_empty()
+	v.in_turbo = want_turbo and absf(angle) < 0.3 and v.turbo > 10.0
 	_shoot(v, delta)
 
 
-## Where to drive and how hard, from the target's health, distance and which way it faces.
-func _plan(v: Vehicle) -> Dictionary:
+## Where to drive, how hard, and whether to use turbo.
+func _plan(v: Vehicle, delta: float) -> Dictionary:
 	var t := v.target
 	var has_t := is_instance_valid(t) and not t.is_dead
 	if v.health < v.max_health * RETREAT_AT:
-		var pickup := _nearest_health(v)
+		var pickup := _nearest_pickup(v, "health")
 		if pickup:
 			mode = "retreat"
-			return {"goal": _via_ramp(v, pickup.global_position), "throttle": 1.0}
+			_drift = true
+			return {"goal": _via_ramp(v, pickup.global_position), "throttle": 1.0, "turbo": true}
 		if has_t and v.global_position.distance_to(t.global_position) < 40.0:
 			mode = "retreat" # nothing to heal with: get some room
 			var away := (v.global_position - t.global_position)
@@ -101,26 +111,76 @@ func _plan(v: Vehicle) -> Dictionary:
 			var half: float = arena.wander_half if arena else 60.0
 			flee.x = clampf(flee.x, -half, half)
 			flee.z = clampf(flee.z, -half, half)
-			return {"goal": flee, "throttle": 1.0}
-	if has_t:
-		var to := t.global_position - v.global_position
-		var d := Vector2(to.x, to.z).length()
-		var level := absf(to.y) < 3.0
-		var back := -to
-		back.y = 0.0
-		var faces_us := t.flat_forward().angle_to(back.normalized()) < FACING
-		if faces_us and level and d < 45.0:
-			mode = "faceoff"
-			_ramp_goal = {}
-			return {"goal": t.global_position, "throttle": clampf((d - STANDOFF) / 12.0, -0.7, 0.85)}
+			return {"goal": flee, "throttle": 1.0, "turbo": true}
+	if not has_t:
+		return _wander_plan(v)
+	var to := t.global_position - v.global_position
+	var d := Vector2(to.x, to.z).length()
+	var flat_to := Vector3(to.x, 0, to.z).normalized()
+	var t_vel := Vector3(t.velocity.x, 0, t.velocity.z)
+	var running := t_vel.length() > 9.0 and t_vel.normalized().dot(flat_to) > 0.4 # driving away from us
+	if absf(to.y) > 3.0: # up on a deck or down on the road: go round by a ramp
 		mode = "chase"
-		var goal := _via_ramp(v, t.global_position + t.velocity * 0.25)
-		var throttle := 1.0
-		if level and d < CHASE_GAP + 8.0:
-			# Match its speed and keep a gap instead of riding its bumper.
-			var match_speed := t.velocity.length() / float(v.stats.get("max_speed", 25.0))
-			throttle = clampf(match_speed * 0.95 + (d - CHASE_GAP) * 0.06, -0.4, 1.0)
-		return {"goal": goal, "throttle": throttle}
+		return {"goal": _via_ramp(v, t.global_position), "throttle": 1.0, "turbo": d > 40.0}
+	_ramp_goal = {}
+	# Low on weapons or turbo and not in the thick of it: pick some up on the way.
+	if d > 35.0:
+		var detour := _detour(v)
+		if detour:
+			mode = "detour"
+			return {"goal": detour.global_position, "throttle": 1.0}
+	if running and d > 14.0:
+		mode = "chase"
+		phase = "approach"
+		return {"goal": t.global_position + t_vel * 0.35, "throttle": 1.0, "turbo": d > 22.0}
+	if d > HUNT_RANGE:
+		mode = "hunt"
+		phase = "approach"
+		return {"goal": t.global_position, "throttle": 1.0, "turbo": d > 90.0}
+	mode = "attack"
+	return _attack_run(v, t, d, flat_to, delta)
+
+
+## One attack run: come in beside the target on _side, swing toward its back, drive past,
+## drift round to face it, pick a new side, again.
+func _attack_run(v: Vehicle, t: Vehicle, d: float, flat_to: Vector3, delta: float) -> Dictionary:
+	var t_fwd := t.flat_forward()
+	var t_right := Vector3(-t_fwd.z, 0, t_fwd.x)
+	var facing := v.flat_forward().angle_to(flat_to) # 0 = its nose points at the target
+	match phase:
+		"approach":
+			# A feint now and then: switch sides mid-run (random, not a reaction to the player).
+			if not _feinted and d < 24.0 and d > 12.0:
+				_feinted = true
+				if randf() < 0.3:
+					_side = -_side
+					_drift = true
+			var lateral := clampf(d * 0.3, 3.5, 8.0)
+			var behind := clampf((26.0 - d) / 26.0, 0.0, 1.0) * 7.0 # closer = aim further round its back
+			var goal := t.global_position + t_right * _side * lateral - t_fwd * behind
+			if d < 6.5 or (facing > 1.9 and d < 22.0):
+				phase = "pass" # alongside or gone past: keep going
+				_phase_t = randf_range(0.45, 0.85)
+			return {"goal": goal, "throttle": 1.0}
+		"pass":
+			# Drive on past it, veering away so we never shove into it.
+			_phase_t -= delta
+			if _phase_t <= 0.0:
+				phase = "turn"
+			var away := -flat_to
+			return {"goal": v.global_position + (v.flat_forward() + away * 0.9).normalized() * 25.0, "throttle": 1.0}
+		_: # "turn": get some room, then drift round to face it again
+			_drift = true
+			if d < 16.0:
+				return {"goal": v.global_position - flat_to * 20.0 + v.flat_forward() * 6.0, "throttle": 1.0}
+			if facing < 0.45 or d > 40.0:
+				phase = "approach"
+				_feinted = false
+				_side = 1.0 if randf() < 0.5 else -1.0
+			return {"goal": t.global_position, "throttle": 0.9}
+
+
+func _wander_plan(v: Vehicle) -> Dictionary:
 	mode = "wander"
 	var half: float = arena.wander_half if arena else 60.0
 	if _wander == Vector3.ZERO or v.global_position.distance_to(_wander) < 8.0:
@@ -129,6 +189,23 @@ func _plan(v: Vehicle) -> Dictionary:
 		if arena and arena.has_method("ground"):
 			_wander = arena.ground(_wander.x, _wander.z) # up on a deck or plateau: _via_ramp finds the way
 	return {"goal": _via_ramp(v, _wander), "throttle": 1.0}
+
+
+## A weapon pickup when we carry nothing but the special, or turbo when it runs low; only if close.
+func _detour(v: Vehicle) -> Pickup:
+	var armed := false
+	for id in v.weapon_order:
+		if id != v.special_id and v.ammo.get(id, 0) > 0:
+			armed = true
+	if not armed:
+		var w := _nearest_pickup(v, "weapon")
+		if w and v.global_position.distance_to(w.global_position) < 45.0:
+			return w
+	if v.turbo < 30.0:
+		var tb := _nearest_pickup(v, "turbo")
+		if tb and v.global_position.distance_to(tb.global_position) < 30.0:
+			return tb
+	return null
 
 
 func _choose_target(v: Vehicle) -> Vehicle:
@@ -197,12 +274,16 @@ func _lower_ramp(v: Vehicle, level: Vector3) -> Vector3:
 	return best.top if (on_slope or near_foot) else best.foot
 
 
-func _nearest_health(v: Vehicle) -> Pickup:
+## Nearest active pickup of a group: "health", "turbo" or "weapon" (on the same level as us).
+func _nearest_pickup(v: Vehicle, what: String) -> Pickup:
 	var best: Pickup = null
 	var best_d := INF
 	for node in v.get_tree().get_nodes_in_group("pickups"):
 		var p := node as Pickup
-		if not p.active or not p.is_health():
+		if not p.active:
+			continue
+		var ok := p.is_health() if what == "health" else (p.is_turbo() if what == "turbo" else (not p.is_health() and not p.is_turbo()))
+		if not ok or (what != "health" and absf(p.global_position.y - v.global_position.y) > 3.0):
 			continue
 		var d := v.global_position.distance_to(p.global_position)
 		if d < best_d:
@@ -257,7 +338,7 @@ func _shoot(v: Vehicle, delta: float) -> void:
 	var to := t.global_position - v.global_position
 	var dist := to.length()
 	var angle := v.flat_forward().angle_to(Vector3(to.x, 0, to.z).normalized())
-	if dist < 75.0 and angle < 0.22 and _clear_shot(v, t):
+	if dist < 70.0 and angle < 0.35 and _clear_shot(v, t):
 		v.in_fire_guns = true
 	if mode == "retreat" and dist > 30.0:
 		return # busy getting away
@@ -290,7 +371,7 @@ func _weapon_makes_sense(id: String, dist: float, angle: float) -> bool:
 		"napalm":
 			return dist > 12.0 and dist < 40.0 and angle < 0.3
 		"remote":
-			return dist < 26.0 and angle < 0.35
+			return dist < 18.0 and angle > 2.3 # a mine for the car on our tail
 		"zoomy":
 			return dist < 70.0 and angle < 0.5
 		"sat":
@@ -301,7 +382,7 @@ func _weapon_makes_sense(id: String, dist: float, angle: float) -> bool:
 func _special_makes_sense(v: Vehicle, dist: float, angle: float) -> bool:
 	match v.special_id:
 		"omni_taser":
-			return dist < 20.0 and _clear_shot(v, v.target)
+			return dist < SPECIAL_RANGE and _clear_shot(v, v.target)
 		"chain_bomb":
 			return dist < 22.0 and angle < 0.2
 		"napalm_cone":
@@ -328,14 +409,21 @@ func _use_live_special(v: Vehicle, delta: float) -> void:
 		for o in Specials.cars_near(v.get_parent(), bomb.global_position, 4.5, v):
 			v.want_fire_weapon = true
 			return
-	elif live is Projectile:
+	elif live is Projectile: # napalm can in the air: drop it on whoever is under it
 		var p := live as Projectile
-		var reach := 4.0 if p.def.get("kind", "") == "gas" else 4.5
+		v.selected = maxi(v.weapon_order.find("napalm"), 0)
 		for o in Specials.cars_near(v.get_parent(), p.global_position, 60.0, v):
-			var flat := Vector2(o.global_position.x - p.global_position.x, o.global_position.z - p.global_position.z)
-			if flat.length() < reach and (p.def.get("kind", "") == "gas" or p.is_resting()):
-				v.want_fire_weapon = true # drop the can on it / blow the bomb
+			if Vector2(o.global_position.x - p.global_position.x, o.global_position.z - p.global_position.z).length() < 4.0:
+				v.want_fire_weapon = true
 				return
+	elif live is Mine: # blow it when an enemy is close to it and we are not
+		var m := live as Mine
+		if v.global_position.distance_to(m.global_position) < 7.0:
+			return
+		for o in Specials.cars_near(v.get_parent(), m.global_position, 4.5, v):
+			v.selected = maxi(v.weapon_order.find("remote"), 0)
+			v.want_fire_weapon = true
+			return
 
 
 func _clear_shot(v: Vehicle, t: Vehicle) -> bool:

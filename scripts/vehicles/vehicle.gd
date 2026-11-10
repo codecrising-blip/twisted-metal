@@ -98,7 +98,12 @@ var _last_wall_normal := Vector3.ZERO
 var _yaw_fix := 0.0 # pending heading correction from wall deflection (radians)
 var _stuck_time := 0.0
 var _wreck_time := 0.0
-var _active_special: Node # live taser link or chain bomb: repeat fire presses go to it
+var _active_special: Node # live taser link, chain bomb, napalm can or mine: repeat fire presses go to it
+var _live_weapon := "" # the weapon that left it out ("" = any fire press goes to it)
+var _tumble_axis := Vector3.RIGHT # blast flips: spin axis in the car's own space
+var _tumble_rate := 0.0
+var _tumble_angle := 0.0
+var _tumble_time := 0.0
 var _smoke: CPUParticles3D
 var _fire: CPUParticles3D
 var _burn_fx: CPUParticles3D
@@ -252,6 +257,14 @@ func _tick(delta: float) -> void:
 			_special_timer = 0.0
 			ammo[special_id] = ammo.get(special_id, 0) + 1
 			weapons_changed.emit(self)
+	# A napalm can or mine that is gone frees its empty weapon slot.
+	if _live_weapon != "" and not has_live_special():
+		if ammo.get(_live_weapon, 0) <= 0 and _live_weapon != special_id:
+			ammo.erase(_live_weapon)
+			weapon_order.erase(_live_weapon)
+			selected = clampi(selected, 0, maxi(weapon_order.size() - 1, 0))
+			weapons_changed.emit(self)
+		_live_weapon = ""
 	if auto_target:
 		_target_timer -= delta
 		if _target_timer <= 0.0:
@@ -433,6 +446,24 @@ func apply_impulse(v: Vector3) -> void:
 	velocity += v
 
 
+## A blast throws the car (heavy cars less). flip 1 = one full roll through the air away from the
+## blast, small values only tilt it; the body lands back on its wheels.
+func blast_knock(push: Vector3, flip := 0.0) -> void:
+	var v := push * knockback
+	velocity += v
+	speed *= 0.5
+	if flip <= 0.0 or v.y < 2.0:
+		return
+	var air := maxf(0.5, 2.0 * v.y / GRAVITY)
+	var axis := Vector3.UP.cross(Vector3(v.x, 0.0, v.z))
+	if axis.length() < 0.1:
+		axis = global_basis.x
+	_tumble_axis = (global_basis.inverse() * axis.normalized()).normalized()
+	_tumble_rate = flip * TAU / air
+	_tumble_time = air
+	_tumble_angle = 0.0
+
+
 func flat_forward() -> Vector3:
 	var f := -global_transform.basis.z
 	f.y = 0.0
@@ -466,7 +497,7 @@ func _combat(delta: float) -> void:
 		_fire_guns()
 	if want_fire_weapon:
 		want_fire_weapon = false
-		if has_live_special():
+		if has_live_special() and (_live_weapon == "" or _live_weapon == selected_weapon()):
 			_active_special.fire_again() # taser mash, bomb detonation, napalm drop
 		elif _can_charge():
 			charging_id = selected_weapon() # fires when the button is let go
@@ -518,8 +549,9 @@ func has_live_special() -> bool:
 	return is_instance_valid(_active_special) and not _active_special.is_queued_for_deletion()
 
 
-func set_live_special(node: Node) -> void:
+func set_live_special(node: Node, weapon := "") -> void:
 	_active_special = node
+	_live_weapon = weapon if node else ""
 
 
 func live_special() -> Node:
@@ -555,7 +587,7 @@ func _fire_selected(charged := false) -> void:
 	ammo[id] -= 1
 	_weapon_cooldowns[id] = float(WeaponData.get_def(id).get("cooldown", 0.5))
 	Specials.fire(self, id, charged)
-	if ammo[id] <= 0 and id != special_id:
+	if ammo[id] <= 0 and id != special_id and not (has_live_special() and _live_weapon == id):
 		ammo.erase(id)
 		weapon_order.erase(id)
 		selected = clampi(selected, 0, weapon_order.size() - 1)
@@ -734,4 +766,9 @@ func _animate(delta: float) -> void:
 	var roll := -in_steer * clampf(absf(speed) / stats.max_speed, 0.0, 1.0) * float(model.get_meta("lean", 0.06))
 	var pitch := 0.0 if is_on_floor() else clampf(velocity.y * 0.02, -0.3, 0.3)
 	var target_basis := Basis(Quaternion(Vector3.UP, up.normalized())) * Basis.from_euler(Vector3(pitch, 0, roll))
+	if _tumble_time > 0.0: # thrown by a blast: roll through the air
+		_tumble_time -= delta
+		_tumble_angle += _tumble_rate * delta
+		_visual.basis = Basis(_tumble_axis, _tumble_angle)
+		return
 	_visual.basis = _visual.basis.slerp(target_basis.orthonormalized(), clampf(10.0 * delta, 0.0, 1.0))

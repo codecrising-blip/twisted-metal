@@ -140,7 +140,7 @@ func detonate() -> void:
 	var world := get_parent()
 	var radius: float = def.get("radius", 7.0)
 	var center := global_position
-	for o in Specials.cars_near(world, center, radius + 1.0, owner_car):
+	for o in Specials.cars_near(world, center, radius + 1.0, null): # friendly fire: Billy Ray too
 		var d := clampf(o.aim_point().distance_to(center) / radius, 0.0, 1.0)
 		var dmg: float = lerpf(def.get("damage", 30.0), def.get("edge_damage", 15.0), d)
 		if o == stuck_to: # the bomb is on it: full center damage plus the hook bonus (40)

@@ -2,9 +2,10 @@ class_name Roster
 extends RefCounted
 ## Character / vehicle stats. Add new cars here and a builder in VehicleModels.
 ## Stats follow docs/design/01-characters.md section 1.1: four stats from 1 to 10 (sum 24) give
-##   max_speed = 19 + 1.1 * SPD m/s     accel = (8 + 0.9 * SPD) * class accel m/s^2
+##   max_speed = 21.3 + 1.1 * SPD m/s   accel = (10.2 + 0.85 * SPD) * class accel m/s^2
 ##   health    = 200 + 16 * ARM         handling = 1.5 + 0.12 * HND rad/s   grip = 6.0 + 0.35 * HND
-## Owner, play-test 1: speeds like TM: Black (slower, not lazy) and no crazy drifts for big cars,
+## Owner, play-test 1: speeds like TM: Black (slower, not lazy); play-test 2: 25% slower was too much,
+## so it is 15% under the first numbers (25 + 1.3 x SPD). No crazy drifts for big cars,
 ## so heavy classes keep more grip with the handbrake on and turn less sharply.
 ## mass class: light 1.0, medium 1.4, heavy 2.0, super 2.8 (rams, knockback, wall speed loss).
 ## size = collision box (width, height, length); camera = chase camera [height, distance].
@@ -72,8 +73,8 @@ static func get_car(id: String) -> Dictionary:
 	var arm: int = c.get("arm", 5)
 	var hnd: int = c.get("hnd", 5)
 	var cls: String = c.get("class", "medium")
-	c["max_speed"] = 19.0 + 1.1 * spd
-	c["accel"] = (8.0 + 0.9 * spd) * float(CLASS_ACCEL.get(cls, 1.0))
+	c["max_speed"] = 21.3 + 1.1 * spd
+	c["accel"] = (10.2 + 0.85 * spd) * float(CLASS_ACCEL.get(cls, 1.0))
 	c["reverse"] = 10.0
 	c["max_health"] = (200.0 + 16.0 * arm) * HEALTH_SCALE
 	c["handling"] = 1.5 + 0.12 * hnd

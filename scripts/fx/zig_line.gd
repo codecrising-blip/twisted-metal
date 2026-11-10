@@ -47,3 +47,22 @@ func draw(from: Vector3, to: Vector3, jitter := 0.0, sag := 0.0, width := -1.0) 
 		var dir := (b - a) / length
 		var up := Vector3.UP if absf(dir.y) < 0.98 else Vector3.RIGHT
 		mi.global_transform = Transform3D(Basis.looking_at(dir, up).scaled(Vector3(w, w, length)), (a + b) * 0.5)
+
+
+## Draw through given points (lightning bolts built by the caller). Extra parts hide.
+func draw_points(points: Array[Vector3], width: float) -> void:
+	for i in _parts.size():
+		var mi := _parts[i]
+		if i + 1 >= points.size():
+			mi.visible = false
+			continue
+		var a := points[i]
+		var b := points[i + 1]
+		var length := a.distance_to(b)
+		if length < 0.001:
+			mi.visible = false
+			continue
+		mi.visible = true
+		var dir := (b - a) / length
+		var up := Vector3.UP if absf(dir.y) < 0.98 else Vector3.RIGHT
+		mi.global_transform = Transform3D(Basis.looking_at(dir, up).scaled(Vector3(width, width, length + width * 0.5)), (a + b) * 0.5)

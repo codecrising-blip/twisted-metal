@@ -1,6 +1,7 @@
 class_name FirePool
 extends Area3D
-## A patch of fire on the ground. Sets every car inside on fire (Burning renews, never stacks).
+## A patch of fire on the ground. Sets every car inside on fire, its owner's too (Burning renews,
+## never stacks).
 ## Used by the Napalm Cone and by stage hazards (time <= 0 burns forever).
 
 var radius := 2.0
@@ -59,7 +60,7 @@ func _physics_process(delta: float) -> void:
 	if _tick <= 0.0:
 		_tick = 0.5
 		for body in get_overlapping_bodies():
-			if body is Vehicle and body != source:
+			if body is Vehicle: # the one who started it burns too (friendly fire)
 				(body as Vehicle).ignite(burn, source)
 	if time <= 0.0:
 		return # permanent stage fire

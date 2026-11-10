@@ -28,7 +28,7 @@ curl -sSL -o g.zip https://github.com/godotengine/godot/releases/download/4.3-st
 G=/tmp/godot/Godot_v4.3-stable_linux.x86_64
 cd <repo> && $G --headless --path . --import            # parse all scripts
 $G --headless --path . -s tests/smoke_test.gd           # gameplay tests, must print ALL TESTS PASSED
-# Screenshots (shots: gameplay | hero | duel | enemies | overview | roof | tunnel | cage | center | pit | hill | ramp | pickups,
+# Screenshots (shots: gameplay | hero | duel | enemies | overview | roof | tunnel | cage | center | pit | hill | ramp | pickups | weapons,
 #   car:<id>:<front34|rear34|side|front|top|low> for one car alone, look:x,y,z:tx,ty,tz for a free camera).
 #   Add `-- full` for all five cars:
 xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --path . -s tests/screenshot.gd -- hero docs/screenshots/hero.png
@@ -176,9 +176,12 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 ## Owner play-test 1 (session 5, end) — full text in `docs/design/09-owner-playtest-1.md`
 **Built in session 6:** AI, Napalm Cone, movement/turbo, pickups (shapes, messages), new pickup weapons.
 **Still to build:** energy combos, pad layout, camera modes, headlights.
-- **AI:** chase but not like a magnet; attack with missiles/specials; when the player turns to face them they keep
-  attacking from the same direction (head-on), no sliding back behind; only at low health do they slide away and
-  look for health. **No limit on AI special use** (owner rejected that idea).
+- **AI (play-test 2 replaces play-test 1's version, which was "brainless"):** a 7/10 fight. Attack runs from the
+  front, passing beside you on a random side each run (sometimes a mid-run feint, never reading the player's
+  inputs), swinging for your back; your counter is to turn into her or ram her. She drives on past, then drifts
+  round for the next run (no circling). If you run she chases with turbo; long-range missiles hunt you; Outlaw's
+  taser only within **8 m**. Picks up weapons/turbo on the way when out. Retreats to health only under 30%.
+  **No limit on AI special use** (owner rejected that idea).
 - **Napalm Cone (Sweet Tooth):** Head-On style. Tap = homing cone, **45** (a power missile's damage) + burning.
   Hold fire 2 s and let go = **90** + normal burning, **no tracking**, straight power-missile path (session 6 numbers;
   the old 30/50 are void). Letting go early fires the tap shot. Other cars' weapons need the same review later.
@@ -187,7 +190,12 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   **Zoomy** (10 light missiles, 6 each = 60, tracking 1.6: straight driving eats all, a hard drift dodges about half);
   **SAT** (marks the locked spot ahead, 112 after 4 s). **Environment** weapons come in later stages, not LA.
   **Freeze is never a pickup**: energy move only (front L R U, rear L R D). Picking up says "<NAME> LOADED".
-- **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 19 + 1.1 x SPD,
+- **Play-test 2 (session 6):** missile trails like TM (fire short orange, homing purple, power wide red, zoomy long
+  white; `Streak` ribbons); **SAT zone is locked in front of your car and moves with you** for 4 s, then 112;
+  **Remote is a mine** dropped behind (fire again to blow, or any car driving onto it after 0.8 s; big push, a car
+  on top flies and flips: `Vehicle.blast_knock`); **friendly fire**: fire pools, blasts, mines, SAT hurt their owner
+  too (only direct hits can't); speed **15%** under the original (not 25%); taser drawn as a crackling arc.
+- **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
   item on every map.
@@ -215,9 +223,9 @@ scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, Mesh
 scripts/vehicles/           Vehicle (driving, wall rule, rams, states, combat), Roster (stats from SPD/ARM/HND/SPC),
                             VehicleModels (dispatch + simple prototype cars), HeroModels (detailed Sweet Tooth
                             and Outlaw), VehicleFx (gatling spin, muzzle flash, turbo flames, mascot spring,
-                            tire smoke), PlayerController, AIDriver (chase with a gap / head-on face-off /
-                            retreat when hurt, weapon choice, ramps, max 2 on player)
-scripts/weapons/            WeaponData (all balance numbers), Projectile (missiles, cones, napalm can, remote bomb),
+                            tire smoke), PlayerController, AIDriver (hunt / chase / attack runs / retreat,
+                            detours for pickups, weapon choice, ramps, max 2 on player)
+scripts/weapons/            WeaponData (all balance numbers), Projectile (missiles, cones, napalm can), Mine (Remote),
                             Pickup (shaped models, LOADED messages, turbo), Specials (fires every weapon; charged
                             shots, salvos, blasts), SatStrike, TaserLink, ChainBomb, FirePool
 scripts/arena/los_angeles.gd  stage 1 / test stage (TM2 Quake Zone): heightmap (raised battleground, ramps, crater,
@@ -231,7 +239,8 @@ scripts/arena/la_props.gd   LA street furniture: toppling street lights, burnt w
 scripts/arena/junkyard.gd   the old prototype stage, now free play (`-- junkyard`)
 scripts/arena/breakable.gd  props that shatter/topple (stands, glass, palms, letters, tower legs)
 scripts/arena/teleporter.gd teleport pad
-scripts/fx/                 FxKit (fire/smoke/explosions), FlickerLight, Blinker, ZigLine (bolts, chains, cables)
+scripts/fx/                 FxKit (fire/smoke/explosions), Streak (missile trail ribbons), FlickerLight, Blinker,
+                            ZigLine (bolts, chains, cables)
 scripts/ui/hud.gd           HUD layout (target, feed, messages, help, countdown, pause) + grain/vignette shader
 scripts/ui/hud_status.gd    bottom-left panel: name, lives, segmented health (trail), turbo, energy, state chips
 scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, ammo), other weapons as chips
@@ -359,3 +368,8 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
   (Vehicle `in_fire_weapon` + `charging_id`: tap fires on release, full charge = charged shot), turbo only from
   pickups, slower cars, new pickups (Napalm, Remote, Zoomy, SAT) with shaped models and LOADED messages.
   Zoomy tracking was tuned by a quick sim: 1.6 rad/s = all 10 on a straight driver, ~half on a drifting one.
+  Play-test 2 round (see above). Gotchas: AI turning at full speed ran off the battleground's open edges and past
+  ramp feet (now it lifts off and drifts when the turn is sharp); AI "stuck" checks must use the real velocity,
+  not `Vehicle.speed` (that is the engine's target, still high while shoving another car); additive trails wash
+  out to white over the bright pavers (Streak uses alpha blending); a live mine/napalm can only takes fire presses
+  while its weapon is selected (`Vehicle.set_live_special(node, weapon)`), so other weapons still fire.

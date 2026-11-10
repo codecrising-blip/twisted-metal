@@ -15,8 +15,10 @@ static func fire(v: Vehicle, id: String, charged := false) -> void:
 			ChainBomb.start(v, def)
 		"cone":
 			_cone(v, id, def, charged)
-		"napalm", "remote":
+		"napalm":
 			_throw(v, id, def)
+		"mine":
+			Mine.drop(v, def)
 		"salvo":
 			_salvo(v, id, def)
 		"sat":
@@ -43,14 +45,14 @@ static func _cone(v: Vehicle, id: String, def: Dictionary, charged: bool) -> voi
 	})
 
 
-## Napalm can and remote bomb: thrown up and ahead (carrying some of the car's speed), then the
-## next fire press goes to them (drop / detonate).
+## Napalm can: thrown up and ahead (carrying some of the car's speed); the next fire press with
+## Napalm still selected drops it.
 static func _throw(v: Vehicle, id: String, def: Dictionary) -> void:
 	var fwd := v.flat_forward()
 	var carry := Vector3(v.velocity.x, 0.0, v.velocity.z) * 0.6
 	var vel := fwd * float(def.get("throw", 30.0)) + carry + Vector3.UP * float(def.get("lift", 10.0))
 	var p := Projectile.spawn_lob(v.get_parent(), id, v.launch_point() + Vector3.UP * 0.4, vel, v)
-	v.set_live_special(p)
+	v.set_live_special(p, id)
 
 
 ## Zoomy: ten light missiles in a quick fan, all chasing the same lock.
@@ -72,8 +74,9 @@ static func _salvo(v: Vehicle, id: String, def: Dictionary) -> void:
 			v.get_tree().create_timer(i * gap, false, true).timeout.connect(one)
 
 
-## Damage every car (but `shooter`) within `radius` of `pos`: `damage` inside `core`, falling to
-## `edge` at the rim. Burning for `burn` seconds if > 0. `skip` already took a direct hit.
+## Damage every car within `radius` of `pos`, the shooter too (friendly fire, owner play-test 2):
+## `damage` inside `core`, falling to `edge` at the rim. Burning for `burn` seconds if > 0.
+## `skip` already took a direct hit.
 static func blast(world: Node, pos: Vector3, radius: float, damage: float, shooter: Vehicle,
 		edge := -1.0, core := 0.0, burn := 0.0, skip: Vehicle = null) -> void:
 	if world == null or not world.is_inside_tree():
@@ -81,7 +84,7 @@ static func blast(world: Node, pos: Vector3, radius: float, damage: float, shoot
 	var rim := damage if edge < 0.0 else edge
 	for node in world.get_tree().get_nodes_in_group("vehicles"):
 		var o := node as Vehicle
-		if o == shooter or o == skip or o.is_dead:
+		if o == skip or o.is_dead:
 			continue
 		var d := o.aim_point().distance_to(pos)
 		if d > radius + 1.0:

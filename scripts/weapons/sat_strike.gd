@@ -1,8 +1,9 @@
 class_name SatStrike
 extends Node3D
-## SAT (owner's design): marks a locked area ahead of the shooter; after `delay` seconds a beam
-## from orbit hits it for `damage` (112). The mark is plain to see and the warning ticks faster
-## near the end, so a target that keeps moving can get out; one that sits still takes it all.
+## SAT (owner, play-test 2): the strike zone is locked `ahead` meters in front of the shooter's car
+## and moves with it. For `delay` seconds you steer to keep your enemy inside it (it goes left, you
+## go left), then the beam from orbit hits wherever the zone is for `damage` (112), you included if
+## you somehow end up inside it. The ring pulses faster as the strike gets close.
 
 var shooter: Vehicle
 var def := {}
@@ -24,22 +25,16 @@ static func start(v: Vehicle, _id: String, d: Dictionary) -> SatStrike:
 	s.radius = d.get("radius", 7.5)
 	s._delay = d.get("delay", 4.0)
 	v.get_parent().add_child(s)
-	s.global_position = Specials.ground_below(v.get_parent(), mark_point(v, d))
+	s.global_position = zone_point(v, d)
 	if v.is_player:
-		v.notice.emit(v, "SAT LOCKED")
+		v.notice.emit(v, "SAT LOCKED - KEEP THEM IN FRONT")
 	return s
 
 
-## The locked target's spot when it is ahead and in reach, otherwise a point straight ahead.
-static func mark_point(v: Vehicle, d: Dictionary) -> Vector3:
-	var t := v.target
-	var fwd := v.flat_forward()
-	if is_instance_valid(t) and not t.is_dead:
-		var to := t.global_position - v.global_position
-		var flat := Vector3(to.x, 0, to.z)
-		if flat.length() < float(d.get("reach", 80.0)) and fwd.angle_to(flat.normalized()) < deg_to_rad(70.0):
-			return t.global_position
-	return v.global_position + fwd * float(d.get("ahead", 35.0))
+## Ground point `ahead` meters in front of the car.
+static func zone_point(v: Vehicle, d: Dictionary) -> Vector3:
+	var p := v.global_position + v.flat_forward() * float(d.get("ahead", 24.0)) + Vector3.UP * 3.0
+	return Specials.ground_below(v.get_parent(), p)
 
 
 func _ready() -> void:
@@ -61,6 +56,8 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	_t += delta
+	if not _struck and is_instance_valid(shooter) and not shooter.is_dead:
+		global_position = global_position.lerp(zone_point(shooter, def), minf(1.0, 20.0 * delta))
 	if not _struck:
 		# Pulses faster as the strike gets close.
 		var left := _delay - _t

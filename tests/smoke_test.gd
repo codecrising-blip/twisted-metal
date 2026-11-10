@@ -321,8 +321,8 @@ func _run() -> void:
 	await _frames(50)
 	_check(n_hp - outlaw.health >= 25.0 and outlaw.burn_time > 0.0, "napalm dropped on a car hits and burns (%.1f)" % (n_hp - outlaw.health))
 
-	# Remote bomb: lands (or sticks), the next press blows it.
-	_place(outlaw, 24, 70, 90)
+	# Remote: a mine dropped behind; a car driving onto it sets it off and gets thrown up.
+	_place(outlaw, 60, 70, 90)
 	outlaw.health = outlaw.max_health
 	outlaw.burn_time = 0.0
 	await _frames(3)
@@ -331,12 +331,33 @@ func _run() -> void:
 	player.selected = player.weapon_order.find("remote")
 	player._weapon_cooldowns.clear()
 	player._fire_selected()
-	await _frames(70)
-	var rb := player.live_special() as Projectile
-	_check(rb != null and rb.is_resting(), "remote bomb lands and waits")
-	player.want_fire_weapon = true
+	var mine := player.live_special() as Mine
+	_check(mine != null and mine.global_position.x > player.global_position.x + 2.0, "remote drops a mine behind the car")
+	await _frames(60)
+	outlaw.global_position = mine.global_position + Vector3(0, 0.3, 0)
 	await _frames(3)
-	_check(not player.has_live_special() and n_hp - outlaw.health >= 20.0, "detonating the remote hurts the car near it (%.1f)" % (n_hp - outlaw.health))
+	_check(not is_instance_valid(mine) or mine.is_queued_for_deletion(), "driving onto the armed mine sets it off")
+	_check(n_hp - outlaw.health >= 45.0, "...for about 50 (%.1f)" % (n_hp - outlaw.health))
+	_check(outlaw.velocity.y > 5.0 or outlaw._tumble_time > 0.0, "...and throws the car into the air")
+	await _frames(90)
+	# Friendly fire: your own mine hurts you too, and so does your own fire.
+	var own_hp := player.health
+	player.add_ammo("remote", 1)
+	player.selected = player.weapon_order.find("remote")
+	player._weapon_cooldowns.clear()
+	player._fire_selected()
+	mine = player.live_special() as Mine
+	await _frames(60)
+	player.global_position = mine.global_position + Vector3(0, 0.3, 0)
+	await _frames(3)
+	_check(own_hp - player.health >= 40.0, "friendly fire: your own mine hurts you (%.1f)" % (own_hp - player.health))
+	player.health = player.max_health
+	FirePool.spawn(main, player.global_position, 3.0, 2.0, 3.0, player)
+	await _frames(40)
+	_check(player.burn_time > 0.0, "friendly fire: your own napalm fire burns you")
+	player.burn_time = 0.0
+	_place(player, 40, 70, 90)
+	await _frames(30)
 
 	# Zoomy: ten light missiles, 6 each; a parked car takes most of them.
 	_place(outlaw, 0, 70, 90)
@@ -353,8 +374,8 @@ func _run() -> void:
 	_check(Projectile.spawned_total - shots_before >= 10, "zoomy fires ten missiles")
 	_check(n_hp - outlaw.health >= 40.0 and n_hp - outlaw.health <= 60.5, "...a car that sits still takes most of the 60 (%.1f)" % (n_hp - outlaw.health))
 
-	# SAT: marks the locked spot, the beam hits 4 s later for 112.
-	_place(outlaw, 10, 70, 90)
+	# SAT: the strike zone sits in front of the shooter and moves with it; 4 s later, 112.
+	_place(outlaw, 10, 40, 90)
 	outlaw.health = outlaw.max_health
 	outlaw.burn_time = 0.0
 	await _frames(3)
@@ -363,10 +384,12 @@ func _run() -> void:
 	player.selected = player.weapon_order.find("sat")
 	player._weapon_cooldowns.clear()
 	player._fire_selected()
-	await _frames(200)
+	await _frames(60)
+	_place(player, 34, 40, 90) # the enemy moved: we follow it, the zone comes along
+	await _frames(140)
 	_check(is_equal_approx(n_hp, outlaw.health), "SAT: nothing happens before the 4 s are up")
 	await _frames(60)
-	_check(absf((n_hp - outlaw.health) - 112.0) < 0.5, "SAT strike hits the marked spot for 112 (%.1f)" % (n_hp - outlaw.health))
+	_check(absf((n_hp - outlaw.health) - 112.0) < 0.5, "SAT zone moves with you and hits for 112 (%.1f)" % (n_hp - outlaw.health))
 	player.auto_target = true
 
 	# Pickups say what you got; turbo never refills by itself, a turbo pickup fills it.
@@ -391,7 +414,7 @@ func _run() -> void:
 	_check(is_equal_approx(player.turbo, 100.0) and heard.has(Pickup.MSG_TURBO), "a turbo pickup fills the bar completely")
 	player.notice.disconnect(listen)
 	var st_car := Roster.get_car("sweet_tooth")
-	_check(float(st_car.max_speed) < float(Roster.get_car("outlaw").max_speed) and float(st_car.max_speed) < 25.0, "Sweet Tooth is a slow truck (%.1f m/s)" % st_car.max_speed)
+	_check(float(st_car.max_speed) < float(Roster.get_car("outlaw").max_speed) and float(st_car.max_speed) < 27.0 and float(st_car.max_speed) > 24.0, "Sweet Tooth is a heavy truck, 15%% under the old speed (%.1f m/s)" % st_car.max_speed)
 	_check(float(st_car.drift_grip) > float(Roster.get_car("spectre").drift_grip), "heavy cars slide less with the handbrake")
 
 	# A car that falls out of the world is put back.
@@ -414,28 +437,36 @@ func _run() -> void:
 			ai_moved += 1
 	_check(ai_moved >= 3, "AI enemies drive around (%d of 4)" % ai_moved)
 
-	# AI (owner, play-test 1): when you face it, it fights head-on from the front at a distance;
-	# it does not glue itself to you or slide round behind you. Badly hurt, it breaks away.
+	# AI (owner, play-tests 1 and 2): Outlaw comes at you in attack runs from the front, swings
+	# for your back and drifts round for the next run; never glued to you, never stuck.
 	for e: Vehicle in main.enemies:
 		e.controller = null
 	var o_brain: AIDriver = brains[main.enemies.find(outlaw)]
 	outlaw.controller = o_brain
 	o_brain._retarget = 0.0
+	o_brain.drifts = 0
 	_place(player, -40, 40, -90)
-	_place(outlaw, 0, 40, 90)
+	_place(outlaw, 10, 40, 90)
 	outlaw.health = outlaw.max_health
 	player.health = player.max_health
 	var closest := INF
-	var went_behind := false
-	for k in 240:
+	var glued := 0
+	var path := 0.0
+	var last := outlaw.global_position
+	var seen_attack := false
+	for k in 480:
 		await _frames(1)
-		var to_o := outlaw.global_position - player.global_position
-		closest = minf(closest, to_o.length())
-		if player.flat_forward().angle_to(Vector3(to_o.x, 0, to_o.z).normalized()) > deg_to_rad(100.0):
-			went_behind = true
-	_check(o_brain.mode == "faceoff", "AI fights head-on when you face it (%s)" % o_brain.mode)
-	_check(closest > 8.0, "...keeps its distance instead of gluing on (closest %.1f m)" % closest)
-	_check(not went_behind, "...and does not slide round behind you")
+		var gap := outlaw.global_position.distance_to(player.global_position)
+		closest = minf(closest, gap)
+		if gap < 6.0:
+			glued += 1
+		path += outlaw.global_position.distance_to(last)
+		last = outlaw.global_position
+		seen_attack = seen_attack or o_brain.mode == "attack"
+	_check(seen_attack and closest < 20.0, "AI makes attack runs at you (closest %.1f m)" % closest)
+	_check(o_brain.drifts >= 1, "...drifts round for the next run (%d drifts)" % o_brain.drifts)
+	_check(glued < 120, "...without gluing itself to you (%d of 480 frames within 6 m)" % glued)
+	_check(path > 60.0, "...and keeps moving, never stuck (%.0f m driven)" % path)
 	outlaw.health = outlaw.max_health * 0.2
 	await _frames(40)
 	_check(o_brain.mode == "retreat", "badly hurt AI breaks away to look for health")

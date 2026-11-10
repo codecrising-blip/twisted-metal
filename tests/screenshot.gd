@@ -94,6 +94,22 @@ func _run() -> void:
 					Pickup.create(main, kinds[i], base + Vector3(-13.5 + i * 3.0, 0, 0)).monitoring = false
 				await _frames(20)
 				_place(cam, base + Vector3(0, 5.0, 17), base + Vector3(0, 1.0, 0), 62.0)
+			"weapons": # trails of each missile, the taser arc, the SAT zone and a mine
+				Engine.max_physics_steps_per_frame = 1 # one physics step per frame: trails sample smoothly
+				var e: Vehicle = main.enemies[0]
+				var base := LosAngelesArena.ground(-40, 40)
+				player.global_transform = Transform3D(Basis.IDENTITY, base + Vector3(0, 0.05, 0))
+				e.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(90)), base + Vector3(9, 0.05, 3))
+				await _frames(5)
+				Mine.drop(player, WeaponData.get_def("remote"))
+				SatStrike.start(player, "sat", WeaponData.get_def("sat"))
+				TaserLink.start(e, WeaponData.get_def("omni_taser"))
+				var ids := ["fire", "homing", "power", "zoomy"]
+				for i in ids.size():
+					var from := base + Vector3(-26, 3.0 + i * 0.4, -4.0 - i * 4.5)
+					Projectile.spawn(main, ids[i], from, Vector3(1, 0, 0.05), e, null)
+				await _frames(16)
+				_place(cam, base + Vector3(-12, 8, 17), base + Vector3(1, 1, -7), 64.0)
 			"duel":
 				var c := player.global_position
 				var e: Vehicle = main.enemies[0]

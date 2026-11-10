@@ -12,6 +12,9 @@ extends RefCounted
 ##   charges / recharge   specials: charges held and seconds to refill one
 ##   handler  weapons with their own behaviour (see Specials)
 ##   icon     HUD icon when it differs from kind
+##   trail / trail_len / trail_w   ribbon behind the shot: colour, seconds of history (length), width
+##   Friendly fire (owner, play-test 2): blasts, fire pools, mines and the SAT beam hurt their own
+##   shooter too. Only a direct hit can't strike the car that fired it.
 
 ## One knob for all damage (the owner says "faster fights": raise it a little).
 const DAMAGE_SCALE := 1.0
@@ -22,16 +25,19 @@ const DEFS := {
 		"speed": 150.0, "damage": 0.55, "homing": 0.0, "life": 0.9, "cooldown": 0.08,
 	},
 	"homing": {
-		"label": "Homing Missile", "kind": "missile", "color": Color(0.35, 0.7, 1.0),
+		"label": "Homing Missile", "kind": "missile", "color": Color(0.62, 0.3, 1.0),
 		"speed": 46.0, "damage": 12.0, "homing": 3.2, "life": 5.0, "cooldown": 0.45, "ammo": 3,
+		"trail": Color(0.6, 0.2, 1.0), "trail_len": 0.3, "trail_w": 0.8,
 	},
 	"fire": {
 		"label": "Fire Missile", "kind": "missile", "color": Color(1.0, 0.42, 0.08),
 		"speed": 78.0, "damage": 14.0, "homing": 1.1, "life": 3.0, "cooldown": 0.45, "ammo": 3, "burn": 4.0,
+		"trail": Color(1.0, 0.45, 0.05), "trail_len": 0.18, "trail_w": 0.9,
 	},
 	"power": {
 		"label": "Power Missile", "kind": "missile", "color": Color(0.95, 0.12, 0.15),
 		"speed": 58.0, "damage": 45.0, "homing": 0.0, "life": 3.5, "cooldown": 1.0, "ammo": 1,
+		"trail": Color(0.95, 0.06, 0.05), "trail_len": 0.4, "trail_w": 1.3, "model_scale": 1.6,
 	},
 	# TM: Black's gas can. Thrown up and ahead; press fire again to drop it on the spot.
 	# It bursts into a pool of fire: everything inside burns.
@@ -40,24 +46,27 @@ const DEFS := {
 		"throw": 34.0, "lift": 15.0, "drop_speed": 26.0, "life": 4.0, "cooldown": 0.6, "ammo": 1,
 		"damage": 30.0, "radius": 6.0, "burn": 5.0, "pool_radius": 4.5, "pool_time": 6.0,
 	},
-	# Remote bomb: lobbed ahead, rests on the ground or sticks to the car it hits. Press fire again
-	# to blow it (full damage in the middle, less at the edge). Goes off by itself after a while.
+	# Remote (owner, play-test 2): a mine dropped behind the car. Press fire again to blow it, or
+	# it goes off when any car (yours too) drives onto it. Big push: cars on top fly and flip,
+	# cars at the side get thrown away. Full damage in the middle, less at the edge.
 	"remote": {
-		"label": "Remote", "kind": "remote", "handler": "remote", "color": Color(0.95, 0.2, 0.15),
-		"throw": 24.0, "lift": 6.0, "life": 12.0, "cooldown": 0.6, "ammo": 1,
-		"damage": 50.0, "edge_damage": 20.0, "radius": 8.0, "core": 3.5,
+		"label": "Remote", "kind": "mine", "handler": "mine", "icon": "remote", "color": Color(0.95, 0.2, 0.15),
+		"cooldown": 0.6, "ammo": 1, "arm": 0.8, "trigger": 2.4, "life": 90.0,
+		"damage": 50.0, "edge_damage": 20.0, "radius": 8.0, "core": 3.5, "push": 16.0, "lift": 9.0, "pop": 15.0,
 	},
 	# Ten light missiles with mid tracking (owner): 6 each, 60 if all hit. Driving straight takes
 	# them all; a hard drift shakes off about half.
 	"zoomy": {
 		"label": "Zoomy", "kind": "missile", "handler": "salvo", "icon": "salvo", "color": Color(0.85, 0.9, 0.2),
 		"speed": 62.0, "damage": 6.0, "homing": 1.6, "life": 3.0, "cooldown": 1.0, "ammo": 1,
-		"salvo": 10, "salvo_gap": 0.06, "small": true,
+		"salvo": 10, "salvo_gap": 0.06, "small": true, "model_scale": 0.6,
+		"trail": Color(0.97, 0.97, 0.95), "trail_len": 0.55, "trail_w": 0.42,
 	},
-	# Satellite strike (owner): marks the locked area ahead, 4 s later the beam hits it for 112.
+	# Satellite strike (owner, play-test 2): the strike zone is locked in front of YOUR car and moves
+	# with you for 4 s; steer to keep the enemy inside it, then the beam hits the zone for 112.
 	"sat": {
-		"label": "SAT", "kind": "sat", "handler": "sat", "color": Color(0.75, 0.45, 1.0),
-		"damage": 112.0, "radius": 7.5, "delay": 4.0, "reach": 80.0, "ahead": 35.0, "cooldown": 1.0, "ammo": 1,
+		"label": "SAT", "kind": "sat", "handler": "sat", "color": Color(0.3, 0.95, 0.8),
+		"damage": 112.0, "radius": 7.5, "delay": 4.0, "ahead": 24.0, "cooldown": 1.0, "ammo": 1,
 	},
 	# Energy move only (front / rear freeze), never a pickup.
 	"freeze": {

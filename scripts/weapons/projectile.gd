@@ -1,9 +1,9 @@
 class_name Projectile
 extends Node3D
-## Bullets, missiles, cones, skulls, ghost missiles, napalm cans and remote bombs. Moves itself and
+## Bullets, missiles, cones, skulls, ghost missiles and napalm cans. Moves itself and
 ## ray-casts each step so fast shots never tunnel. Anything in the world with
 ## projectile_hit(damage, shooter) (stands, glass, sign letters) takes the hit too.
-## Napalm cans and remote bombs are thrown (gravity) and wait for the next fire press: fire_again().
+## Napalm cans are thrown (gravity) and wait for the next fire press: fire_again() drops them.
 
 const HIT_MASK := 1 | 2 # world + vehicles
 const LOB_GRAVITY := 30.0
@@ -18,11 +18,6 @@ var direction := Vector3.FORWARD
 var velocity := Vector3.ZERO # thrown shots only
 var _life := 1.0
 var _trail: CPUParticles3D
-var _resting := false # remote bomb lying on the ground
-var _stuck_to: Vehicle # remote bomb stuck on a car
-var _stuck_offset := Vector3.ZERO
-var _blink: Node3D
-var _blink_t := 0.0
 
 
 ## overrides: changes to the weapon's numbers for this one shot (a charged Napalm Cone).
@@ -41,6 +36,7 @@ static func spawn(parent: Node, id: String, from: Vector3, dir: Vector3, by: Veh
 	p.global_position = from
 	p._orient()
 	p._build_visual()
+	p._add_streak()
 	spawned_total += 1
 	return p
 
@@ -58,14 +54,14 @@ func _build_visual() -> void:
 		"bullet":
 			MeshKit.box(self, Vector3(0.07, 0.07, 1.6), Vector3.ZERO, MeshKit.emissive(color, 4.0))
 		"missile":
-			if def.get("small", false): # zoomy: thin, quick, a short trail and no light
-				MeshKit.cylinder(self, 0.07, 0.55, Vector3.ZERO, MeshKit.mat(Color(0.3, 0.3, 0.32), 0.4, 0.6), Vector3(90, 0, 0), 6)
-				MeshKit.sphere(self, 0.09, Vector3(0, 0, 0.3), MeshKit.emissive(color, 4.0), Vector3(1, 1, 1.6), 6)
-				_add_trail(FxKit.smoke(0.18, 10))
-			else:
-				MeshKit.cylinder(self, 0.12, 0.9, Vector3.ZERO, MeshKit.mat(Color(0.3, 0.3, 0.32), 0.4, 0.6), Vector3(90, 0, 0), 8)
-				MeshKit.sphere(self, 0.16, Vector3(0, 0, 0.5), MeshKit.emissive(color, 5.0), Vector3(1, 1, 1.6), 8)
-				_add_trail(FxKit.smoke(0.35, 24))
+			# Each missile has its own look and trail (TM): fire = short orange, homing = purple,
+			# power = fat warhead with a long red trail, zoomy = thin with a long white trail.
+			var s := float(def.get("model_scale", 1.0))
+			var body := MeshKit.mat(Color(0.26, 0.26, 0.28), 0.4, 0.6)
+			MeshKit.cylinder(self, 0.12 * s, 0.9 * s, Vector3.ZERO, body, Vector3(90, 0, 0), 8)
+			MeshKit.cylinder(self, 0.12 * s, 0.3 * s, Vector3(0, 0, -0.6 * s), MeshKit.emissive(color, 3.0), Vector3(-90, 0, 0), 8, 0.0)
+			MeshKit.sphere(self, 0.13 * s, Vector3(0, 0, 0.5 * s), MeshKit.emissive(color.lerp(Color.WHITE, 0.4), 6.0), Vector3(1, 1, 1.4), 6)
+			if not def.get("small", false):
 				_add_light(color, 2.0, 5.0)
 		"freeze":
 			MeshKit.sphere(self, 0.35, Vector3.ZERO, MeshKit.emissive(color, 4.0), Vector3.ONE, 10)
@@ -91,12 +87,6 @@ func _build_visual() -> void:
 			MeshKit.cylinder(self, 0.06, 0.25, Vector3(0.18, 0.48, 0), MeshKit.mat(Color(0.2, 0.2, 0.2), 0.5, 0.6), Vector3(0, 0, -30), 6)
 			_add_trail(FxKit.fire(0.7, 22))
 			_add_light(color, 2.0, 6.0)
-		"remote":
-			# Black bomb with a stub antenna and a blinking red light.
-			MeshKit.sphere(self, 0.45, Vector3.ZERO, MeshKit.mat(Color(0.08, 0.08, 0.09), 0.5, 0.5), Vector3.ONE, 10)
-			MeshKit.cylinder(self, 0.18, 0.12, Vector3(0, 0.44, 0), MeshKit.mat(Color(0.3, 0.3, 0.3), 0.5, 0.6), Vector3.ZERO, 8)
-			MeshKit.cylinder(self, 0.02, 0.6, Vector3(0.1, 0.7, 0), MeshKit.mat(Color(0.2, 0.2, 0.2), 0.5, 0.6), Vector3.ZERO, 4)
-			_blink = MeshKit.sphere(self, 0.08, Vector3(0, 0.56, 0.12), MeshKit.emissive(Color(1.0, 0.1, 0.05), 6.0), Vector3.ONE, 6)
 		"skull":
 			_skull_visual(color)
 		"ghost":
@@ -129,6 +119,11 @@ func _skull_visual(color: Color) -> void:
 	_add_light(color, 4.0, 10.0)
 
 
+func _add_streak() -> void:
+	if def.has("trail"):
+		Streak.attach(self, def["trail"], float(def.get("trail_len", 0.4)), float(def.get("trail_w", 0.5)))
+
+
 func _add_trail(p: CPUParticles3D) -> void:
 	_trail = p
 	add_child(p)
@@ -149,18 +144,6 @@ func _physics_process(delta: float) -> void:
 	_life -= delta
 	if _life <= 0.0:
 		_explode(global_position, Vector3.UP, null)
-		return
-	if _blink:
-		_blink_t += delta * (2.5 if _stuck_to else 1.5)
-		_blink.visible = fmod(_blink_t, 1.0) < 0.5
-	if _stuck_to:
-		if is_instance_valid(_stuck_to) and not _stuck_to.is_dead:
-			global_position = _stuck_to.global_transform * _stuck_offset
-			return
-		_stuck_to = null
-		_resting = false # its car blew up: fall to the ground
-		velocity = Vector3.ZERO
-	if _resting:
 		return
 
 	var step: Vector3
@@ -187,9 +170,6 @@ func _physics_process(delta: float) -> void:
 		query.exclude = [shooter.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty():
-		if def.get("kind", "") == "remote":
-			_land(hit)
-			return
 		_explode(hit.position, hit.normal, hit.collider)
 		return
 	global_position = to
@@ -201,31 +181,10 @@ func _thrown() -> bool:
 	return def.has("lift")
 
 
-## Remote bomb: sticks to the car it hits, otherwise lies where it lands.
-func _land(hit: Dictionary) -> void:
-	velocity = Vector3.ZERO
-	if hit.collider is Vehicle:
-		_stuck_to = hit.collider as Vehicle
-		_stuck_offset = _stuck_to.global_transform.affine_inverse() * (hit.position as Vector3)
-		if is_instance_valid(shooter) and shooter.is_player:
-			shooter.notice.emit(shooter, "REMOTE STUCK")
-	else:
-		_resting = true
-		global_position = (hit.position as Vector3) + (hit.normal as Vector3) * 0.4
-		rotation = Vector3.ZERO
-
-
-## The next fire press after throwing: a napalm can drops straight down, a remote bomb blows.
+## The next fire press after throwing: a napalm can drops straight down.
 func fire_again() -> void:
-	match def.get("kind", ""):
-		"gas":
-			velocity = Vector3(0, -float(def.get("drop_speed", 26.0)), 0)
-		"remote":
-			_explode(global_position, Vector3.UP, null)
-
-
-func is_resting() -> bool:
-	return _resting or _stuck_to != null
+	if def.get("kind", "") == "gas":
+		velocity = Vector3(0, -float(def.get("drop_speed", 26.0)), 0)
 
 
 func _orient() -> void:
@@ -242,9 +201,6 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 		if collider is Vehicle:
 			(collider as Vehicle).take_damage(dmg, shooter)
 			(collider as Vehicle).ignite(float(def.get("burn", 5.0)), shooter)
-	elif kind == "remote":
-		FxKit.explosion(world, pos, 2.6, Color(1.0, 0.45, 0.12))
-		Specials.blast(world, pos, float(def.get("radius", 8.0)), dmg, shooter, float(def.get("edge_damage", 20.0)), float(def.get("core", 3.5)))
 	elif collider is Vehicle:
 		var v := collider as Vehicle
 		v.take_damage(dmg, shooter)
@@ -260,7 +216,7 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 		FxKit.explosion(world, pos, 0.6, Color(0.5, 0.85, 1.0))
 	elif kind == "cone":
 		FxKit.explosion(world, pos, 1.2 + dmg / 60.0, Color(1.0, 0.5, 0.15))
-	elif kind != "gas" and kind != "remote":
+	elif kind != "gas":
 		FxKit.explosion(world, pos, (0.4 if def.get("small", false) else 0.8) + dmg / 40.0, def.get("color", Color(1, 0.5, 0.15)))
 	# Let the smoke trail finish instead of vanishing with the missile.
 	if _trail and is_instance_valid(_trail):
