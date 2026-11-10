@@ -8,9 +8,10 @@ extends RefCounted
 ##   cooldown seconds before the same car can fire again
 ##   ammo     ammo granted by a pickup
 ##   burn     seconds of Burning on hit
-##   kind     bullet | missile | freeze | lob | skull | ghost
+##   kind     bullet | missile | freeze | cone | gas | remote | skull | ghost | sat (look and flight)
 ##   charges / recharge   specials: charges held and seconds to refill one
-##   handler  specials with their own behaviour (see Specials)
+##   handler  weapons with their own behaviour (see Specials)
+##   icon     HUD icon when it differs from kind
 
 ## One knob for all damage (the owner says "faster fights": raise it a little).
 const DAMAGE_SCALE := 1.0
@@ -21,27 +22,57 @@ const DEFS := {
 		"speed": 150.0, "damage": 0.55, "homing": 0.0, "life": 0.9, "cooldown": 0.08,
 	},
 	"homing": {
-		"label": "Homing Missile", "kind": "missile", "color": Color(0.45, 0.8, 1.0),
+		"label": "Homing Missile", "kind": "missile", "color": Color(0.35, 0.7, 1.0),
 		"speed": 46.0, "damage": 12.0, "homing": 3.2, "life": 5.0, "cooldown": 0.45, "ammo": 3,
 	},
 	"fire": {
-		"label": "Fire Missile", "kind": "missile", "color": Color(1.0, 0.45, 0.1),
+		"label": "Fire Missile", "kind": "missile", "color": Color(1.0, 0.42, 0.08),
 		"speed": 78.0, "damage": 14.0, "homing": 1.1, "life": 3.0, "cooldown": 0.45, "ammo": 3, "burn": 4.0,
 	},
 	"power": {
-		"label": "Power Missile", "kind": "missile", "color": Color(1.0, 0.15, 0.2),
+		"label": "Power Missile", "kind": "missile", "color": Color(0.95, 0.12, 0.15),
 		"speed": 58.0, "damage": 45.0, "homing": 0.0, "life": 3.5, "cooldown": 1.0, "ammo": 1,
 	},
+	# TM: Black's gas can. Thrown up and ahead; press fire again to drop it on the spot.
+	# It bursts into a pool of fire: everything inside burns.
+	"napalm": {
+		"label": "Napalm", "kind": "gas", "handler": "napalm", "color": Color(1.0, 0.55, 0.1),
+		"throw": 34.0, "lift": 15.0, "drop_speed": 26.0, "life": 4.0, "cooldown": 0.6, "ammo": 1,
+		"damage": 30.0, "radius": 6.0, "burn": 5.0, "pool_radius": 4.5, "pool_time": 6.0,
+	},
+	# Remote bomb: lobbed ahead, rests on the ground or sticks to the car it hits. Press fire again
+	# to blow it (full damage in the middle, less at the edge). Goes off by itself after a while.
+	"remote": {
+		"label": "Remote", "kind": "remote", "handler": "remote", "color": Color(0.95, 0.2, 0.15),
+		"throw": 24.0, "lift": 6.0, "life": 12.0, "cooldown": 0.6, "ammo": 1,
+		"damage": 50.0, "edge_damage": 20.0, "radius": 8.0, "core": 3.5,
+	},
+	# Ten light missiles with mid tracking (owner): 6 each, 60 if all hit. Driving straight takes
+	# them all; a hard drift shakes off about half.
+	"zoomy": {
+		"label": "Zoomy", "kind": "missile", "handler": "salvo", "icon": "salvo", "color": Color(0.85, 0.9, 0.2),
+		"speed": 62.0, "damage": 6.0, "homing": 1.6, "life": 3.0, "cooldown": 1.0, "ammo": 1,
+		"salvo": 10, "salvo_gap": 0.06, "small": true,
+	},
+	# Satellite strike (owner): marks the locked area ahead, 4 s later the beam hits it for 112.
+	"sat": {
+		"label": "SAT", "kind": "sat", "handler": "sat", "color": Color(0.75, 0.45, 1.0),
+		"damage": 112.0, "radius": 7.5, "delay": 4.0, "reach": 80.0, "ahead": 35.0, "cooldown": 1.0, "ammo": 1,
+	},
+	# Energy move only (front / rear freeze), never a pickup.
 	"freeze": {
 		"label": "Freeze", "kind": "freeze", "color": Color(0.55, 0.9, 1.0),
 		"speed": 70.0, "damage": 3.0, "homing": 2.2, "life": 2.5, "cooldown": 0.5, "freeze": 2.0,
 	},
 	# ---- Specials: one per driver.
-	# Sweet Tooth: flaming ice cream cone lobbed to where the target will be. Leaves a fire pool.
+	# Sweet Tooth (owner, play-test 1, Head-On style): tap = a homing flaming cone, 45 (a power
+	# missile's damage) + burning. Hold fire 2 s and let go = charged cone, 90 + burning, but it
+	# flies straight like a power missile (no tracking).
 	"napalm_cone": {
-		"label": "Napalm Cone", "kind": "lob", "color": Color(1.0, 0.5, 0.15), "special": true,
-		"damage": 30.0, "splash": 15.0, "splash_radius": 4.0, "burn": 4.0, "pool_radius": 2.0, "pool_time": 5.0,
-		"min_range": 12.0, "max_range": 70.0, "life": 3.0, "cooldown": 1.0, "charges": 2, "recharge": 18.0,
+		"label": "Napalm Cone", "kind": "cone", "handler": "cone", "color": Color(1.0, 0.5, 0.15), "special": true,
+		"speed": 60.0, "damage": 45.0, "homing": 2.4, "life": 3.0, "burn": 4.0,
+		"charge_time": 2.0, "charged_damage": 90.0, "charged_speed": 64.0,
+		"cooldown": 0.8, "charges": 2, "recharge": 16.0,
 	},
 	# Outlaw (Jamie Roberts): Crazy 8-style taser. Fired by the player; grows with link time and
 	# fire-button mashing; breaks when the target gets too far away.
@@ -71,8 +102,10 @@ const DEFS := {
 	},
 }
 
-## Weapons that can appear in pickups and breakable stands.
-const PICKUP_WEAPONS := ["homing", "homing", "fire", "fire", "power"]
+## Weapons that can appear in pickups and breakable stands (repeats = more common).
+## Turbo pickups have their own, more numerous spots (the most common item on every map).
+const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "power", "power",
+	"napalm", "napalm", "remote", "remote", "zoomy", "zoomy", "sat"]
 
 ## Owner, session 3: a health pickup restores a share of max health, so armor matters all match.
 const HEALTH_PICKUP_RATIO := 0.30
@@ -80,6 +113,7 @@ const MEGA_HEALTH_RATIO := 0.60 # confirmed by the owner (session 4)
 const HEALTH_RESPAWN := 30.0
 const MEGA_RESPAWN := 50.0
 const WEAPON_RESPAWN := 14.0
+const TURBO_RESPAWN := 10.0
 
 const BURN_DPS := 3.0
 

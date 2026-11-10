@@ -60,6 +60,7 @@ var respawn_points: Array[Transform3D] = []
 var weapon_points: Array[Vector3] = []
 var health_points: Array[Vector3] = []
 var mega_points: Array[Vector3] = []
+var turbo_points: Array[Vector3] = [] # the most common pickup (owner, play-test 1)
 var ramps: Array[Dictionary] = [] # {foot, top}: the AI drives to the foot, then up
 var center := Vector3(0, PLAT_H, 0)
 var wander_half := 130.0
@@ -1698,6 +1699,21 @@ func _points() -> void:
 	var hill: Dictionary = hills()[1]
 	var top: Vector2 = hill.p
 	health_points.append(Vector3(top.x, HILL_H + 2.6, top.y)) # floating over a hill: jump for it
+	# Turbo: all along the road (before the jump hills too), around the battleground, one on the roof.
+	for k in 24:
+		var p: Vector3 = road_at(k / 24.0).p
+		var clear := true
+		for w in weapon_points:
+			if w.distance_to(ground(p.x, p.z)) < 12.0:
+				clear = false
+		for h: Dictionary in hills():
+			if Vector2(p.x, p.z).distance_to(h.p) < 14.0:
+				clear = false
+		if clear:
+			turbo_points.append(ground(p.x, p.z))
+	for q: Vector2 in [Vector2(-30, 40), Vector2(40, 15), Vector2(-15, -55), Vector2(75, 20), Vector2(-80, 15), Vector2(10, 80)]:
+		turbo_points.append(ground(q.x, q.y))
+	turbo_points.append(Vector3(-4, ROOF_Y, (TUNNEL_Z0 + TUNNEL_Z1) * 0.5))
 
 
 func _spot(x: float, z: float, yaw_deg: float) -> Transform3D:

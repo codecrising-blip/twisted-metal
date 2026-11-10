@@ -100,6 +100,9 @@ func _spawn_pickups() -> void:
 		Pickup.create(self, "health", p)
 	for p in arena.mega_points:
 		Pickup.create(self, "mega", p)
+	if "turbo_points" in arena:
+		for p: Vector3 in arena.turbo_points:
+			Pickup.create(self, "turbo", p)
 
 
 func _physics_process(delta: float) -> void:

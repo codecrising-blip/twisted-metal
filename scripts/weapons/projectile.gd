@@ -1,8 +1,9 @@
 class_name Projectile
 extends Node3D
-## Bullets, missiles, skulls, ghost missiles and lobbed bombs. Moves itself and ray-casts each
-## step so fast shots never tunnel. Anything in the world with projectile_hit(damage, shooter)
-## (stands, glass, sign letters) takes the hit too.
+## Bullets, missiles, cones, skulls, ghost missiles, napalm cans and remote bombs. Moves itself and
+## ray-casts each step so fast shots never tunnel. Anything in the world with
+## projectile_hit(damage, shooter) (stands, glass, sign letters) takes the hit too.
+## Napalm cans and remote bombs are thrown (gravity) and wait for the next fire press: fire_again().
 
 const HIT_MASK := 1 | 2 # world + vehicles
 const LOB_GRAVITY := 30.0
@@ -14,15 +15,24 @@ var def := {}
 var shooter: Vehicle
 var target: Vehicle
 var direction := Vector3.FORWARD
-var velocity := Vector3.ZERO # lobbed shots only
+var velocity := Vector3.ZERO # thrown shots only
 var _life := 1.0
 var _trail: CPUParticles3D
+var _resting := false # remote bomb lying on the ground
+var _stuck_to: Vehicle # remote bomb stuck on a car
+var _stuck_offset := Vector3.ZERO
+var _blink: Node3D
+var _blink_t := 0.0
 
 
-static func spawn(parent: Node, id: String, from: Vector3, dir: Vector3, by: Vehicle, lock: Vehicle) -> Projectile:
+## overrides: changes to the weapon's numbers for this one shot (a charged Napalm Cone).
+static func spawn(parent: Node, id: String, from: Vector3, dir: Vector3, by: Vehicle, lock: Vehicle, overrides := {}) -> Projectile:
 	var p := Projectile.new()
 	p.weapon_id = id
 	p.def = WeaponData.get_def(id)
+	if not overrides.is_empty():
+		p.def = p.def.duplicate()
+		p.def.merge(overrides, true)
 	p.shooter = by
 	p.target = lock
 	p.direction = dir.normalized()
@@ -35,7 +45,7 @@ static func spawn(parent: Node, id: String, from: Vector3, dir: Vector3, by: Veh
 	return p
 
 
-## A shot that falls under gravity (Napalm Cone).
+## A shot that falls under gravity (napalm can, remote bomb).
 static func spawn_lob(parent: Node, id: String, from: Vector3, launch_velocity: Vector3, by: Vehicle) -> Projectile:
 	var p := spawn(parent, id, from, launch_velocity, by, null)
 	p.velocity = launch_velocity
@@ -48,10 +58,15 @@ func _build_visual() -> void:
 		"bullet":
 			MeshKit.box(self, Vector3(0.07, 0.07, 1.6), Vector3.ZERO, MeshKit.emissive(color, 4.0))
 		"missile":
-			MeshKit.cylinder(self, 0.12, 0.9, Vector3.ZERO, MeshKit.mat(Color(0.3, 0.3, 0.32), 0.4, 0.6), Vector3(90, 0, 0), 8)
-			MeshKit.sphere(self, 0.16, Vector3(0, 0, 0.5), MeshKit.emissive(color, 5.0), Vector3(1, 1, 1.6), 8)
-			_add_trail(FxKit.smoke(0.35, 24))
-			_add_light(color, 2.0, 5.0)
+			if def.get("small", false): # zoomy: thin, quick, a short trail and no light
+				MeshKit.cylinder(self, 0.07, 0.55, Vector3.ZERO, MeshKit.mat(Color(0.3, 0.3, 0.32), 0.4, 0.6), Vector3(90, 0, 0), 6)
+				MeshKit.sphere(self, 0.09, Vector3(0, 0, 0.3), MeshKit.emissive(color, 4.0), Vector3(1, 1, 1.6), 6)
+				_add_trail(FxKit.smoke(0.18, 10))
+			else:
+				MeshKit.cylinder(self, 0.12, 0.9, Vector3.ZERO, MeshKit.mat(Color(0.3, 0.3, 0.32), 0.4, 0.6), Vector3(90, 0, 0), 8)
+				MeshKit.sphere(self, 0.16, Vector3(0, 0, 0.5), MeshKit.emissive(color, 5.0), Vector3(1, 1, 1.6), 8)
+				_add_trail(FxKit.smoke(0.35, 24))
+				_add_light(color, 2.0, 5.0)
 		"freeze":
 			MeshKit.sphere(self, 0.35, Vector3.ZERO, MeshKit.emissive(color, 4.0), Vector3.ONE, 10)
 			var t := FxKit.fire(0.5, 20)
@@ -59,12 +74,29 @@ func _build_visual() -> void:
 			t.color = Color(0.6, 0.9, 1.0, 0.6)
 			_add_trail(t)
 			_add_light(color, 2.5, 6.0)
-		"lob":
-			# Ice cream cone on fire: waffle cone, pink scoop, flames.
-			MeshKit.cylinder(self, 0.32, 0.9, Vector3(0, 0, 0.35), MeshKit.mat(Color(0.8, 0.55, 0.25)), Vector3(-90, 0, 0), 8, 0.0)
-			MeshKit.sphere(self, 0.36, Vector3(0, 0, -0.15), MeshKit.emissive(Color(1.0, 0.45, 0.65), 1.5), Vector3.ONE, 10)
-			_add_trail(FxKit.fire(1.1, 36))
-			_add_light(color, 3.0, 8.0)
+		"cone":
+			# A burning waffle cone, point first; the charged one is bigger and burns harder.
+			var big := 1.5 if def.get("charged", false) else 1.0
+			var waffle := MeshKit.mat(Color(0.72, 0.48, 0.22), 0.9)
+			var c1 := MeshKit.cylinder(self, 0.36 * big, 1.0 * big, Vector3(0, 0, -0.2 * big), waffle, Vector3(-90, 0, 0), 8, 0.02)
+			c1.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			MeshKit.sphere(self, 0.4 * big, Vector3(0, 0, 0.35 * big), MeshKit.emissive(Color(1.0, 0.42, 0.12), 2.2), Vector3.ONE, 10)
+			_add_trail(FxKit.fire(1.0 * big, int(30 * big)))
+			_add_light(color, 3.0 * big, 8.0)
+		"gas":
+			# A dented red gas can tumbling through the air, leaking fire.
+			var can := MeshKit.mat(Color(0.62, 0.08, 0.06), 0.6, 0.3)
+			MeshKit.box(self, Vector3(0.55, 0.75, 0.3), Vector3.ZERO, can)
+			MeshKit.box(self, Vector3(0.57, 0.12, 0.32), Vector3(0, 0.1, 0), MeshKit.mat(Color(0.85, 0.65, 0.1), 0.6))
+			MeshKit.cylinder(self, 0.06, 0.25, Vector3(0.18, 0.48, 0), MeshKit.mat(Color(0.2, 0.2, 0.2), 0.5, 0.6), Vector3(0, 0, -30), 6)
+			_add_trail(FxKit.fire(0.7, 22))
+			_add_light(color, 2.0, 6.0)
+		"remote":
+			# Black bomb with a stub antenna and a blinking red light.
+			MeshKit.sphere(self, 0.45, Vector3.ZERO, MeshKit.mat(Color(0.08, 0.08, 0.09), 0.5, 0.5), Vector3.ONE, 10)
+			MeshKit.cylinder(self, 0.18, 0.12, Vector3(0, 0.44, 0), MeshKit.mat(Color(0.3, 0.3, 0.3), 0.5, 0.6), Vector3.ZERO, 8)
+			MeshKit.cylinder(self, 0.02, 0.6, Vector3(0.1, 0.7, 0), MeshKit.mat(Color(0.2, 0.2, 0.2), 0.5, 0.6), Vector3.ZERO, 4)
+			_blink = MeshKit.sphere(self, 0.08, Vector3(0, 0.56, 0.12), MeshKit.emissive(Color(1.0, 0.1, 0.05), 6.0), Vector3.ONE, 6)
 		"skull":
 			_skull_visual(color)
 		"ghost":
@@ -118,9 +150,21 @@ func _physics_process(delta: float) -> void:
 	if _life <= 0.0:
 		_explode(global_position, Vector3.UP, null)
 		return
+	if _blink:
+		_blink_t += delta * (2.5 if _stuck_to else 1.5)
+		_blink.visible = fmod(_blink_t, 1.0) < 0.5
+	if _stuck_to:
+		if is_instance_valid(_stuck_to) and not _stuck_to.is_dead:
+			global_position = _stuck_to.global_transform * _stuck_offset
+			return
+		_stuck_to = null
+		_resting = false # its car blew up: fall to the ground
+		velocity = Vector3.ZERO
+	if _resting:
+		return
 
 	var step: Vector3
-	if def.get("kind", "") == "lob":
+	if _thrown():
 		velocity.y -= LOB_GRAVITY * delta
 		direction = velocity.normalized()
 		step = velocity * delta
@@ -135,16 +179,53 @@ func _physics_process(delta: float) -> void:
 
 	var from := global_position
 	var to := from + step
+	if _thrown():
+		rotate_object_local(Vector3.RIGHT, delta * 6.0) # tumbling
 	var mask := 2 if def.get("through_walls", false) else HIT_MASK
 	var query := PhysicsRayQueryParameters3D.create(from, to, mask)
 	if is_instance_valid(shooter):
 		query.exclude = [shooter.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if not hit.is_empty():
+		if def.get("kind", "") == "remote":
+			_land(hit)
+			return
 		_explode(hit.position, hit.normal, hit.collider)
 		return
 	global_position = to
-	_orient()
+	if not _thrown():
+		_orient()
+
+
+func _thrown() -> bool:
+	return def.has("lift")
+
+
+## Remote bomb: sticks to the car it hits, otherwise lies where it lands.
+func _land(hit: Dictionary) -> void:
+	velocity = Vector3.ZERO
+	if hit.collider is Vehicle:
+		_stuck_to = hit.collider as Vehicle
+		_stuck_offset = _stuck_to.global_transform.affine_inverse() * (hit.position as Vector3)
+		if is_instance_valid(shooter) and shooter.is_player:
+			shooter.notice.emit(shooter, "REMOTE STUCK")
+	else:
+		_resting = true
+		global_position = (hit.position as Vector3) + (hit.normal as Vector3) * 0.4
+		rotation = Vector3.ZERO
+
+
+## The next fire press after throwing: a napalm can drops straight down, a remote bomb blows.
+func fire_again() -> void:
+	match def.get("kind", ""):
+		"gas":
+			velocity = Vector3(0, -float(def.get("drop_speed", 26.0)), 0)
+		"remote":
+			_explode(global_position, Vector3.UP, null)
+
+
+func is_resting() -> bool:
+	return _resting or _stuck_to != null
 
 
 func _orient() -> void:
@@ -154,8 +235,17 @@ func _orient() -> void:
 
 func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 	var world := get_parent()
+	var kind: String = def.get("kind", "bullet")
 	var dmg := float(def.get("damage", 1.0)) * WeaponData.DAMAGE_SCALE
-	if collider is Vehicle:
+	if kind == "gas":
+		Specials.napalm_burst(world, pos, collider as Vehicle, shooter, def)
+		if collider is Vehicle:
+			(collider as Vehicle).take_damage(dmg, shooter)
+			(collider as Vehicle).ignite(float(def.get("burn", 5.0)), shooter)
+	elif kind == "remote":
+		FxKit.explosion(world, pos, 2.6, Color(1.0, 0.45, 0.12))
+		Specials.blast(world, pos, float(def.get("radius", 8.0)), dmg, shooter, float(def.get("edge_damage", 20.0)), float(def.get("core", 3.5)))
+	elif collider is Vehicle:
 		var v := collider as Vehicle
 		v.take_damage(dmg, shooter)
 		if def.has("freeze"):
@@ -164,15 +254,14 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 			v.ignite(float(def["burn"]), shooter)
 	elif collider != null and collider.has_method("projectile_hit"):
 		collider.projectile_hit(dmg, shooter)
-	var kind: String = def.get("kind", "bullet")
-	if kind == "lob":
-		Specials.napalm_splash(world, pos, collider as Vehicle, shooter, def)
-	elif kind == "bullet":
+	if kind == "bullet":
 		FxKit.spark(world, pos, normal)
 	elif kind == "freeze":
 		FxKit.explosion(world, pos, 0.6, Color(0.5, 0.85, 1.0))
-	else:
-		FxKit.explosion(world, pos, 0.8 + dmg / 40.0, def.get("color", Color(1, 0.5, 0.15)))
+	elif kind == "cone":
+		FxKit.explosion(world, pos, 1.2 + dmg / 60.0, Color(1.0, 0.5, 0.15))
+	elif kind != "gas" and kind != "remote":
+		FxKit.explosion(world, pos, (0.4 if def.get("small", false) else 0.8) + dmg / 40.0, def.get("color", Color(1, 0.5, 0.15)))
 	# Let the smoke trail finish instead of vanishing with the missile.
 	if _trail and is_instance_valid(_trail):
 		var keep := _trail.global_position

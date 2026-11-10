@@ -2,7 +2,7 @@ class_name Radar
 extends Control
 ## Top-right radar. Turns with your car (straight ahead = up), 120 m range.
 ##   red triangles   enemies (pointing where they drive); at the rim when out of range
-##   yellow squares  weapon pickups, green crosses = health (bigger = mega health)
+##   yellow squares  weapon pickups, small blue dots = turbo, green crosses = health (bigger = mega)
 ##   grey lines      the arena walls and the ring road (from arena.radar_lines(), if it has one)
 ##   N               north on the rim
 
@@ -72,6 +72,8 @@ func _draw() -> void:
 			var col := Color(0.45, 1.0, 0.45) if pk.kind == "mega" else Color(0.3, 0.85, 0.35)
 			draw_rect(Rect2(p - Vector2(s, s * 0.35), Vector2(s * 2, s * 0.7)), col)
 			draw_rect(Rect2(p - Vector2(s * 0.35, s), Vector2(s * 0.7, s * 2)), col)
+		elif pk.kind == "turbo":
+			draw_rect(Rect2(p - Vector2(1.5, 1.5), Vector2(3, 3)), Color(0.35, 0.7, 1.0, 0.75))
 		else:
 			draw_rect(Rect2(p - Vector2(2.5, 2.5), Vector2(5, 5)), Color(1.0, 0.82, 0.25, 0.9))
 	# Enemies.

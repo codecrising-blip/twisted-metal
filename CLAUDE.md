@@ -28,7 +28,7 @@ curl -sSL -o g.zip https://github.com/godotengine/godot/releases/download/4.3-st
 G=/tmp/godot/Godot_v4.3-stable_linux.x86_64
 cd <repo> && $G --headless --path . --import            # parse all scripts
 $G --headless --path . -s tests/smoke_test.gd           # gameplay tests, must print ALL TESTS PASSED
-# Screenshots (shots: gameplay | hero | duel | enemies | overview | roof | tunnel | cage | center | pit | hill | ramp,
+# Screenshots (shots: gameplay | hero | duel | enemies | overview | roof | tunnel | cage | center | pit | hill | ramp | pickups,
 #   car:<id>:<front34|rear34|side|front|top|low> for one car alone, look:x,y,z:tx,ty,tz for a free camera).
 #   Add `-- full` for all five cars:
 xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --path . -s tests/screenshot.gd -- hero docs/screenshots/hero.png
@@ -173,15 +173,22 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 - **TM2 source code:** not public (Sony's, never released); not needed — we write everything in Godot. Useful
   inputs instead: top-down map shots, gameplay video frames, the owner's memories, side/back car images.
 
-## Owner play-test 1 (session 5, end) — full text in `docs/design/09-owner-playtest-1.md`. APPROVED, NOT BUILT YET
-Build these with the owner next session (he asked to keep them for then):
+## Owner play-test 1 (session 5, end) — full text in `docs/design/09-owner-playtest-1.md`
+**Built in session 6:** AI, Napalm Cone, movement/turbo, pickups (shapes, messages), new pickup weapons.
+**Still to build:** energy combos, pad layout, camera modes, headlights.
 - **AI:** chase but not like a magnet; attack with missiles/specials; when the player turns to face them they keep
   attacking from the same direction (head-on), no sliding back behind; only at low health do they slide away and
   look for health. **No limit on AI special use** (owner rejected that idea).
-- **Napalm Cone (Sweet Tooth, rated 1/10 now):** Head-On style. Tap = homing napalm shot, burns on contact,
-  30 + burning. Hold to charge (up to 2 s) = 50 + normal burning, **no tracking**, power-missile path.
-  Other cars' weapons need the same kind of review later, car by car.
-- **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo. **Turbo never regenerates**:
+- **Napalm Cone (Sweet Tooth):** Head-On style. Tap = homing cone, **45** (a power missile's damage) + burning.
+  Hold fire 2 s and let go = **90** + normal burning, **no tracking**, straight power-missile path (session 6 numbers;
+  the old 30/50 are void). Letting go early fires the tap shot. Other cars' weapons need the same review later.
+- **Pickup weapons (session 6):** Fire, Homing, Power; **Napalm** (TMB gas can: thrown up and ahead, press fire
+  again to drop it; 30 + burning + fire pool); **Remote** (lands or sticks to a car, press again: 50 core / 20 edge);
+  **Zoomy** (10 light missiles, 6 each = 60, tracking 1.6: straight driving eats all, a hard drift dodges about half);
+  **SAT** (marks the locked spot ahead, 112 after 4 s). **Environment** weapons come in later stages, not LA.
+  **Freeze is never a pickup**: energy move only (front L R U, rear L R D). Picking up says "<NAME> LOADED".
+- **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 19 + 1.1 x SPD,
+  handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
   item on every map.
 - **Pickups:** less bright; each shows its weapon's shape and color (fire vs homing must be obvious), health clear.
@@ -208,9 +215,11 @@ scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, Mesh
 scripts/vehicles/           Vehicle (driving, wall rule, rams, states, combat), Roster (stats from SPD/ARM/HND/SPC),
                             VehicleModels (dispatch + simple prototype cars), HeroModels (detailed Sweet Tooth
                             and Outlaw), VehicleFx (gatling spin, muzzle flash, turbo flames, mascot spring,
-                            tire smoke), PlayerController, AIDriver (specials, ramps, max 2 on player)
-scripts/weapons/            WeaponData (all balance numbers), Projectile, Pickup, Specials (fires specials),
-                            TaserLink, ChainBomb, FirePool
+                            tire smoke), PlayerController, AIDriver (chase with a gap / head-on face-off /
+                            retreat when hurt, weapon choice, ramps, max 2 on player)
+scripts/weapons/            WeaponData (all balance numbers), Projectile (missiles, cones, napalm can, remote bomb),
+                            Pickup (shaped models, LOADED messages, turbo), Specials (fires every weapon; charged
+                            shots, salvos, blasts), SatStrike, TaserLink, ChainBomb, FirePool
 scripts/arena/los_angeles.gd  stage 1 / test stage (TM2 Quake Zone): heightmap (raised battleground, ramps, crater,
                             road hills), spline road, tunnels, cage, tower, sign; spot() = named places for tests
 scripts/arena/la_city.gd    BAKE ONLY: the 3D city rendered into the LA backdrop panorama (not built in the game)
@@ -304,8 +313,9 @@ and date palms (no more "chopsticks"), bushes, street props, ramps paved in asph
 stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
 
 **Next candidates (agree with owner first):**
-0. **The play-test 1 fixes above** (AI, Napalm Cone, movement/turbo, pickups, combos, pad layout, cameras,
-   headlights). Performance pass and LA look rework are done (session 6); owner to judge them.
+0. **Rest of play-test 1:** energy combos (U U L jump ... on D-pad and left stick), PS pad layout (double-tap Square
+   turbo), camera modes with the in-car view, headlights that reveal invisible cars. Owner to judge session 6's
+   AI, Napalm Cone, movement, turbo and weapons.
 1. Owner play-test of the LA stage: driving feel, wall slide, damage/health, AI, the new specials.
 2. Owner's verdict on the preview cars; then the same detail for the other cars, new Laughing Ghost look.
 3. Remaining energy moves and Sweet Bot; napalm pickup (needed for the Tokyo puzzle).
@@ -345,3 +355,7 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
   `_drape` strip only sampled its two edges, so on a ramp it cut under the crest and the grass showed through (strips
   are now split into ~2.5 m lanes, ramps use their exact plane via `ramp_y`); the baked backdrop is tonemapped twice
   (bake + stage), so the bake uses softer saturation/contrast or the sky turns electric indigo.
+  Then the play-test 1 gameplay fixes: AI modes (chase with a gap, face-off head-on, retreat), Napalm Cone charge
+  (Vehicle `in_fire_weapon` + `charging_id`: tap fires on release, full charge = charged shot), turbo only from
+  pickups, slower cars, new pickups (Napalm, Remote, Zoomy, SAT) with shaped models and LOADED messages.
+  Zoomy tracking was tuned by a quick sim: 1.6 rad/s = all 10 on a straight driver, ~half on a drifting one.

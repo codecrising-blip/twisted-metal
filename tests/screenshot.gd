@@ -85,6 +85,15 @@ func _run() -> void:
 				var foot: Vector3 = rp.foot
 				var side: Vector3 = rp.side
 				_place(cam, foot + side * 26.0 + (rp.dir as Vector3) * 14.0 + Vector3(0, 9, 0), (Vector3(rp.top.x, 2.5, rp.top.z) + foot) * 0.5, 62.0)
+			"pickups": # every pickup kind in a row
+				for v: Vehicle in [player] + main.enemies:
+					v.global_position = Vector3(0, -200, 0)
+				var kinds := ["homing", "fire", "power", "napalm", "remote", "zoomy", "sat", "turbo", "health", "mega"]
+				var base := LosAngelesArena.ground(-60, 72)
+				for i in kinds.size():
+					Pickup.create(main, kinds[i], base + Vector3(-13.5 + i * 3.0, 0, 0)).monitoring = false
+				await _frames(20)
+				_place(cam, base + Vector3(0, 5.0, 17), base + Vector3(0, 1.0, 0), 62.0)
 			"duel":
 				var c := player.global_position
 				var e: Vehicle = main.enemies[0]

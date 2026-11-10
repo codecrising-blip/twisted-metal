@@ -9,6 +9,7 @@ func drive(v: Vehicle, _delta: float) -> void:
 	v.in_handbrake = Input.is_action_pressed("handbrake")
 	v.in_turbo = Input.is_action_pressed("turbo")
 	v.in_fire_guns = Input.is_action_pressed("fire_guns")
+	v.in_fire_weapon = Input.is_action_pressed("fire_weapon") # held: charged shots
 	if Input.is_action_just_pressed("fire_weapon"):
 		v.want_fire_weapon = true
 	if Input.is_action_just_pressed("weapon_next"):

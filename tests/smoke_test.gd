@@ -278,10 +278,121 @@ func _run() -> void:
 	player.selected = 0
 	player._weapon_cooldowns.clear()
 	player._fire_selected()
-	await _frames(100)
-	_check(n_hp - outlaw.health >= 15.0, "Napalm Cone lands on the target (%.1f)" % (n_hp - outlaw.health))
-	_check(outlaw.burn_time > 0.0 or n_hp - outlaw.health > 30.0, "...and sets it on fire")
+	await _frames(60)
+	_check(n_hp - outlaw.health >= 44.5, "Napalm Cone tap: homing cone hits for 45 (%.1f)" % (n_hp - outlaw.health))
+	_check(outlaw.burn_time > 0.0, "...and sets it on fire")
+
+	# Charged Napalm Cone: hold fire 2 s and let go = 90 + burning, flying straight.
+	outlaw.health = outlaw.max_health
+	outlaw.burn_time = 0.0
+	player.ammo["napalm_cone"] = 2
+	player.selected = 0
+	player._weapon_cooldowns.clear()
+	await _frames(2)
+	n_hp = outlaw.health
+	Input.action_press("fire_weapon")
+	await _frames(130)
+	_check(player.charge_ratio() >= 1.0, "holding fire charges the Napalm Cone")
+	Input.action_release("fire_weapon")
+	await _frames(2)
+	var cones: Array = main.get_children().filter(func(n: Node): return n is Projectile and n.weapon_id == "napalm_cone")
+	_check(not cones.is_empty() and float(cones[0].def.homing) == 0.0, "...the charged cone has no tracking")
+	await _frames(45)
+	_check(n_hp - outlaw.health >= 89.5, "charged Napalm Cone hits for 90 (%.1f)" % (n_hp - outlaw.health))
+	_check(outlaw.burn_time > 0.0, "...and burns")
+
+	# Napalm (gas can): thrown up and ahead, dropped on the car with a second press.
+	_place(outlaw, 20, 70, 90)
+	outlaw.health = outlaw.max_health
+	outlaw.burn_time = 0.0
+	await _frames(3)
+	n_hp = outlaw.health
+	player.add_ammo("napalm", 1)
+	player.selected = player.weapon_order.find("napalm")
+	player._weapon_cooldowns.clear()
+	player._fire_selected()
+	_check(player.has_live_special(), "napalm can thrown, waiting for the drop")
+	for k in 90:
+		await _frames(1)
+		var can := player.live_special() as Node3D
+		if can == null or absf(can.global_position.x - outlaw.global_position.x) < 2.0:
+			player.want_fire_weapon = true
+			break
+	await _frames(50)
+	_check(n_hp - outlaw.health >= 25.0 and outlaw.burn_time > 0.0, "napalm dropped on a car hits and burns (%.1f)" % (n_hp - outlaw.health))
+
+	# Remote bomb: lands (or sticks), the next press blows it.
+	_place(outlaw, 24, 70, 90)
+	outlaw.health = outlaw.max_health
+	outlaw.burn_time = 0.0
+	await _frames(3)
+	n_hp = outlaw.health
+	player.add_ammo("remote", 1)
+	player.selected = player.weapon_order.find("remote")
+	player._weapon_cooldowns.clear()
+	player._fire_selected()
+	await _frames(70)
+	var rb := player.live_special() as Projectile
+	_check(rb != null and rb.is_resting(), "remote bomb lands and waits")
+	player.want_fire_weapon = true
+	await _frames(3)
+	_check(not player.has_live_special() and n_hp - outlaw.health >= 20.0, "detonating the remote hurts the car near it (%.1f)" % (n_hp - outlaw.health))
+
+	# Zoomy: ten light missiles, 6 each; a parked car takes most of them.
+	_place(outlaw, 0, 70, 90)
+	outlaw.health = outlaw.max_health
+	outlaw.burn_time = 0.0 # still burning from the napalm
+	await _frames(3)
+	n_hp = outlaw.health
+	var shots_before := Projectile.spawned_total
+	player.add_ammo("zoomy", 1)
+	player.selected = player.weapon_order.find("zoomy")
+	player._weapon_cooldowns.clear()
+	player._fire_selected()
+	await _frames(120)
+	_check(Projectile.spawned_total - shots_before >= 10, "zoomy fires ten missiles")
+	_check(n_hp - outlaw.health >= 40.0 and n_hp - outlaw.health <= 60.5, "...a car that sits still takes most of the 60 (%.1f)" % (n_hp - outlaw.health))
+
+	# SAT: marks the locked spot, the beam hits 4 s later for 112.
+	_place(outlaw, 10, 70, 90)
+	outlaw.health = outlaw.max_health
+	outlaw.burn_time = 0.0
+	await _frames(3)
+	n_hp = outlaw.health
+	player.add_ammo("sat", 1)
+	player.selected = player.weapon_order.find("sat")
+	player._weapon_cooldowns.clear()
+	player._fire_selected()
+	await _frames(200)
+	_check(is_equal_approx(n_hp, outlaw.health), "SAT: nothing happens before the 4 s are up")
+	await _frames(60)
+	_check(absf((n_hp - outlaw.health) - 112.0) < 0.5, "SAT strike hits the marked spot for 112 (%.1f)" % (n_hp - outlaw.health))
 	player.auto_target = true
+
+	# Pickups say what you got; turbo never refills by itself, a turbo pickup fills it.
+	var heard: Array[String] = []
+	var listen := func(_v: Vehicle, text: String) -> void: heard.append(text)
+	player.notice.connect(listen)
+	Pickup.create(main, "fire", player.global_position)
+	await _frames(4)
+	_check(heard.has("FIRE MISSILE LOADED"), "weapon pickup says FIRE MISSILE LOADED")
+	_place(player, -60, 60, 0)
+	player.turbo = 100.0
+	Input.action_press("accelerate")
+	Input.action_press("turbo")
+	await _frames(60)
+	Input.action_release("turbo")
+	Input.action_release("accelerate")
+	var t_left := player.turbo
+	await _frames(120)
+	_check(t_left < 95.0 and is_equal_approx(player.turbo, t_left), "turbo drains and never refills by itself (%.0f)" % player.turbo)
+	Pickup.create(main, "turbo", player.global_position)
+	await _frames(4)
+	_check(is_equal_approx(player.turbo, 100.0) and heard.has(Pickup.MSG_TURBO), "a turbo pickup fills the bar completely")
+	player.notice.disconnect(listen)
+	var st_car := Roster.get_car("sweet_tooth")
+	_check(float(st_car.max_speed) < float(Roster.get_car("outlaw").max_speed) and float(st_car.max_speed) < 25.0, "Sweet Tooth is a slow truck (%.1f m/s)" % st_car.max_speed)
+	_check(float(st_car.drift_grip) > float(Roster.get_car("spectre").drift_grip), "heavy cars slide less with the handbrake")
 
 	# A car that falls out of the world is put back.
 	dog.global_position = Vector3(0, -40, 0)
@@ -302,6 +413,33 @@ func _run() -> void:
 		if (main.enemies[i] as Vehicle).global_position.distance_to(ai_starts[i]) > 6.0:
 			ai_moved += 1
 	_check(ai_moved >= 3, "AI enemies drive around (%d of 4)" % ai_moved)
+
+	# AI (owner, play-test 1): when you face it, it fights head-on from the front at a distance;
+	# it does not glue itself to you or slide round behind you. Badly hurt, it breaks away.
+	for e: Vehicle in main.enemies:
+		e.controller = null
+	var o_brain: AIDriver = brains[main.enemies.find(outlaw)]
+	outlaw.controller = o_brain
+	o_brain._retarget = 0.0
+	_place(player, -40, 40, -90)
+	_place(outlaw, 0, 40, 90)
+	outlaw.health = outlaw.max_health
+	player.health = player.max_health
+	var closest := INF
+	var went_behind := false
+	for k in 240:
+		await _frames(1)
+		var to_o := outlaw.global_position - player.global_position
+		closest = minf(closest, to_o.length())
+		if player.flat_forward().angle_to(Vector3(to_o.x, 0, to_o.z).normalized()) > deg_to_rad(100.0):
+			went_behind = true
+	_check(o_brain.mode == "faceoff", "AI fights head-on when you face it (%s)" % o_brain.mode)
+	_check(closest > 8.0, "...keeps its distance instead of gluing on (closest %.1f m)" % closest)
+	_check(not went_behind, "...and does not slide round behind you")
+	outlaw.health = outlaw.max_health * 0.2
+	await _frames(40)
+	_check(o_brain.mode == "retreat", "badly hurt AI breaks away to look for health")
+	outlaw.health = outlaw.max_health
 
 	# Damage, death, win.
 	victim = main.enemies[0]

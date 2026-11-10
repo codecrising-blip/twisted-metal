@@ -13,9 +13,11 @@ signal notice(vehicle: Vehicle, text: String) # short feedback for the player's 
 const GRAVITY := 30.0
 const BRAKE := 38.0
 const COAST := 7.0
-const TURBO_MULT := 1.45
-const TURBO_DRAIN := 40.0
-const TURBO_REGEN := 10.0
+## Turbo (owner, play-test 1): weaker than before and it never refills by itself. Full at the start
+## and after a respawn; every turbo pickup fills it up again (Pickup).
+const TURBO_MULT := 1.28
+const TURBO_ACCEL := 1.35
+const TURBO_DRAIN := 22.0 # a full bar lasts about 4.5 s
 const ENERGY_REGEN := 2.5
 const ENERGY_PAUSE := 1.5 # no regen for this long after spending energy
 const JUMP_COST := 25.0
@@ -44,6 +46,7 @@ var in_steer := 0.0 # -1 left .. 1 right
 var in_handbrake := false
 var in_turbo := false
 var in_fire_guns := false
+var in_fire_weapon := false # fire button held (charged specials)
 var want_fire_weapon := false # one-shot requests, consumed here
 var want_jump := false
 var want_freeze := false
@@ -69,6 +72,8 @@ var weapon_order: Array[String] = []
 var selected := 0
 var special_id := ""
 var special_charges := 2
+var charging_id := "" # weapon being charged while the fire button is held (Napalm Cone)
+var charge_time := 0.0
 
 var model: Node3D
 var _visual: Node3D
@@ -193,7 +198,7 @@ func _physics_process(delta: float) -> void:
 		_clear_inputs()
 	_tick(delta)
 	_drive(delta)
-	_combat()
+	_combat(delta)
 	_animate(delta)
 
 
@@ -204,6 +209,7 @@ func _clear_inputs() -> void:
 	in_handbrake = false
 	in_turbo = false
 	in_fire_guns = false
+	in_fire_weapon = false
 	want_fire_weapon = false
 	want_jump = false
 	want_freeze = false
@@ -267,11 +273,9 @@ func _drive(delta: float) -> void:
 	if boosting:
 		top *= TURBO_MULT
 		turbo = maxf(0.0, turbo - TURBO_DRAIN * delta)
-	else:
-		turbo = minf(100.0, turbo + TURBO_REGEN * delta)
 
 	if on_floor:
-		var accel: float = stats.accel * (1.6 if boosting else 1.0)
+		var accel: float = stats.accel * (TURBO_ACCEL if boosting else 1.0)
 		if throttle > 0.05:
 			if speed < -0.5:
 				speed = move_toward(speed, 0.0, brake * delta)
@@ -295,7 +299,8 @@ func _drive(delta: float) -> void:
 	var authority := clampf(absf(speed) / 7.0, 0.0, 1.0)
 	if not on_floor:
 		authority *= 0.3
-	var turn: float = stats.handling * (1.7 if handbrake else 1.0)
+	var turn: float = stats.handling * (float(stats.drift_turn) if handbrake else 1.0)
+	turn *= lerpf(1.0, 0.78, clampf(absf(speed) / float(stats.max_speed), 0.0, 1.0)) # wider turns when fast
 	var dir := 1.0 if speed >= 0.0 else -1.0
 	rotate_y(-steer * turn * authority * dir * delta)
 	# Wall deflection turns the car over a few frames instead of snapping.
@@ -307,7 +312,7 @@ func _drive(delta: float) -> void:
 	var forward := flat_forward()
 	var desired := forward * speed
 	var hv := Vector3(velocity.x, 0.0, velocity.z)
-	var grip: float = stats.grip * (0.22 if handbrake else 1.0)
+	var grip: float = stats.grip * (float(stats.drift_grip) if handbrake else 1.0) # heavy cars barely slide
 	if not on_floor:
 		grip = 0.3
 	hv = hv.lerp(desired, 1.0 - exp(-grip * delta))
@@ -450,10 +455,11 @@ func spend_energy(amount: float) -> bool:
 
 # ---------------------------------------------------------------- combat
 
-func _combat() -> void:
+func _combat(delta: float) -> void:
 	if frozen_time > 0.0:
 		want_fire_weapon = false
 		want_freeze = false
+		_cancel_charge()
 		return
 	if in_fire_guns and _gun_cooldown <= 0.0:
 		_gun_cooldown = WeaponData.get_def("guns").cooldown
@@ -461,16 +467,53 @@ func _combat() -> void:
 	if want_fire_weapon:
 		want_fire_weapon = false
 		if has_live_special():
-			_active_special.fire_again() # taser mash / bomb detonation
+			_active_special.fire_again() # taser mash, bomb detonation, napalm drop
+		elif _can_charge():
+			charging_id = selected_weapon() # fires when the button is let go
+			charge_time = 0.0
 		else:
 			_fire_selected()
+	if charging_id != "":
+		if selected_weapon() != charging_id or ammo.get(charging_id, 0) <= 0:
+			_cancel_charge()
+		elif in_fire_weapon:
+			charge_time = minf(charge_time + delta, charge_full(charging_id))
+		else:
+			var full := charge_time >= charge_full(charging_id)
+			_cancel_charge()
+			_fire_selected(full)
 	if want_freeze:
 		want_freeze = false
 		if spend_energy(float(stats.get("freeze_cost", FREEZE_COST))):
 			launch("freeze", target)
 
 
-## A taser link or chain bomb that is still out (fire presses go to it).
+## Weapons with a charged shot (Napalm Cone): tap = normal shot, hold to the end = charged shot.
+func _can_charge() -> bool:
+	var id := selected_weapon()
+	return id != "" and WeaponData.get_def(id).has("charge_time") and ammo.get(id, 0) > 0 and not _weapon_cooldowns.has(id)
+
+
+static func charge_full(id: String) -> float:
+	return float(WeaponData.get_def(id).get("charge_time", 2.0))
+
+
+## 0..1 while charging (HUD meter); 0 when not charging.
+func charge_ratio() -> float:
+	return clampf(charge_time / charge_full(charging_id), 0.0, 1.0) if charging_id != "" else 0.0
+
+
+func _cancel_charge() -> void:
+	charging_id = ""
+	charge_time = 0.0
+
+
+## A turbo pickup fills the bar up again (turbo never refills by itself).
+func refill_turbo() -> void:
+	turbo = 100.0
+
+
+## A taser link, chain bomb, napalm can or remote bomb that is still out (fire presses go to it).
 func has_live_special() -> bool:
 	return is_instance_valid(_active_special) and not _active_special.is_queued_for_deletion()
 
@@ -500,7 +543,7 @@ func _fire_guns() -> void:
 	_fx.gun_fired(_gun_index)
 
 
-func _fire_selected() -> void:
+func _fire_selected(charged := false) -> void:
 	if weapon_order.is_empty():
 		return
 	selected = clampi(selected, 0, weapon_order.size() - 1)
@@ -511,10 +554,7 @@ func _fire_selected() -> void:
 		return
 	ammo[id] -= 1
 	_weapon_cooldowns[id] = float(WeaponData.get_def(id).get("cooldown", 0.5))
-	if id == special_id:
-		Specials.fire(self, id)
-	else:
-		launch(id, target)
+	Specials.fire(self, id, charged)
 	if ammo[id] <= 0 and id != special_id:
 		ammo.erase(id)
 		weapon_order.erase(id)

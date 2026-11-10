@@ -35,10 +35,12 @@ void fragment() {
 const HELP_TEXT := """W / S  ............  gas / brake-reverse
 A / D  ............  steer
 SPACE  ............  handbrake (power slide)
-SHIFT  ............  turbo
+SHIFT  ............  turbo (refill: blue turbo pickups)
 J or L-MOUSE  .....  machine guns
 K or R-MOUSE  .....  fire selected weapon
-                     (special: press again to mash / detonate)
+                     Napalm Cone: tap = homing, hold 2 s = charged
+                     Napalm / Remote / taser: press again to
+                     drop / blow / mash
 Q / E  ............  change weapon
 C  ................  jump  (energy)
 F  ................  freeze (energy)
