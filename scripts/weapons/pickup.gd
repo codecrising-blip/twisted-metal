@@ -205,7 +205,7 @@ static func mesh_for(id: String) -> ArrayMesh:
 				mb.torus(glow, 1.0, 0.06, MeshBuilder.at(Vector3.ZERO, Vector3(90, 0, 0)), 24, 4)
 		_:
 			_missile(mb, metal, paint, glow, 1.0)
-	var mesh := mb.build_mesh()
+	var mesh := mb.build_mesh(0.0, 0.0, true) # body parts share one material: 2 draw calls a pickup
 	_meshes[id] = mesh
 	return mesh
 

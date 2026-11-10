@@ -3,7 +3,8 @@ extends RefCounted
 ## Materials with generated textures: painted metal with scratches, chips, grime and rust streaks,
 ## bare steel, chrome, rubber, glass, emissive lamps. Textures are drawn pixel by pixel once and
 ## cached for the whole run (static), so a scene reload does not rebuild them.
-## Everything uses triplanar mapping, so meshes need no UVs. Streaks run down the image's Y axis,
+## Car paint uses triplanar mapping (meshes need no UVs). Ground textures and the shared neutral
+## material read UVs in meters instead (MeshBuilder writes them; one texture read, not three). Streaks run down the image's Y axis,
 ## which is "down" on every vertical face.
 
 const SIZE := 256
@@ -99,6 +100,7 @@ static func paint(base: Color, wear := 0.3, rust := 0.2, dirt := 0.3, tile := 2.
 	m.uv1_world_triplanar = false
 	m.uv1_scale = Vector3.ONE / tile
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	m.set_meta("base", base) # MeshBuilder can fold it into a shared material (collapse)
 	_cache[key] = m
 	return m
 
@@ -129,6 +131,7 @@ static func steel(base := Color(0.22, 0.22, 0.23), rust := 0.25, tile := 1.5) ->
 		return _cache[key]
 	var m := paint(base, 0.6, rust, 0.4, tile, 0.55, 3).duplicate() as StandardMaterial3D
 	m.metallic = 0.7
+	m.set_meta("base", base)
 	_cache[key] = m
 	return m
 
@@ -196,8 +199,35 @@ static func flat(color: Color, roughness := 0.8, metallic := 0.0) -> StandardMat
 	m.albedo_color = color
 	m.roughness = roughness
 	m.metallic = metallic
+	m.set_meta("base", color)
 	_cache[key] = m
 	return m
+
+
+## Shared material for collapsed props and the static stage (MeshBuilder.build_mesh(collapse)):
+## a light worn-paint texture; each part's own colour rides in the vertex colours. One for paint,
+## one for metal. Mapped with UVs (computed by MeshBuilder), not triplanar: one texture read.
+static func neutral(metal: bool) -> StandardMaterial3D:
+	var key := "neutral_%d" % int(metal)
+	if _cache.has(key):
+		return _cache[key]
+	var m := paint(Color(0.95, 0.95, 0.94), 0.3, 0.1, 0.45, 1.8, 0.6, 777).duplicate() as StandardMaterial3D
+	m.remove_meta("base")
+	m.vertex_color_is_srgb = true
+	m.uv1_triplanar = false
+	m.uv1_scale = Vector3.ONE / 1.8
+	m.metallic = 0.6 if metal else 0.1
+	_cache[key] = m
+	return m
+
+
+## The shared material a part's material folds into, or null if it must stay its own
+## (glass, lamps, ground textures).
+static func neutral_for(mat: Material) -> StandardMaterial3D:
+	var m := mat as StandardMaterial3D
+	if m == null or not m.has_meta("base") or m.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED or m.emission_enabled:
+		return null
+	return neutral(m.metallic > 0.35)
 
 
 ## Ground surfaces in world space (triplanar), one texture tile = tile_m meters:
@@ -265,8 +295,7 @@ static func pavement(kind: String, base: Color, tile_m := 16.0, seed := 1) -> St
 	m.roughness_texture = ImageTexture.create_from_image(rough)
 	m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
 	m.roughness = 1.0
-	m.uv1_triplanar = true
-	m.uv1_world_triplanar = true
+	m.uv1_triplanar = false # ground meshes carry UVs in meters (drapes, terrain, MeshBuilder): 1 read, not 3
 	m.uv1_scale = Vector3.ONE / tile_m
 	m.cull_mode = BaseMaterial3D.CULL_DISABLED
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
@@ -291,8 +320,7 @@ static func _world_material(img: Image, tile_m: float, roughness: float, two_sid
 	var m := StandardMaterial3D.new()
 	m.albedo_texture = ImageTexture.create_from_image(img)
 	m.roughness = roughness
-	m.uv1_triplanar = true
-	m.uv1_world_triplanar = true
+	m.uv1_triplanar = false # ground meshes carry UVs in meters (drapes, terrain, MeshBuilder): 1 read, not 3
 	m.uv1_scale = Vector3.ONE / tile_m
 	if two_sided:
 		m.cull_mode = BaseMaterial3D.CULL_DISABLED

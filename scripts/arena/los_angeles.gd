@@ -104,6 +104,79 @@ func build() -> void:
 	props.build(self)
 	_blimp()
 	_points()
+	_flush_batch()
+
+
+# ---------------------------------------------------------------- static batching
+
+## Owner's performance plan (session 6): everything in the stage that never moves or breaks is
+## merged into ONE mesh per material, so the static stage costs about one draw call per material
+## instead of one per piece (roads, lines, cracks, walls, buildings, props, signs, cables...).
+## Breakables, pickups and cars stay separate. Call batch_* while building; _flush_batch() at the end.
+var _batch := {} # "material id|shadows" -> {st, mat, shadows}
+static var _text_mats := {}
+
+
+func batch_mesh(mesh: Mesh, xf := Transform3D.IDENTITY, shadows := true, override: Material = null) -> void:
+	for i in mesh.get_surface_count():
+		var mat: Material = override if override else mesh.surface_get_material(i)
+		if mat == null:
+			continue
+		var key := "%d|%d" % [mat.get_instance_id(), int(shadows)]
+		if not _batch.has(key):
+			var st := SurfaceTool.new()
+			st.begin(Mesh.PRIMITIVE_TRIANGLES)
+			_batch[key] = {"st": st, "mat": mat, "shadows": shadows}
+		(_batch[key].st as SurfaceTool).append_from(mesh, i, xf)
+
+
+## A finished MeshBuilder (instead of mb.commit(self, ...)). xf places it (a billboard's frame).
+func batch_builder(mb: MeshBuilder, shadows := true, grime := 0.0, xf := Transform3D.IDENTITY) -> void:
+	batch_mesh(mb.build_mesh(grime, 0.0, true), xf, shadows) # plain paints fold into 2 shared materials
+
+
+## Text as real geometry (replaces Label3D, which costs a draw call each). The text faces +Z of xf.
+## neon = unshaded and bright (shop signs); otherwise lit paint.
+func batch_text(text: String, xf: Transform3D, font_size: int, pixel_size: float, color: Color, neon := false) -> void:
+	var tm := TextMesh.new()
+	tm.text = text
+	tm.font_size = font_size
+	tm.pixel_size = pixel_size
+	tm.depth = 0.0
+	var arrays := tm.get_mesh_arrays()
+	if arrays.is_empty() or (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).is_empty():
+		return
+	var raw := ArrayMesh.new()
+	raw.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var key := "%s|%d" % [color.to_html(), int(neon)]
+	if not _text_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = color
+		m.roughness = 0.8 # one-sided: readable from the front only, like the old labels
+		if neon:
+			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_text_mats[key] = m
+	batch_mesh(_indexed(raw), xf, false, _text_mats[key])
+
+
+## append_from() drops non-indexed parts once the merged mesh holds indexed ones: index first.
+static func _indexed(mesh: Mesh) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.create_from(mesh, 0)
+	st.index()
+	return st.commit()
+
+
+func _flush_batch() -> void:
+	for key: String in _batch:
+		var e: Dictionary = _batch[key]
+		var mi := MeshInstance3D.new()
+		mi.mesh = (e.st as SurfaceTool).commit()
+		mi.material_override = e.mat
+		if not e.shadows:
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(mi)
+	_batch.clear()
 
 
 # ---------------------------------------------------------------- layout data (static)
@@ -483,7 +556,7 @@ func _terrain() -> void:
 							var x: float = c.x * step - MAP_HALF
 							var z: float = c.y * step - MAP_HALF
 							tools[which].set_normal(gnorm[k])
-							tools[which].set_uv(Vector2(x, z) * 0.1)
+							tools[which].set_uv(Vector2(x, z))
 							tools[which].add_vertex(Vector3(x, gh[k], z))
 			for w in 2:
 				if not used[w]:
@@ -498,7 +571,7 @@ func _terrain() -> void:
 		var basis := Basis(Vector3.UP, side * PI * 0.5)
 		var out := basis * Vector3(0, 0, -1)
 		mb.box(_m.retain, (basis * Vector3(MAP_HALF * 2.0 + 4.0, 14.0, 2.0)).abs(), MeshBuilder.at(out * (MAP_HALF + 1.0) + Vector3(0, -7.0, 0)), 0.0)
-	mb.commit(self, false)
+	batch_builder(mb, false)
 
 
 func _normal_at(x: float, z: float) -> Vector3:
@@ -542,13 +615,10 @@ func _drape(points: PackedVector3Array, width: float, lift: float, mat: Material
 			var rj := rows[j][k + 1]
 			for p: Vector3 in [li, lj, ri, ri, lj, rj]: # clockwise from above = front face
 				st.set_normal(_normal_at(p.x, p.z))
-				st.set_uv(Vector2(p.x, p.z) * 0.1)
+				st.set_uv(Vector2(p.x, p.z))
 				st.add_vertex(p)
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
+	st.index()
+	batch_mesh(st.commit(), Transform3D.IDENTITY, false, mat)
 
 
 ## Retaining walls around the battleground: one continuous concrete face with a hazard-painted
@@ -592,7 +662,7 @@ func _battleground_walls() -> void:
 			var tangent := (b - a).normalized()
 			var basis := Basis(tangent, Vector3.UP, tangent.cross(Vector3.UP))
 			mb.box(_m.retain, Vector3(1.3, PLAT_H - 0.6, 0.8), Transform3D(basis, mid + out * 1.4 + Vector3(0, (PLAT_H - 0.6) * 0.5 - 0.6, 0)), 0.1)
-	mb.commit(self, true, 0.6)
+	batch_builder(mb, true, 0.6)
 
 
 ## Ramps from the road up to the battleground (the heightmap holds their slope): asphalt, sloped
@@ -631,7 +701,7 @@ func _ramps_build() -> void:
 			shape.transform = Transform3D(Basis.looking_at(fwd, Vector3.UP), (a + b) * 0.5 + Vector3(0, park * 0.5 - 0.3, 0))
 			rails.add_child(shape)
 		ramps.append({"foot": foot + dir * 10.0, "top": top - dir * 8.0})
-	mb.commit(self, true, 0.5)
+	batch_builder(mb, true, 0.5)
 	for rp: Dictionary in ramp_list():
 		var pts := PackedVector3Array()
 		var base := Vector3(rp.top.x, 0, rp.top.z) - (rp.dir as Vector3) * 2.0
@@ -708,7 +778,7 @@ func _curbs() -> void:
 			var ybo := mesh_height(b_out.x, b_out.z)
 			mb.quad(mat, Vector3(a_in.x, ya + h, a_in.z), Vector3(b_in.x, yb + h, b_in.z), Vector3(b_out.x, ybo + h, b_out.z), Vector3(a_out.x, yao + h, a_out.z), Vector3.UP)
 			mb.quad(mat, Vector3(a_in.x, ya - 0.05, a_in.z), Vector3(b_in.x, yb - 0.05, b_in.z), Vector3(b_in.x, yb + h, b_in.z), Vector3(a_in.x, ya + h, a_in.z), -nrm[i] * side)
-	mb.commit(self, false, 0.5)
+	batch_builder(mb, false, 0.5)
 	# Sidewalk slabs along the outer edge (the loop runs clockwise, so the outside is -side).
 	_drape(pts, 3.0, 0.06, _m.sidewalk, true, -(ROAD_W * 0.5 + 0.45 + 1.5))
 
@@ -781,7 +851,7 @@ func _outer_wall() -> void:
 			mb.box(_m.rib, Vector3(length, 0.03, 0.03), Transform3D(basis, mid + Vector3.UP * (h + 0.15 + wire * 0.22) + out * (0.15 + wire * 0.15)), 0.0)
 		var fence := MeshKit.box(self, Vector3(length, h - barrier_h - 0.2, 0.05), mid + Vector3.UP * (barrier_h + (h - barrier_h) * 0.5), _m.chainlink, Vector3(0, yaw, 0))
 		fence.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	mb.commit(self, true, 0.8)
+	batch_builder(mb, true, 0.8)
 	# Graffiti, Calypso's tournament everywhere (painted on the steel).
 	var tags := [
 		["QUAKE ZONE", Vector3(-30, 1.5, HALF - 0.85), 0.0, Color(0.85, 0.2, 0.22)],
@@ -790,17 +860,9 @@ func _outer_wall() -> void:
 		["NO WISH IS FREE", Vector3(80, 1.5, -HALF + 0.85), 180.0, Color(0.9, 0.82, 0.25)],
 	]
 	for t in tags:
-		var l := Label3D.new()
-		l.text = t[0]
-		l.font_size = 220
-		l.pixel_size = 0.007
-		l.outline_size = 18
-		l.modulate = t[3]
-		l.outline_modulate = Color(0.05, 0.05, 0.05)
-		l.shaded = true
-		l.position = t[1]
-		l.rotation_degrees.y = t[2] + 180.0
-		add_child(l)
+		var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(t[2] + 180.0)), t[1])
+		batch_text(t[0], xf * Transform3D(Basis.IDENTITY, Vector3(0.05, -0.05, -0.02)), 220, 0.007, Color(0.05, 0.05, 0.05)) # drop shadow
+		batch_text(t[0], xf, 220, 0.007, t[3])
 
 
 ## Twin tunnels on the north straight: the road runs through them along x, a divider between the
@@ -822,14 +884,7 @@ func _tunnels() -> void:
 	for dz: float in [-4.5, 4.5]:
 		MeshKit.cylinder(self, 0.25, 6.0, sign_post + Vector3(0, 3.0, dz), _m.steel)
 	MeshKit.box(self, Vector3(0.3, 3.2, 11.0), sign_post + Vector3(0, 6.6, 0), MeshKit.mat(Color(0.1, 0.4, 0.22), 0.6))
-	var fwy := Label3D.new()
-	fwy.text = "101  HOLLYWOOD FWY"
-	fwy.font_size = 140
-	fwy.pixel_size = 0.012
-	fwy.modulate = Color(1.3, 1.3, 1.3)
-	fwy.position = sign_post + Vector3(-0.2, 6.6, 0)
-	fwy.rotation_degrees.y = -90.0
-	add_child(fwy)
+	batch_text("101  HOLLYWOOD FWY", Transform3D(Basis(Vector3.UP, deg_to_rad(-90.0)), sign_post + Vector3(-0.2, 6.6, 0)), 140, 0.012, Color(0.95, 0.95, 0.92), true)
 	# Walls along x: pillars every 8 m with glass between. The roof ramps cover bays on the south side.
 	var ramp_bays := [1, 2, 5, 6]
 	for wall_z: float in [TUNNEL_Z0 + 0.5, cz, TUNNEL_Z1 - 0.5]:
@@ -876,7 +931,7 @@ func _tunnels() -> void:
 			var z := lerpf(z0, z1, t)
 			mb.box(_m.yellow_line, Vector3(9.0, 0.05, 1.2), MeshBuilder.at(Vector3(x, PLAT_H + (ROOF_Y - PLAT_H) * t + 0.06, z), Vector3(rad_to_deg(atan((ROOF_Y - PLAT_H) / run)), 0, 0)), 0.0)
 		ramps.append({"foot": Vector3(x, PLAT_H, z0 + 10.0), "top": Vector3(x, ROOF_Y, z1 - 8.0)})
-	mb.commit(self)
+	batch_builder(mb)
 	# Teleporter on the roof: straight into the cage with the super health.
 	var tp := Teleporter.new()
 	add_child(tp)
@@ -936,15 +991,10 @@ func _overpass_and_cage() -> void:
 			var p := a.lerp(b, float(k) / maxf(1.0, posts - 1))
 			cage.cylinder(_m.steel, 0.12, fence_h + 0.4, MeshBuilder.at(p + Vector3.UP * (DECK_Y + (fence_h + 0.4) * 0.5)), 6)
 		cage.box(_m.steel, size + Vector3(0.1, -fence_h + 0.12, 0.1), MeshBuilder.at(mid + Vector3.UP * (DECK_Y + fence_h)), 0.0)
-	cage.commit(self)
-	var warn := Label3D.new()
-	warn.text = "CALYPSO PROPERTY\nKEEP OUT"
-	warn.font_size = 120
-	warn.pixel_size = 0.012
-	warn.modulate = Color(0.95, 0.2, 0.15)
-	warn.outline_size = 16
-	warn.position = c + Vector3(-11, DECK_Y + 3.0, 15.15)
-	add_child(warn)
+	batch_builder(cage)
+	var warn_xf := Transform3D(Basis.IDENTITY, c + Vector3(-11, DECK_Y + 3.0, 15.15))
+	batch_text("CALYPSO PROPERTY\nKEEP OUT", warn_xf * Transform3D(Basis.IDENTITY, Vector3(0.05, -0.05, -0.02)), 120, 0.012, Color(0.05, 0.05, 0.05))
+	batch_text("CALYPSO PROPERTY\nKEEP OUT", warn_xf, 120, 0.012, Color(0.95, 0.2, 0.15))
 	mega_points.append(c + Vector3(0, DECK_Y, -2))
 	weapon_points.append(c + Vector3(-9, DECK_Y, -9))
 	weapon_points.append(c + Vector3(9, DECK_Y, -9))
@@ -970,13 +1020,10 @@ func _drape_disc(c: Vector3, radius: float, lift: float, mat: Material) -> void:
 				var q: Vector2 = quad[i]
 				var p := on_mesh(c.x + q.x, c.z + q.y, lift)
 				st.set_normal(_normal_at(p.x, p.z))
-				st.set_uv(Vector2(p.x, p.z) * 0.1)
+				st.set_uv(Vector2(p.x, p.z))
 				st.add_vertex(p)
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	mi.material_override = mat
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
+	st.index()
+	batch_mesh(st.commit(), Transform3D.IDENTITY, false, mat)
 
 
 ## The pit of fire in the middle of the battleground.
@@ -1028,7 +1075,7 @@ func _fire_pit() -> void:
 		var r := _rng.randf_range(8.0, 18.0)
 		var p := ground(cos(a) * r, sin(a) * r, 0.1)
 		slabs.box(_m.concrete_dark, Vector3(_rng.randf_range(2, 4), 0.3, _rng.randf_range(1.5, 3)), MeshBuilder.at(p, Vector3(_rng.randf_range(-6, 6), _rng.randf_range(0, 180), _rng.randf_range(-6, 6))), 0.08)
-	slabs.commit(self)
+	batch_builder(slabs)
 
 
 ## Burnt-out building you can drive through (north and south doors, 10 m wide).
@@ -1054,7 +1101,7 @@ func _burnt_building(c: Vector3) -> void:
 			mb.box(_m.char, Vector3(2.0, 1.5, 1.12), MeshBuilder.at(Vector3(x, b + 10.8, z)), 0.0)
 	_solid_box_mb(mb, _m.char, Vector3(w, 0.6, d), MeshBuilder.at(c + Vector3(0, 6.3, 0))) # first floor
 	mb.box(_m.char, Vector3(w * 0.6, 0.5, d * 0.7), MeshBuilder.at(c + Vector3(-3, h - 0.3, -1), Vector3(0, 0, -8)), 0.0)
-	mb.commit(self)
+	batch_builder(mb)
 	var smoke := FxKit.smoke(2.5, 24)
 	smoke.position = c + Vector3(2, h + 1.0, 0)
 	add_child(smoke)
@@ -1115,28 +1162,23 @@ func _power_tower() -> void:
 			for k in 3:
 				tb.cylinder(_insulator(), 0.22, 0.25, MeshBuilder.at(Vector3(x, y - 0.6 - k * 0.3, 0)), 8)
 	tb.commit(_tower_upper)
-	# Power lines running off over the wall toward the city.
-	var line_mat := MeshKit.mat(Color(0.1, 0.1, 0.1), 0.6)
+	# Power lines running off over the wall toward the city (merged into the static stage).
+	var wires := MeshBuilder.new()
+	var wire_mat := MatKit.flat(Color(0.08, 0.08, 0.08), 0.6)
 	for x: float in [-7.5, 7.5, -5.5, 5.5]:
 		var y := 20.0 if absf(x) > 6.0 else 25.0
-		var line := ZigLine.new()
-		line.material = line_mat
-		line.thickness = 0.08
-		add_child(line)
-		line.draw(at + Vector3(x, y, 0), Vector3(HALF + 70.0, 18.0, HALF + 30.0 + x), 0.0, 6.0)
+		var a := at + Vector3(x, y, 0)
+		var b := Vector3(HALF + 70.0, 18.0, HALF + 30.0 + x)
+		var prev := a
+		for k in 12:
+			var t := float(k + 1) / 12.0
+			var p := a.lerp(b, t) - Vector3(0, 6.0 * 4.0 * t * (1.0 - t), 0)
+			wires.cylinder(wire_mat, 0.05, prev.distance_to(p), MeshBuilder.along((prev + p) * 0.5, p - prev), 4, -1.0, false)
+			prev = p
+	batch_builder(wires, false)
 	MeshKit.box(self, Vector3(4.6, 2.4, 0.08), at + Vector3(0, 6.0, 4.0), MatKit.plain(MatKit.paint(Color(0.7, 0.55, 0.08), 0.6, 0.6, 0.6, 2.0, 0.7, 120)))
 	for face: float in [1.0, -1.0]:
-		var sign := Label3D.new()
-		sign.text = "DANGER\nHIGH VOLTAGE"
-		sign.font_size = 90
-		sign.pixel_size = 0.009
-		sign.modulate = Color(0.05, 0.04, 0.03)
-		sign.outline_size = 0
-		sign.shaded = true
-		sign.double_sided = false
-		sign.position = at + Vector3(0, 6.0, 4.0 + 0.05 * face)
-		sign.rotation_degrees.y = 0.0 if face > 0.0 else 180.0
-		add_child(sign)
+		batch_text("DANGER\nHIGH VOLTAGE", Transform3D(Basis(Vector3.UP, 0.0 if face > 0.0 else PI), at + Vector3(0, 6.0, 4.0 + 0.05 * face)), 90, 0.009, Color(0.05, 0.04, 0.03))
 
 
 var _insulator_mat: StandardMaterial3D
@@ -1234,7 +1276,7 @@ func _stand_mesh() -> ArrayMesh:
 	for i in 7:
 		var flip := 1.0 if i % 2 == 0 else -1.0
 		mb.box(mustard, Vector3(0.5, 0.06, 0.1), MeshBuilder.at(Vector3(-1.5 + i * 0.5, 3.96, 0.1 * flip), Vector3(0, 30.0 * flip, 0)), 0.0)
-	_stand_mesh_cache = mb.build_mesh(0.6)
+	_stand_mesh_cache = mb.build_mesh(0.6, 0.0, true)
 	return _stand_mesh_cache
 
 
@@ -1328,7 +1370,7 @@ func _fan_palm_mesh(variant: int) -> ArrayMesh:
 			var bend := stem_end + bdir * 1.3
 			var bside := bdir.cross(Vector3.UP).normalized()
 			mb.box(leaf, Vector3(0.32, 0.03, 1.3), Transform3D(Basis(bside, bside.cross(bdir), -bdir), (stem_end + bend) * 0.5), 0.0)
-	_palm_meshes[key] = mb.build_mesh(0.25)
+	_palm_meshes[key] = mb.build_mesh(0.25, 0.0, true)
 	return _palm_meshes[key]
 
 
@@ -1389,7 +1431,7 @@ func _palm_mesh(variant: int) -> ArrayMesh:
 		mb.box(dead, Vector3(0.7, 0.04, a.distance_to(b)), Transform3D(Basis(side, side.cross(fwd), -fwd), (a + b) * 0.5), 0.0)
 	for k in 5:
 		mb.sphere(ring, 0.16, MeshBuilder.at(top + Vector3(cos(k * 1.3) * 0.4, -0.5 - (k % 2) * 0.2, sin(k * 1.3) * 0.4)), 6, 4)
-	_palm_meshes[variant] = mb.build_mesh(0.3)
+	_palm_meshes[variant] = mb.build_mesh(0.3, 0.0, true)
 	return _palm_meshes[variant]
 
 
@@ -1428,7 +1470,7 @@ func _bush_mesh() -> ArrayMesh:
 		var a := TAU * k / 5.0
 		mb.sphere(green if k % 2 == 0 else olive, 0.7, MeshBuilder.at(Vector3(cos(a) * 0.55, 0.45, sin(a) * 0.55), Vector3.ZERO, Vector3(1.0, 0.75, 1.0)), 8, 5)
 	mb.sphere(green, 0.75, MeshBuilder.at(Vector3(0, 0.7, 0), Vector3.ZERO, Vector3(1.0, 0.8, 1.0)), 8, 5)
-	_shrub = mb.build_mesh(0.4)
+	_shrub = mb.build_mesh(0.4, 0.0, true)
 	return _shrub
 
 
@@ -1509,6 +1551,7 @@ func _hollywood_sign() -> void:
 			var c := grid[(j + 1) * (nx + 1) + i]
 			var d := grid[(j + 1) * (nx + 1) + i + 1]
 			for v: Vector3 in [a, b, c, b, d, c]:
+				st.set_uv(Vector2(v.x, v.z)) # chaparral reads UVs in meters
 				st.add_vertex(v)
 	st.generate_normals()
 	var hill := MeshInstance3D.new()
@@ -1565,7 +1608,7 @@ func _hollywood_sign() -> void:
 		_letters_left += 1
 		for px: float in [-1.8, 1.8]:
 			posts.box(steel, Vector3(0.18, 7.0, 0.18), MeshBuilder.at(base + Vector3(px, 2.0, -1.6), Vector3(-20, 0, 0)), 0.0)
-	posts.commit(self)
+	batch_builder(posts)
 
 
 func _on_letter_broken(_letter: Breakable, _by: Vehicle) -> void:

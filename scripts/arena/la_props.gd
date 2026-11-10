@@ -10,11 +10,13 @@ extends Node3D
 
 
 var _rng := RandomNumberGenerator.new()
+var _arena: LosAngelesArena # static props go into its merged stage mesh
 var _body: StaticBody3D
 var _meshes := {}
 
 
-func build(_arena: Node3D = null) -> void:
+func build(arena: LosAngelesArena) -> void:
+	_arena = arena
 	_rng.seed = 4242
 	_body = StaticBody3D.new()
 	_body.name = "PropColliders"
@@ -43,7 +45,11 @@ func _solid(size: Vector3, pos: Vector3, yaw_deg := 0.0) -> void:
 	_body.add_child(shape)
 
 
+## A prop mesh. Static ones (no parent) are merged into the stage; parts of breakables get a node.
 func _place(mesh: Mesh, pos: Vector3, yaw_deg := 0.0, parent: Node3D = null) -> MeshInstance3D:
+	if parent == null:
+		_arena.batch_mesh(mesh, transform * Transform3D(Basis(Vector3.UP, deg_to_rad(yaw_deg)), pos))
+		return null
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	mi.position = pos
@@ -106,7 +112,7 @@ func _lamp_mesh() -> ArrayMesh:
 	mb.box(_dark(), Vector3(0.5, 0.18, 0.9), MeshBuilder.at(Vector3(0, 9.15, -2.9)), 0.05)
 	mb.box(MatKit.lamp(Color(1.0, 0.85, 0.6), 0.8), Vector3(0.36, 0.03, 0.7), MeshBuilder.at(Vector3(0, 9.05, -2.9)), 0.0)
 	mb.box(_dark(), Vector3(0.24, 0.4, 0.16), MeshBuilder.at(Vector3(0, 2.2, 0.14)), 0.02)
-	_meshes.lamp = mb.build_mesh(0.6)
+	_meshes.lamp = mb.build_mesh(0.6, 0.0, true)
 	return _meshes.lamp
 
 
@@ -166,7 +172,7 @@ func _wreck_mesh(variant: int) -> ArrayMesh:
 				continue
 			mb.cylinder(rim, 0.3, 0.2, MeshBuilder.at(Vector3(x, 0.3, z), Vector3(0, 0, 90)), 10)
 	mb.box(black, Vector3(1.7, 0.1, 4.4), MeshBuilder.at(Vector3(0, 0.32, 0)), 0.0)
-	_meshes[key] = mb.build_mesh(0.8)
+	_meshes[key] = mb.build_mesh(0.8, 0.0, true)
 	return _meshes[key]
 
 
@@ -220,18 +226,11 @@ func _billboards() -> void:
 		mb.box(steel, Vector3(15.6, 0.15, 1.2), MeshBuilder.at(Vector3(0, 8.7, -0.4)), 0.0)
 		for k in 3:
 			mb.box(dark, Vector3(0.3, 0.3, 0.8), MeshBuilder.at(Vector3(-5.0 + k * 5.0, 14.6, -0.5), Vector3(30, 0, 0)), 0.03)
-		mb.commit(node, true, 0.3)
+		_arena.batch_builder(mb, true, 0.3, node.transform)
 		for line in 2:
-			var l := Label3D.new()
-			l.text = b[2] if line == 0 else b[3]
-			l.font_size = 200 if line == 0 else 110
-			l.pixel_size = 0.009
-			l.outline_size = 0
-			l.modulate = Color(0.92, 0.9, 0.84) if line == 0 else Color(0.1, 0.08, 0.07)
-			l.shaded = true
-			l.position = Vector3(0, 12.6 if line == 0 else 10.4, -0.06)
-			l.rotation_degrees.y = 180.0
-			node.add_child(l)
+			var txf := node.transform * Transform3D(Basis(Vector3.UP, PI), Vector3(0, 12.6 if line == 0 else 10.4, -0.06))
+			_arena.batch_text(b[2] if line == 0 else b[3], txf, 200 if line == 0 else 110, 0.009,
+				Color(0.92, 0.9, 0.84) if line == 0 else Color(0.1, 0.08, 0.07))
 		for x: float in [-4.5, 4.5]:
 			_solid(Vector3(0.6, 9.0, 0.6), pos + Basis(Vector3.UP, deg_to_rad(yaw)) * Vector3(x, 4.5, 0.4))
 
@@ -271,7 +270,7 @@ func _power_lines() -> void:
 					var p := p0.lerp(p1, t) - Vector3(0, sin(t * PI) * 1.2, 0)
 					mb.cylinder(wire, 0.02, prev.distance_to(p), MeshBuilder.along((prev + p) * 0.5, p - prev), 3, -1.0, false)
 					prev = p
-	mb.commit(self, true, 0.4)
+	_arena.batch_builder(mb, true, 0.4)
 
 
 # ---------------------------------------------------------------- traffic lights
@@ -300,7 +299,7 @@ func _traffic_lights() -> void:
 			var lp := arm_end + Vector3(0, -0.3 - k * 0.4, 0) + inward * 0.21
 			mb.cylinder(lamps[k], 0.13, 0.04, MeshBuilder.along(lp, inward), 10)
 		_solid(Vector3(0.4, 6.0, 0.4), g + Vector3(0, 3.0, 0))
-	mb.commit(self, true, 0.3)
+	_arena.batch_builder(mb, true, 0.3)
 
 
 # ---------------------------------------------------------------- barriers, bins, containers
@@ -312,7 +311,7 @@ func _barrier_mesh() -> ArrayMesh:
 	var conc := _concrete()
 	mb.loft(conc, [MeshBuilder.section(-1.5, 0.4, 0.3, 0.4, 0.05, 0.12), MeshBuilder.section(1.5, 0.4, 0.3, 0.4, 0.05, 0.12)], Transform3D.IDENTITY, 1)
 	mb.box(MatKit.flat(Color(0.62, 0.5, 0.12), 0.8), Vector3(0.62, 0.12, 2.9), MeshBuilder.at(Vector3(0, 0.12, 0)), 0.0)
-	_meshes.barrier = mb.build_mesh(0.7)
+	_meshes.barrier = mb.build_mesh(0.7, 0.0, true)
 	return _meshes.barrier
 
 
@@ -327,7 +326,7 @@ func _dumpster_mesh() -> ArrayMesh:
 	for x: float in [-0.75, 0.75]:
 		for z: float in [-0.5, 0.5]:
 			mb.cylinder(dark, 0.08, 0.1, MeshBuilder.at(Vector3(x, 0.08, z), Vector3(0, 0, 90)), 8)
-	_meshes.dumpster = mb.build_mesh(0.6)
+	_meshes.dumpster = mb.build_mesh(0.6, 0.0, true)
 	return _meshes.dumpster
 
 
@@ -373,7 +372,7 @@ func _container_stack() -> void:
 			for side: float in [-1.0, 1.0]:
 				mb.box(paint, Vector3(0.18, 2.3, 0.06), MeshBuilder.at(p + Basis(Vector3.UP, deg_to_rad(yaw)) * Vector3(x, 0, 1.24 * side), Vector3(0, yaw, 0)), 0.0)
 		mb.box(dark, Vector3(0.08, 2.4, 2.3), MeshBuilder.at(p + Basis(Vector3.UP, deg_to_rad(yaw)) * Vector3(6.02, 0, 0), Vector3(0, yaw, 0)), 0.0)
-	mb.commit(self, true, 0.5)
+	_arena.batch_builder(mb, true, 0.5)
 	_solid(Vector3(12.2, 2.6, 5.1), base + Vector3(0, 1.3, 1.3))
 
 
@@ -395,7 +394,7 @@ func _rubble() -> void:
 		if i % 6 == 0:
 			var d := Vector3(_rng.randf_range(-1, 1), _rng.randf_range(0.6, 1.0), _rng.randf_range(-1, 1)).normalized()
 			mb.cylinder(rebar, 0.015, 0.9, MeshBuilder.along(g + d * 0.4, d), 4, -1.0, false)
-	mb.commit(self, false, 0.6)
+	_arena.batch_builder(mb, false, 0.6)
 
 
 func _stain_mat() -> StandardMaterial3D:
@@ -427,7 +426,7 @@ func _road_marks() -> void:
 		var dir := (pts[(k + 1) % pts.size()] - p).normalized()
 		var q := p + Vector3(-dir.z, 0, dir.x) * 3.0
 		mb.cylinder(iron, 0.38, 0.03, MeshBuilder.at(_ground_at(q.x, q.z) + Vector3(0, 0.05, 0)), 14)
-	mb.commit(self, false)
+	_arena.batch_builder(mb, false)
 	# Oil stains and tire marks as soft dark patches lying on the road: all in one mesh.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -449,11 +448,8 @@ func _road_marks() -> void:
 			st.set_normal(Vector3.UP)
 			st.set_uv(uv[idx])
 			st.add_vertex(c[idx])
-	var stains := MeshInstance3D.new()
-	stains.mesh = st.commit()
-	stains.material_override = _stain_mat()
-	stains.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(stains)
+	st.index()
+	_arena.batch_mesh(st.commit(), transform, false, _stain_mat())
 
 
 # ---------------------------------------------------------------- small street furniture
@@ -469,7 +465,7 @@ func _hydrant_mesh() -> ArrayMesh:
 	for a: float in [0.0, 180.0]:
 		mb.cylinder(steel, 0.07, 0.18, MeshBuilder.at(Vector3(0, 0.5, 0), Vector3(0, a, 90)) * MeshBuilder.at(Vector3(0, 0.18, 0)), 8)
 	mb.cylinder(steel, 0.26, 0.08, MeshBuilder.at(Vector3(0, 0.04, 0)), 10)
-	_meshes.hydrant = mb.build_mesh(0.6)
+	_meshes.hydrant = mb.build_mesh(0.6, 0.0, true)
 	return _meshes.hydrant
 
 
@@ -481,7 +477,7 @@ func _trash_mesh() -> ArrayMesh:
 	var dark := _dark()
 	mb.cylinder(green, 0.32, 0.95, MeshBuilder.at(Vector3(0, 0.48, 0)), 10, 0.36)
 	mb.cylinder(dark, 0.38, 0.1, MeshBuilder.at(Vector3(0, 1.0, 0)), 10)
-	_meshes.trash = mb.build_mesh(0.6)
+	_meshes.trash = mb.build_mesh(0.6, 0.0, true)
 	return _meshes.trash
 
 
@@ -494,7 +490,7 @@ func _cone_mesh() -> ArrayMesh:
 	mb.cylinder(orange, 0.2, 0.72, MeshBuilder.at(Vector3(0, 0.4, 0)), 10, 0.04)
 	mb.cylinder(white, 0.15, 0.1, MeshBuilder.at(Vector3(0, 0.45, 0)), 10, 0.12, false)
 	mb.box(orange, Vector3(0.5, 0.05, 0.5), MeshBuilder.at(Vector3(0, 0.025, 0)), 0.02)
-	_meshes.cone = mb.build_mesh(0.5)
+	_meshes.cone = mb.build_mesh(0.5, 0.0, true)
 	return _meshes.cone
 
 
@@ -512,7 +508,7 @@ func _bus_stop_mesh() -> ArrayMesh:
 	mb.box(glass, Vector3(3.6, 1.8, 0.04), MeshBuilder.at(Vector3(0, 1.4, 0.62)), 0.0)
 	mb.box(ad, Vector3(0.04, 1.8, 1.1), MeshBuilder.at(Vector3(1.8, 1.4, 0)), 0.0)
 	mb.box(_dark(), Vector3(2.4, 0.08, 0.4), MeshBuilder.at(Vector3(0, 0.5, 0.35)), 0.0)
-	_meshes.bus = mb.build_mesh(0.6)
+	_meshes.bus = mb.build_mesh(0.6, 0.0, true)
 	return _meshes.bus
 
 

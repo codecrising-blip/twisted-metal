@@ -36,7 +36,7 @@ func build(arena: LosAngelesArena) -> void:
 		_auto_parts()
 	if _place(Vector3(100, 0, -H), Vector3(0, 0, 1), 20.0, 11.0):
 		_pawn()
-	_mb.commit(arena, true, 0.7)
+	arena.batch_builder(_mb, true, 0.7) # merged with the rest of the static stage
 
 
 # ---------------------------------------------------------------- frame and helpers
@@ -84,20 +84,10 @@ func _solid(size: Vector3, pos: Vector3) -> void:
 	_arena._solid(size, _xf(pos))
 
 
-## Text facing out of the front (toward the arena). neon = unshaded and bright.
-func _text(text: String, pos: Vector3, px: int, color: Color, pixel := 0.012, neon := true) -> Label3D:
-	var l := Label3D.new()
-	l.text = text
-	l.font_size = px
-	l.pixel_size = pixel
-	l.outline_size = 0 if neon else 8
-	l.modulate = color
-	l.outline_modulate = Color(0.05, 0.04, 0.04)
-	l.shaded = not neon
-	l.double_sided = false
-	l.transform = _F * Transform3D(Basis(Vector3.UP, PI), pos)
-	_arena.add_child(l)
-	return l
+## Text facing out of the front (toward the arena), merged into the static stage as geometry.
+## neon = unshaded and bright. turn = extra yaw (blade signs).
+func _text(text: String, pos: Vector3, px: int, color: Color, pixel := 0.012, neon := true, turn := 0.0) -> void:
+	_arena.batch_text(text, _F * Transform3D(Basis(Vector3.UP, PI), pos) * Transform3D(Basis(Vector3.UP, turn)), px, pixel, color, neon)
 
 
 func _materials() -> void:
@@ -312,8 +302,7 @@ func _theater() -> void:
 	# Vertical blade sign.
 	_box(_m.dark, Vector3(0.6, 7.0, 2.4), Vector3(0, 9.8, z - 1.2), Vector3.ZERO, 0.08)
 	for s: float in [-1.0, 1.0]:
-		var l := _text("T\nH\nE\nA\nT\nE\nR", Vector3(s * 0.32, 9.8, z - 1.2), 120, Color(1.0, 0.82, 0.3), 0.011)
-		l.rotate_object_local(Vector3.UP, s * PI * 0.5)
+		_text("T\nH\nE\nA\nT\nE\nR", Vector3(s * 0.32, 9.8, z - 1.2), 110, Color(1.0, 0.82, 0.3), 0.0072, true, s * PI * 0.5)
 	for k in 3:
 		_window(-9.5 + k * 9.5, 8.0, 2.0, 2.2, "boarded" if k == 2 else "")
 

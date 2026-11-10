@@ -34,7 +34,31 @@ func _flush(mat: Material, st: SurfaceTool, xf: Transform3D, smooth: bool) -> vo
 		st.index()
 	var mesh := st.commit()
 	if mesh.get_surface_count() > 0:
-		_master(mat).append_from(mesh, 0, xf)
+		_master(mat).append_from(_box_uv(mesh, xf), 0, xf)
+
+
+## UVs in meters by box projection in the model's space (each vertex takes the plane its normal
+## faces most). Materials that read UVs (ground, the shared neutral) then need one texture read
+## instead of triplanar's three. Car paint stays triplanar and ignores them.
+static func _box_uv(mesh: ArrayMesh, xf: Transform3D) -> ArrayMesh:
+	var arrays := mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var norms: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var uvs := PackedVector2Array()
+	uvs.resize(verts.size())
+	for i in verts.size():
+		var p := xf * verts[i]
+		var n := (xf.basis * norms[i]).abs() if i < norms.size() else Vector3.UP
+		if n.y >= n.x and n.y >= n.z:
+			uvs[i] = Vector2(p.x, p.z)
+		elif n.x >= n.z:
+			uvs[i] = Vector2(p.z, -p.y)
+		else:
+			uvs[i] = Vector2(p.x, -p.y)
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	var out := ArrayMesh.new()
+	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return out
 
 
 ## One mesh per material under `parent`. Returns the created MeshInstance3D nodes.
@@ -269,15 +293,43 @@ func torus(mat: Material, radius: float, tube: float, xf := Transform3D.IDENTITY
 
 
 ## Everything added so far as ONE mesh with a surface per material (for MultiMesh instancing).
-func build_mesh(grime := 0.0, y_offset := 0.0) -> ArrayMesh:
+## collapse: fold every plain paint / flat / steel part into the shared MatKit.neutral materials,
+## its colour baked into the vertices: a palm or a pickup becomes 1-2 draw calls instead of 3-5.
+## Lamps, glass and ground textures keep their own surface.
+func build_mesh(grime := 0.0, y_offset := 0.0, collapse := false) -> ArrayMesh:
 	var out := ArrayMesh.new()
+	var folded := {} # neutral material -> SurfaceTool
 	for mat: Material in _masters:
 		var part := _with_grime((_masters[mat] as SurfaceTool).commit(), grime, y_offset)
 		if part.get_surface_count() == 0:
 			continue
+		var target: Material = MatKit.neutral_for(mat) if collapse else null
+		if target:
+			if not folded.has(target):
+				var st := SurfaceTool.new()
+				st.begin(Mesh.PRIMITIVE_TRIANGLES)
+				folded[target] = st
+			(folded[target] as SurfaceTool).append_from(_tinted(part, mat.get_meta("base")), 0, Transform3D.IDENTITY)
+			continue
 		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, part.surface_get_arrays(0))
 		out.surface_set_material(out.get_surface_count() - 1, mat)
+	for target: Material in folded:
+		var merged := (folded[target] as SurfaceTool).commit()
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, merged.surface_get_arrays(0))
+		out.surface_set_material(out.get_surface_count() - 1, target)
 	_masters.clear()
+	return out
+
+
+## Vertex colours multiplied by a part's base colour (collapse).
+static func _tinted(mesh: ArrayMesh, base: Color) -> ArrayMesh:
+	var arrays := mesh.surface_get_arrays(0)
+	var cols: PackedColorArray = arrays[Mesh.ARRAY_COLOR]
+	for i in cols.size():
+		cols[i] = Color(cols[i].r * base.r, cols[i].g * base.g, cols[i].b * base.b, 1.0)
+	arrays[Mesh.ARRAY_COLOR] = cols
+	var out := ArrayMesh.new()
+	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
 	return out
 
 
