@@ -28,8 +28,9 @@ curl -sSL -o g.zip https://github.com/godotengine/godot/releases/download/4.3-st
 G=/tmp/godot/Godot_v4.3-stable_linux.x86_64
 cd <repo> && $G --headless --path . --import            # parse all scripts
 $G --headless --path . -s tests/smoke_test.gd           # gameplay tests, must print ALL TESTS PASSED
-# Screenshots (shots: gameplay | hero | duel | enemies | overview | roof | tunnel | cage | center | pit,
-#   or car:<id>:<front34|rear34|side|front|top|low> for one car alone). Add `-- full` for all five cars:
+# Screenshots (shots: gameplay | hero | duel | enemies | overview | roof | tunnel | cage | center | pit | hill | ramp,
+#   car:<id>:<front34|rear34|side|front|top|low> for one car alone, look:x,y,z:tx,ty,tz for a free camera).
+#   Add `-- full` for all five cars:
 xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --path . -s tests/screenshot.gd -- hero docs/screenshots/hero.png
 ```
 - Always run the smoke test before committing. Look at screenshots after visual changes.
@@ -51,6 +52,9 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
   `GraphicsSettings.EXTRA_LIGHT_GROUP` (HIGH only). Measure with a quick script using
   `RenderingServer.get_rendering_info(RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)` at a few camera spots.
   After the pass: 1706 -> 597 mesh nodes, 45 -> 16 lights, worst view ~2500 -> ~1070 draw calls. F3 = FPS counter.
+  `tests/_perf.gd` prints draw calls at fixed camera spots (run it with xvfb like a screenshot). After the session 6
+  look rework: worst view ~1090. Small props (hydrants, cones, trash cans): no shadow, `visibility_range_end` 80 m.
+  Scatter many copies with `LosAngelesArena._scatter()` (one MultiMesh) like bushes and hill scrub.
 - The game starts in the **preview match** (Sweet Tooth vs Outlaw only). `-- full` = all five cars (tests use it).
   `-- high` / `-- low` force a graphics level for one run.
 
@@ -199,7 +203,8 @@ scenes/main.tscn            single scene; everything is spawned from scripts/mai
 scripts/main.gd             match flow (spawn, lives + 6 s respawn, win/lose, restart, fall-out rescue), music
 scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (simple primitives),
                             MeshBuilder (detailed models merged per material: chamfered boxes, lofts, lathes),
-                            MatKit (generated paint/rust/chrome/rubber textures), GraphicsSettings (LOW/HIGH)
+                            MatKit (generated paint/rust/chrome/rubber textures; world-mapped ground: pavement,
+                            pavers, grass, masonry, chaparral), GraphicsSettings (LOW/HIGH)
 scripts/vehicles/           Vehicle (driving, wall rule, rams, states, combat), Roster (stats from SPD/ARM/HND/SPC),
                             VehicleModels (dispatch + simple prototype cars), HeroModels (detailed Sweet Tooth
                             and Outlaw), VehicleFx (gatling spin, muzzle flash, turbo flames, mascot spring,
@@ -209,8 +214,11 @@ scripts/weapons/            WeaponData (all balance numbers), Projectile, Pickup
 scripts/arena/los_angeles.gd  stage 1 / test stage (TM2 Quake Zone): heightmap (raised battleground, ramps, crater,
                             road hills), spline road, tunnels, cage, tower, sign; spot() = named places for tests
 scripts/arena/la_city.gd    BAKE ONLY: the 3D city rendered into the LA backdrop panorama (not built in the game)
+scripts/arena/la_buildings.gd  LA's seven real buildings along the walls (motel, liquor, donuts, theater, tacos,
+                            auto parts, pawn): depth, parapets, awnings, signs, all in one MeshBuilder
 scripts/arena/la_props.gd   LA street furniture: toppling street lights, burnt wrecks, billboards, power lines,
-                            traffic lights, barriers, dumpsters, containers, rubble, manholes, stains
+                            traffic lights, barriers, dumpsters, containers, rubble, manholes, stains,
+                            hydrants, trash cans, cones, bus stops
 scripts/arena/junkyard.gd   the old prototype stage, now free play (`-- junkyard`)
 scripts/arena/breakable.gd  props that shatter/topple (stands, glass, palms, letters, tower legs)
 scripts/arena/teleporter.gd teleport pad
@@ -285,10 +293,19 @@ blimp too close, HUD weak, radar missing. Pass 2 (current):
 - **HUD**: status panel, weapons panel, radar (see code map).
 - Effects: spinning gatlings + muzzle flash, turbo flames, tire smoke. Graphics: LOW (default) / HIGH, G in pause.
 Owner also wants, later: main menu, car select, stage select, world map, opponent preview.
+**Selection screens (owner, session 5, "super important"):** like TM2's select screens: the driver's picture
+shown before choosing and a different one after choosing (reaction), plus the car turning on a stand, for the
+whole roster. Our own portraits and art.
+
+**LA look rework (session 6, from the owner's TM2 reference shots):** golden-hour dusk (violet sky, pink smog
+horizon, low warm sun; backdrop rebaked), stone pavers on the battleground, masonry retaining walls, dry grass
+verges, curbs (red/white at bends) and a sidewalk, seven real buildings with depth (`la_buildings.gd`), LA fan palms
+and date palms (no more "chopsticks"), bushes, street props, ramps paved in asphalt, and the HOLLYWOOD sign in bold
+stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
 
 **Next candidates (agree with owner first):**
 0. **The play-test 1 fixes above** (AI, Napalm Cone, movement/turbo, pickups, combos, pad layout, cameras,
-   headlights), plus performance for the owner's laptop. Then the stage look rework.
+   headlights). Performance pass and LA look rework are done (session 6); owner to judge them.
 1. Owner play-test of the LA stage: driving feel, wall slide, damage/health, AI, the new specials.
 2. Owner's verdict on the preview cars; then the same detail for the other cars, new Laughing Ghost look.
 3. Remaining energy moves and Sweet Bot; napalm pickup (needed for the Tokyo puzzle).
@@ -323,3 +340,8 @@ Owner also wants, later: main menu, car select, stage select, world map, opponen
   a constant expression in 4.3 (write the class name out); Godot's panorama reads u = 0 at north (-Z) growing
   east, v = 0 straight up (tests/cube_to_panorama.py follows that); AI wandering now aims at `arena.ground()` and
   climbs ramps in two steps when a ramp starts up on a plateau (`AIDriver._lower_ramp`).
+- **Session 6:** Performance pass (lag near the power lines: merged props, cut lights, lighter LOW, F3 FPS). Owner sent
+  TM2 reference shots (LA plaza at dusk, map, select screens); LA look rework built (see Status). Gotchas: a wide
+  `_drape` strip only sampled its two edges, so on a ramp it cut under the crest and the grass showed through (strips
+  are now split into ~2.5 m lanes, ramps use their exact plane via `ramp_y`); the baked backdrop is tonemapped twice
+  (bake + stage), so the bake uses softer saturation/contrast or the sky turns electric indigo.

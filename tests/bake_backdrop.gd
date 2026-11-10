@@ -24,22 +24,22 @@ func _run() -> void:
 	sky.sky_material = LosAngelesArena.sky_material()
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.6, 0.62, 0.68)
-	env.ambient_light_energy = 0.5
+	env.ambient_light_color = Color(0.62, 0.56, 0.66)
+	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.68, 0.66, 0.62)
+	env.fog_light_color = Color(0.66, 0.55, 0.56)
 	env.fog_density = 0.00075
 	env.fog_sky_affect = 0.4
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 0.9
-	env.adjustment_contrast = 1.12
+	env.adjustment_saturation = 0.85 # the stage tonemaps the image again: keep the bake soft
+	env.adjustment_contrast = 1.0
 	var we := WorldEnvironment.new()
 	we.environment = env
 	world.add_child(we)
 	var sun := DirectionalLight3D.new()
-	sun.light_color = Color(1.0, 0.9, 0.74)
-	sun.light_energy = 1.35
+	sun.light_color = Color(1.0, 0.76, 0.54)
+	sun.light_energy = 1.3
 	sun.rotation_degrees = LosAngelesArena.SUN_ROTATION
 	world.add_child(sun)
 	var city := LaCity.new()

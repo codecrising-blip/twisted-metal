@@ -30,6 +30,7 @@ func build(_arena: Node3D = null) -> void:
 	_container_stack()
 	_rubble()
 	_road_marks()
+	_street_bits()
 
 
 func _solid(size: Vector3, pos: Vector3, yaw_deg := 0.0) -> void:
@@ -242,7 +243,7 @@ func _power_lines() -> void:
 	var dark := _dark()
 	var wire := MatKit.flat(Color(0.03, 0.03, 0.03), 0.8)
 	var mb := MeshBuilder.new()
-	var runs := [[Vector3(45, 0, -LosAngelesArena.HALF + 6.0), Vector3(122, 0, -LosAngelesArena.HALF + 6.0)], [Vector3(-LosAngelesArena.HALF + 6.0, 0, 75), Vector3(-LosAngelesArena.HALF + 6.0, 0, 128)]]
+	var runs := [[Vector3(-LosAngelesArena.HALF + 6.0, 0, 75), Vector3(-LosAngelesArena.HALF + 6.0, 0, 128)]]
 	for run in runs:
 		var a: Vector3 = run[0]
 		var b: Vector3 = run[1]
@@ -453,3 +454,107 @@ func _road_marks() -> void:
 	stains.material_override = _stain_mat()
 	stains.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(stains)
+
+
+# ---------------------------------------------------------------- small street furniture
+
+func _hydrant_mesh() -> ArrayMesh:
+	if _meshes.has("hydrant"):
+		return _meshes.hydrant
+	var mb := MeshBuilder.new()
+	var red := MatKit.paint(Color(0.55, 0.1, 0.07), 0.4, 0.3, 0.6, 0.5, 0.6, 180)
+	var steel := _steel()
+	mb.cylinder(red, 0.18, 0.7, MeshBuilder.at(Vector3(0, 0.35, 0)), 10)
+	mb.sphere(red, 0.2, MeshBuilder.at(Vector3(0, 0.72, 0), Vector3.ZERO, Vector3(1, 0.7, 1)), 10, 5)
+	for a: float in [0.0, 180.0]:
+		mb.cylinder(steel, 0.07, 0.18, MeshBuilder.at(Vector3(0, 0.5, 0), Vector3(0, a, 90)) * MeshBuilder.at(Vector3(0, 0.18, 0)), 8)
+	mb.cylinder(steel, 0.26, 0.08, MeshBuilder.at(Vector3(0, 0.04, 0)), 10)
+	_meshes.hydrant = mb.build_mesh(0.6)
+	return _meshes.hydrant
+
+
+func _trash_mesh() -> ArrayMesh:
+	if _meshes.has("trash"):
+		return _meshes.trash
+	var mb := MeshBuilder.new()
+	var green := MatKit.paint(Color(0.16, 0.24, 0.18), 0.6, 0.6, 0.7, 0.6, 0.7, 181)
+	var dark := _dark()
+	mb.cylinder(green, 0.32, 0.95, MeshBuilder.at(Vector3(0, 0.48, 0)), 10, 0.36)
+	mb.cylinder(dark, 0.38, 0.1, MeshBuilder.at(Vector3(0, 1.0, 0)), 10)
+	_meshes.trash = mb.build_mesh(0.6)
+	return _meshes.trash
+
+
+func _cone_mesh() -> ArrayMesh:
+	if _meshes.has("cone"):
+		return _meshes.cone
+	var mb := MeshBuilder.new()
+	var orange := MatKit.paint(Color(0.75, 0.3, 0.06), 0.3, 0.0, 0.6, 0.5, 0.6, 182)
+	var white := MatKit.flat(Color(0.82, 0.8, 0.75), 0.6)
+	mb.cylinder(orange, 0.2, 0.72, MeshBuilder.at(Vector3(0, 0.4, 0)), 10, 0.04)
+	mb.cylinder(white, 0.15, 0.1, MeshBuilder.at(Vector3(0, 0.45, 0)), 10, 0.12, false)
+	mb.box(orange, Vector3(0.5, 0.05, 0.5), MeshBuilder.at(Vector3(0, 0.025, 0)), 0.02)
+	_meshes.cone = mb.build_mesh(0.5)
+	return _meshes.cone
+
+
+func _bus_stop_mesh() -> ArrayMesh:
+	if _meshes.has("bus"):
+		return _meshes.bus
+	var mb := MeshBuilder.new()
+	var steel := _steel()
+	var glass := MatKit.flat(Color(0.1, 0.13, 0.15), 0.15, 0.3)
+	var ad := MatKit.paint(Color(0.55, 0.12, 0.1), 0.3, 0.0, 0.5, 1.0, 0.6, 183)
+	for x: float in [-1.8, 1.8]:
+		for z: float in [-0.6, 0.6]:
+			mb.box(steel, Vector3(0.08, 2.5, 0.08), MeshBuilder.at(Vector3(x, 1.25, z)), 0.0)
+	mb.box(steel, Vector3(4.0, 0.12, 1.6), MeshBuilder.at(Vector3(0, 2.55, 0)), 0.03)
+	mb.box(glass, Vector3(3.6, 1.8, 0.04), MeshBuilder.at(Vector3(0, 1.4, 0.62)), 0.0)
+	mb.box(ad, Vector3(0.04, 1.8, 1.1), MeshBuilder.at(Vector3(1.8, 1.4, 0)), 0.0)
+	mb.box(_dark(), Vector3(2.4, 0.08, 0.4), MeshBuilder.at(Vector3(0, 0.5, 0.35)), 0.0)
+	_meshes.bus = mb.build_mesh(0.6)
+	return _meshes.bus
+
+
+## Hydrants, trash cans and cones on the outside sidewalk (they break when hit), a bus stop.
+func _street_bits() -> void:
+	var pts := LosAngelesArena.road_points()
+	var n := pts.size()
+	var k := 6
+	var kind := 0
+	while k < n:
+		var p := pts[k]
+		var dir := (pts[(k + 1) % n] - pts[(k - 1 + n) % n]).normalized()
+		var outside := -Vector3(-dir.z, 0, dir.x) # the loop runs clockwise: outside is -normal
+		var pos := p + outside * (LosAngelesArena.ROAD_W * 0.5 + 1.6)
+		k += 17
+		kind = (kind + 1) % 4
+		if not _free(pos, 0.4, -1.6) or LosAngelesArena.road_distance(pos.x, pos.z) < LosAngelesArena.ROAD_W * 0.5 + 0.9:
+			continue
+		var b := Breakable.new()
+		b.health = 6.0
+		b.debris_color = [Color(0.55, 0.1, 0.07), Color(0.16, 0.24, 0.18), Color(0.75, 0.3, 0.06), Color(0.75, 0.3, 0.06)][kind]
+		b.position = _ground_at(pos.x, pos.z)
+		b.rotation.y = _rng.randf() * TAU
+		add_child(b)
+		b.add_box_shape(Vector3(0.6, 1.0, 0.6), Vector3(0, 0.5, 0))
+		var mesh: ArrayMesh = [_hydrant_mesh(), _trash_mesh(), _cone_mesh(), _cone_mesh()][kind]
+		var bits: Array[MeshInstance3D] = [_place(mesh, Vector3.ZERO, 0.0, b.visual)]
+		if kind >= 2: # cones come in little groups
+			for c in 2:
+				bits.append(_place(mesh, Vector3(_rng.randf_range(-1.2, 1.2), 0, _rng.randf_range(0.8, 1.6)), _rng.randf_range(0, 90), b.visual))
+		for mi in bits: # small: no shadow, not drawn from far away (draw calls on the HD 5500)
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			mi.visibility_range_end = 80.0
+	for f: float in [0.3, 0.68]:
+		var r := LosAngelesArena.road_at(f)
+		var dir: Vector3 = r.dir
+		var outside := -Vector3(-dir.z, 0, dir.x)
+		var pos: Vector3 = r.p + outside * (LosAngelesArena.ROAD_W * 0.5 + 3.4)
+		if not _free(pos, 2.0, -3.0):
+			continue
+		var yaw := rad_to_deg(atan2(-outside.x, -outside.z)) + 180.0
+		var g := _ground_at(pos.x, pos.z)
+		_place(_bus_stop_mesh(), g, yaw)
+		_solid(Vector3(4.0, 2.6, 1.4), g + Vector3(0, 1.3, 0), yaw)
+

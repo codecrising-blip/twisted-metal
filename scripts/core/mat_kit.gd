@@ -285,3 +285,184 @@ static func plain(m: StandardMaterial3D) -> StandardMaterial3D:
 	_cache[key] = d
 	return d
 
+
+static func _world_material(img: Image, tile_m: float, roughness: float, two_sided := true) -> StandardMaterial3D:
+	img.generate_mipmaps()
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = ImageTexture.create_from_image(img)
+	m.roughness = roughness
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE / tile_m
+	if two_sided:
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return m
+
+
+## Large stone pavers (plazas): 2 m slabs in slightly different tones, dark joints, a few
+## cracked or sunken slabs, grime in the joints. One tile = tile_m meters (4 x 4 slabs).
+static func pavers(base: Color, tile_m := 8.0, seed := 1) -> StandardMaterial3D:
+	var key := "pavers_%s_%.1f_%d" % [base.to_html(), tile_m, seed]
+	if _cache.has(key):
+		return _cache[key]
+	var size := 256
+	var cell := size / 4
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var grain := FastNoiseLite.new()
+	grain.seed = rng.randi()
+	grain.frequency = 0.25
+	var blotch := FastNoiseLite.new()
+	blotch.seed = rng.randi()
+	blotch.frequency = 0.03
+	var tones: Array[float] = []
+	for i in 16:
+		tones.append(rng.randf_range(-0.08, 0.08))
+	var img := Image.create(size, size, false, Image.FORMAT_RGB8)
+	for y in size:
+		for x in size:
+			var tx := x / cell
+			var ty := y / cell
+			var t := tones[ty * 4 + tx]
+			var g := grain.get_noise_2d(x, y) * 0.5 + 0.5
+			var b := blotch.get_noise_2d(x, y) * 0.5 + 0.5
+			var c := base.lightened(t) if t > 0.0 else base.darkened(-t)
+			c = c.darkened((1.0 - b) * 0.18).lightened((g - 0.5) * 0.08)
+			var jx := mini(x % cell, cell - 1 - x % cell)
+			var jy := mini(y % cell, cell - 1 - y % cell)
+			var j := mini(jx, jy)
+			if j < 2:
+				c = c.darkened(0.45)
+			elif j < 4:
+				c = c.darkened(0.12)
+			img.set_pixel(x, y, c)
+	for i in 5: # cracks across a slab
+		var p := Vector2(rng.randf_range(0, size), rng.randf_range(0, size))
+		var a := rng.randf_range(0, TAU)
+		for k in rng.randi_range(15, 40):
+			a += rng.randf_range(-0.4, 0.4)
+			p += Vector2(cos(a), sin(a))
+			var px := posmod(int(p.x), size)
+			var py := posmod(int(p.y), size)
+			img.set_pixel(px, py, img.get_pixel(px, py).darkened(0.35))
+	var m := _world_material(img, tile_m, 0.85)
+	_cache[key] = m
+	return m
+
+
+## Dry LA grass: muted green with yellowed and bare patches.
+static func grass(base: Color, tile_m := 12.0, seed := 1) -> StandardMaterial3D:
+	var key := "grass_%s_%.1f_%d" % [base.to_html(), tile_m, seed]
+	if _cache.has(key):
+		return _cache[key]
+	var size := 256
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var big := FastNoiseLite.new()
+	big.seed = rng.randi()
+	big.frequency = 0.02
+	big.fractal_octaves = 3
+	var fine := FastNoiseLite.new()
+	fine.seed = rng.randi()
+	fine.frequency = 0.6
+	var dry := Color(0.5, 0.45, 0.28)
+	var dirt := Color(0.36, 0.3, 0.22)
+	var img := Image.create(size, size, false, Image.FORMAT_RGB8)
+	for y in size:
+		for x in size:
+			var b := big.get_noise_2d(x, y) * 0.5 + 0.5
+			var f := fine.get_noise_2d(x, y) * 0.5 + 0.5
+			var c := base.lerp(dry, smoothstep(0.45, 0.8, b) * 0.7)
+			if b < 0.22:
+				c = c.lerp(dirt, smoothstep(0.22, 0.1, b))
+			c = c.darkened((1.0 - f) * 0.22).lightened(f * 0.05)
+			img.set_pixel(x, y, c)
+	var m := _world_material(img, tile_m, 0.97)
+	_cache[key] = m
+	return m
+
+
+## Chaparral hillside (the hills around LA): clumps of dark scrub over dry tan earth, darker in
+## the folds. Seen from far away, so one tile covers tile_m meters.
+static func chaparral(tile_m := 40.0, seed := 1) -> StandardMaterial3D:
+	var key := "chaparral_%.1f_%d" % [tile_m, seed]
+	if _cache.has(key):
+		return _cache[key]
+	var size := 256
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var big := FastNoiseLite.new()
+	big.seed = rng.randi()
+	big.frequency = 0.012
+	big.fractal_octaves = 3
+	var clump := FastNoiseLite.new()
+	clump.seed = rng.randi()
+	clump.frequency = 0.07
+	clump.fractal_octaves = 2
+	var fine := FastNoiseLite.new()
+	fine.seed = rng.randi()
+	fine.frequency = 0.7
+	var scrub := Color(0.16, 0.19, 0.1)
+	var sage := Color(0.3, 0.31, 0.2)
+	var dry := Color(0.47, 0.4, 0.27)
+	var dirt := Color(0.38, 0.3, 0.21)
+	var img := Image.create(size, size, false, Image.FORMAT_RGB8)
+	for y in size:
+		for x in size:
+			var b := big.get_noise_2d(x, y) * 0.5 + 0.5
+			var k := clump.get_noise_2d(x, y) * 0.5 + 0.5
+			var f := fine.get_noise_2d(x, y) * 0.5 + 0.5
+			var c := dry.lerp(dirt, smoothstep(0.55, 0.8, b))
+			c = c.lerp(sage, smoothstep(0.35, 0.55, k) * 0.8)
+			c = c.lerp(scrub, smoothstep(0.52, 0.66, k + (b - 0.5) * 0.3))
+			c = c.darkened((1.0 - f) * 0.3)
+			img.set_pixel(x, y, c)
+	var m := _world_material(img, tile_m, 1.0)
+	_cache[key] = m
+	return m
+
+
+## Stone block wall (retaining walls): courses of rough blocks with mortar, rain streaks.
+static func masonry(base: Color, tile_m := 4.0, seed := 1) -> StandardMaterial3D:
+	var key := "masonry_%s_%.1f_%d" % [base.to_html(), tile_m, seed]
+	if _cache.has(key):
+		return _cache[key]
+	var size := 256
+	var rows := 8
+	var row_h := size / rows
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var grain := FastNoiseLite.new()
+	grain.seed = rng.randi()
+	grain.frequency = 0.15
+	var img := Image.create(size, size, false, Image.FORMAT_RGB8)
+	var offsets: Array[int] = []
+	var widths: Array[int] = []
+	for r in rows:
+		offsets.append(rng.randi_range(0, 60))
+		widths.append(rng.randi_range(44, 72))
+	for y in size:
+		var r := y / row_h
+		var yy := y % row_h
+		for x in size:
+			var xs := (x + offsets[r]) % size
+			var block := xs / widths[r]
+			var xx := xs % widths[r]
+			var h := fposmod(sin(float(block * 31 + r * 17) * 12.9898) * 43758.5453, 1.0)
+			var c := base.lightened((h - 0.5) * 0.18) if h > 0.5 else base.darkened((0.5 - h) * 0.22)
+			var g := grain.get_noise_2d(x, y) * 0.5 + 0.5
+			c = c.darkened((1.0 - g) * 0.2)
+			if yy < 3 or xx < 3:
+				c = base.darkened(0.5) # mortar
+			elif yy < 6 or xx < 6:
+				c = c.darkened(0.15)
+			var streak := fposmod(sin(float(x) * 7.31) * 9341.7, 1.0)
+			if streak > 0.9:
+				c = c.darkened(0.12 * float(size - y) / size)
+			img.set_pixel(x, y, c)
+	var m := _world_material(img, tile_m, 0.9, false)
+	m.vertex_color_use_as_albedo = true
+	_cache[key] = m
+	return m
+

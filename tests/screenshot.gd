@@ -65,7 +65,7 @@ func _run() -> void:
 					(we as WorldEnvironment).environment.sky.sky_material = LosAngelesArena.sky_material()
 				_place(cam, Vector3(205, 170, 245), Vector3(-5, 0, 5), 62.0)
 			"roof":
-				_place(cam, Vector3(12, 13.5, -114), Vector3(-10, 16, -180), 65.0)
+				_place(cam, Vector3(12, 13.5, -114), Vector3(-10, 22, -200), 65.0)
 			"tunnel":
 				_place(cam, Vector3(-46, 3.0, -121), Vector3(0, 2.5, -121), 70.0)
 			"cage":
@@ -95,6 +95,11 @@ func _run() -> void:
 			_:
 				if shot.begins_with("car:"):
 					await _car_shot(main, cam, shot.split(":"))
+				elif shot.begins_with("look:"): # look:x,y,z:tx,ty,tz = free camera
+					var parts := shot.split(":")
+					var a := parts[1].split_floats(",")
+					var b := parts[2].split_floats(",")
+					_place(cam, Vector3(a[0], a[1], a[2]), Vector3(b[0], b[1], b[2]), 62.0)
 	await _frames(15)
 	await RenderingServer.frame_post_draw
 	root.get_viewport().get_texture().get_image().save_png(out)

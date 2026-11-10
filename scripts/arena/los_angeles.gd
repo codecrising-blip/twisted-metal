@@ -13,7 +13,10 @@ extends Node3D
 ##   - the HOLLYWOOD sign on a scaffold beyond the north wall: shoot every letter from the tunnel roof
 ## Beyond the steel wall the city lies below: a pre-rendered panorama on the sky (assets/backdrops),
 ## not 3D, so all the modeling budget goes into the stage itself.
-## Bright late-afternoon light, as in TM2. Fixed seed: the layout is the same every run.
+## Look (owner's references, session 5): golden-hour dusk with a purple-pink sky, stone pavers on
+## the battleground, dry grass below, stone retaining walls, curbs striped at the bends, sidewalks,
+## real shop buildings with depth (LaBuildings), tall LA fan palms and date palms, the HOLLYWOOD sign
+## on its hill. Fixed seed: the layout is the same every run.
 
 signal easter_egg(title: String, text: String)
 
@@ -38,8 +41,7 @@ const DECK_Y := 6.0 # caged deck, above the battleground
 const DECK_CENTER := Vector3(55, PLAT_H, -42)
 const TOWER_AT := Vector3(52, PLAT_H, 48)
 const BURNT_AT := Vector3(-52, PLAT_H, -38)
-const SIGN_Z := -180.0
-const SIGN_BASE_Y := 12.0
+const SIGN_Z := -200.0 # the HOLLYWOOD letters, on the hill north of the arena
 const BACKDROP := "res://assets/backdrops/los_angeles_city.jpg"
 
 ## Road loop control points (x, z), Catmull-Rom. Starts on the north straight (tunnels).
@@ -67,6 +69,7 @@ var _m := {} # materials
 var _tower_legs := 4
 var _tower_upper: Node3D
 var _letters_left := 0
+var _shrub: ArrayMesh
 
 static var _road: PackedVector3Array
 static var _hills: Array = []
@@ -81,9 +84,10 @@ func build() -> void:
 	_battleground_walls()
 	_ramps_build()
 	_roads()
+	_curbs()
 	_cracks()
 	_outer_wall()
-	_storefronts()
+	LaBuildings.new().build(self)
 	_tunnels()
 	_overpass_and_cage()
 	_fire_pit()
@@ -91,6 +95,7 @@ func build() -> void:
 	_power_tower()
 	_hot_dog_stands()
 	_palms()
+	_bushes()
 	_hollywood_sign()
 	var props := LaProps.new()
 	props.name = "Props"
@@ -152,6 +157,12 @@ static func ramp_list() -> Array:
 			var top := Vector3(e.x, PLAT_H, e.y)
 			_ramps.append({"top": top, "dir": dir, "side": Vector3(-dir.z, 0, dir.x), "foot": Vector3(top.x, 0, top.z) + dir * RAMP_L})
 	return _ramps
+
+
+## Height of a ramp's driving surface (a plane from the battleground edge down to the foot).
+static func ramp_y(rp: Dictionary, x: float, z: float) -> float:
+	var along: float = (Vector3(x, 0, z) - Vector3(rp.top.x, 0, rp.top.z)).dot(rp.dir)
+	return PLAT_H * (1.0 - clampf(along / RAMP_L, 0.0, 1.0))
 
 
 ## Signed distance (m, approx.) from the battleground edge: > 0 inside.
@@ -268,8 +279,9 @@ static func _beam(mb: MeshBuilder, mat: Material, a: Vector3, b: Vector3, t: flo
 # ---------------------------------------------------------------- look
 
 func _materials() -> void:
-	_m.ground = MatKit.pavement("concrete", Color(0.4, 0.38, 0.35), 24.0, 7) # low ground around the road
-	_m.deck = MatKit.pavement("concrete", Color(0.3, 0.29, 0.28), 16.0, 11) # the raised battleground
+	_m.ground = MatKit.grass(Color(0.3, 0.36, 0.2), 14.0, 7) # low ground around the road: dry grass
+	_m.deck = MatKit.pavers(Color(0.6, 0.55, 0.46), 8.0, 11) # the raised battleground: stone pavers
+	_m.sidewalk = MatKit.pavement("concrete", Color(0.5, 0.48, 0.44), 6.0, 13)
 	_m.asphalt = MatKit.pavement("asphalt", Color(0.25, 0.25, 0.26), 16.0, 9)
 	_m.yellow_line = _two_sided(MeshKit.mat(Color(0.95, 0.75, 0.12), 0.7))
 	_m.white_line = _two_sided(MeshKit.mat(Color(0.92, 0.92, 0.88), 0.7))
@@ -291,7 +303,7 @@ func _materials() -> void:
 	_m.glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_m.chainlink = _chainlink_material()
 	# MeshBuilder materials (dust baked into vertex colors).
-	_m.retain = MatKit.paint(Color(0.52, 0.5, 0.46), 0.5, 0.35, 0.8, 3.0, 0.92, 140)
+	_m.retain = MatKit.masonry(Color(0.5, 0.45, 0.38), 4.0, 140)
 	_m.hazard = MatKit.paint(Color(0.68, 0.52, 0.08), 0.75, 0.5, 0.6, 1.0, 0.7, 141)
 	_m.hazard_dark = MatKit.flat(Color(0.03, 0.03, 0.03), 0.9)
 	_m.wall_steel = MatKit.paint(Color(0.22, 0.24, 0.22), 0.7, 0.75, 0.7, 2.0, 0.6, 142)
@@ -360,8 +372,8 @@ func _environment() -> void:
 		sky.sky_material = LosAngelesArena.sky_material()
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.6, 0.62, 0.68)
-	env.ambient_light_energy = 0.5
+	env.ambient_light_color = Color(0.62, 0.56, 0.66) # dusk: violet sky light
+	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 1.0
 	env.glow_enabled = true
@@ -369,38 +381,39 @@ func _environment() -> void:
 	env.glow_bloom = 0.02
 	env.glow_hdr_threshold = 1.5
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.68, 0.66, 0.62) # LA smog
+	env.fog_light_color = Color(0.66, 0.55, 0.56) # LA smog at dusk
 	env.fog_density = 0.0006
 	env.fog_sky_affect = 0.0 # the backdrop already has its haze
 	if RenderingServer.get_rendering_device() != null: # Forward+ / Mobile only
 		env.ssao_enabled = true
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 0.9 # gritty, not candy (owner, session 5: "serious")
+	env.adjustment_saturation = 0.95 # gritty, not candy (owner, session 5: "serious")
 	env.adjustment_contrast = 1.12
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
-	sun.light_color = Color(1.0, 0.9, 0.74)
-	sun.light_energy = 1.35
+	sun.light_color = Color(1.0, 0.76, 0.54) # golden hour
+	sun.light_energy = 1.3
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 180.0
 	sun.rotation_degrees = SUN_ROTATION
 	add_child(sun)
 
 
-const SUN_ROTATION := Vector3(-38, -45, 0) # low sun in the south-west
+const SUN_ROTATION := Vector3(-26, -62, 0) # low evening sun in the west-south-west
 
 
 ## The sky the backdrop is baked with (and the fallback when the backdrop image is missing).
 static func sky_material() -> ProceduralSkyMaterial:
 	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.32, 0.46, 0.66)
-	sky_mat.sky_horizon_color = Color(0.74, 0.7, 0.64) # smog on the horizon
-	sky_mat.sky_curve = 0.1
-	sky_mat.ground_horizon_color = Color(0.66, 0.63, 0.58)
-	sky_mat.ground_bottom_color = Color(0.3, 0.29, 0.27)
+	sky_mat.sky_top_color = Color(0.3, 0.27, 0.46) # dusk: dusty violet above
+	sky_mat.sky_horizon_color = Color(0.9, 0.58, 0.5) # pink-orange smog on the horizon
+	sky_mat.sky_curve = 0.12
+	sky_mat.ground_horizon_color = Color(0.62, 0.48, 0.46)
+	sky_mat.ground_bottom_color = Color(0.24, 0.21, 0.23)
+	sky_mat.sun_angle_max = 8.0
 	return sky_mat
 
 
@@ -491,13 +504,15 @@ func _normal_at(x: float, z: float) -> Vector3:
 	return Vector3(height_at(x - 1.0, z) - height_at(x + 1.0, z), 2.0, height_at(x, z - 1.0) - height_at(x, z + 1.0)).normalized()
 
 
-## A strip laid on the ground along a polyline (roads, painted lines, cracks).
-func _drape(points: PackedVector3Array, width: float, lift: float, mat: Material, closed := false, offset := 0.0) -> void:
+## A strip laid on the ground along a polyline (roads, painted lines, cracks). Wide strips are
+## split across into ~2.5 m lanes so they follow the ground (a ramp's crest, a hill's shoulders)
+## instead of cutting under it.
+func _drape(points: PackedVector3Array, width: float, lift: float, mat: Material, closed := false, offset := 0.0, surface := Callable()) -> void:
 	var count := points.size()
 	if count < 2:
 		return
-	var left := PackedVector3Array()
-	var right := PackedVector3Array()
+	var lanes := maxi(1, ceili(width / 2.5))
+	var rows: Array[PackedVector3Array] = [] # rows[i][k]: k = 0 is the left edge
 	for i in count:
 		var prev := points[i - 1] if (i > 0 or closed) else points[i]
 		var next := points[(i + 1) % count] if (i < count - 1 or closed) else points[i]
@@ -506,19 +521,28 @@ func _drape(points: PackedVector3Array, width: float, lift: float, mat: Material
 		tangent = tangent.normalized()
 		var side := Vector3(-tangent.z, 0.0, tangent.x)
 		var c := points[i] + side * offset
-		var l := c - side * width * 0.5
-		var r := c + side * width * 0.5
-		left.append(on_mesh(l.x, l.z, lift))
-		right.append(on_mesh(r.x, r.z, lift))
+		var row := PackedVector3Array()
+		for k in lanes + 1:
+			var q := c + side * width * (float(k) / lanes - 0.5)
+			if surface.is_valid(): # a known plane (ramps): the 2 m ground mesh rounds their edges off
+				row.append(Vector3(q.x, float(surface.call(q.x, q.z)) + lift, q.z))
+			else:
+				row.append(on_mesh(q.x, q.z, lift))
+		rows.append(row)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var segs := count if closed else count - 1
 	for i in segs:
 		var j := (i + 1) % count
-		for p: Vector3 in [left[i], left[j], right[i], right[i], left[j], right[j]]: # clockwise from above = front face
-			st.set_normal(_normal_at(p.x, p.z))
-			st.set_uv(Vector2(p.x, p.z) * 0.1)
-			st.add_vertex(p)
+		for k in lanes:
+			var li := rows[i][k]
+			var lj := rows[j][k]
+			var ri := rows[i][k + 1]
+			var rj := rows[j][k + 1]
+			for p: Vector3 in [li, lj, ri, ri, lj, rj]: # clockwise from above = front face
+				st.set_normal(_normal_at(p.x, p.z))
+				st.set_uv(Vector2(p.x, p.z) * 0.1)
+				st.add_vertex(p)
 	var mi := MeshInstance3D.new()
 	mi.mesh = st.commit()
 	mi.material_override = mat
@@ -612,15 +636,16 @@ func _ramps_build() -> void:
 		var base := Vector3(rp.top.x, 0, rp.top.z) - (rp.dir as Vector3) * 2.0
 		for k in 14:
 			pts.append(base + (rp.dir as Vector3) * ((RAMP_L + 2.0) * k / 13.0))
-		_drape(pts, RAMP_W - 0.2, 0.05, _m.asphalt)
+		var plane := func(x: float, z: float) -> float: return ramp_y(rp, x, z)
+		_drape(pts, RAMP_W - 0.1, 0.05, _m.asphalt, false, 0.0, plane)
 		for s: float in [-1.0, 1.0]:
-			_drape(pts, 0.3, 0.08, _m.yellow_line, false, s * (RAMP_W * 0.5 - 0.7))
+			_drape(pts, 0.3, 0.08, _m.yellow_line, false, s * (RAMP_W * 0.5 - 0.7), plane)
 		# Chevrons pointing up the ramp.
 		for k in 3:
 			var c := base + (rp.dir as Vector3) * (6.0 + k * 6.0)
 			for s: float in [-1.0, 1.0]:
 				var chev := PackedVector3Array([c + (rp.side as Vector3) * s * 3.5 + (rp.dir as Vector3) * 1.5, c])
-				_drape(chev, 0.5, 0.09, _m.white_line)
+				_drape(chev, 0.5, 0.09, _m.white_line, false, 0.0, plane)
 
 
 func _roads() -> void:
@@ -647,6 +672,44 @@ func _roads() -> void:
 				for q in pts:
 					moved.append(q + Vector3(d.x, 0, d.y) * offs)
 				_drape(moved, 0.45, 0.08, _m.white_line)
+
+
+## Raised curbs on both road edges (red and white at the bends), a sidewalk along the outside.
+## Visual only: the cars ride over them without a bump.
+func _curbs() -> void:
+	var pts := road_points()
+	var n := pts.size()
+	var mb := MeshBuilder.new()
+	var curb := MatKit.paint(Color(0.62, 0.6, 0.55), 0.3, 0.1, 0.8, 1.0, 0.9, 160)
+	var red := MatKit.paint(Color(0.6, 0.14, 0.1), 0.4, 0.1, 0.7, 1.0, 0.85, 161)
+	var white := MatKit.paint(Color(0.82, 0.8, 0.74), 0.4, 0.1, 0.7, 1.0, 0.85, 162)
+	var nrm: Array[Vector3] = []
+	var tan: Array[Vector3] = []
+	for i in n:
+		var t := (pts[(i + 1) % n] - pts[(i - 1 + n) % n]).normalized()
+		tan.append(t)
+		nrm.append(Vector3(-t.z, 0, t.x))
+	for side: float in [-1.0, 1.0]:
+		for i in n:
+			var j := (i + 1) % n
+			var bend := tan[(i - 4 + n) % n].angle_to(tan[(i + 4) % n]) > 0.16
+			var mat: Material = (red if (i / 2) % 2 == 0 else white) if bend else curb
+			var o_in := side * (ROAD_W * 0.5 - 0.05)
+			var o_out := side * (ROAD_W * 0.5 + 0.45)
+			var a_in := pts[i] + nrm[i] * o_in
+			var b_in := pts[j] + nrm[j] * o_in
+			var a_out := pts[i] + nrm[i] * o_out
+			var b_out := pts[j] + nrm[j] * o_out
+			var h := 0.14
+			var ya := mesh_height(a_in.x, a_in.z)
+			var yb := mesh_height(b_in.x, b_in.z)
+			var yao := mesh_height(a_out.x, a_out.z)
+			var ybo := mesh_height(b_out.x, b_out.z)
+			mb.quad(mat, Vector3(a_in.x, ya + h, a_in.z), Vector3(b_in.x, yb + h, b_in.z), Vector3(b_out.x, ybo + h, b_out.z), Vector3(a_out.x, yao + h, a_out.z), Vector3.UP)
+			mb.quad(mat, Vector3(a_in.x, ya - 0.05, a_in.z), Vector3(b_in.x, yb - 0.05, b_in.z), Vector3(b_in.x, yb + h, b_in.z), Vector3(a_in.x, ya + h, a_in.z), -nrm[i] * side)
+	mb.commit(self, false, 0.5)
+	# Sidewalk slabs along the outer edge (the loop runs clockwise, so the outside is -side).
+	_drape(pts, 3.0, 0.06, _m.sidewalk, true, -(ROAD_W * 0.5 + 0.45 + 1.5))
 
 
 ## Earthquake cracks: dark jagged lines across the ground (kept off the cliff edges).
@@ -737,54 +800,6 @@ func _outer_wall() -> void:
 		l.position = t[1]
 		l.rotation_degrees.y = t[2] + 180.0
 		add_child(l)
-
-
-## Shops built against the inside of the outer wall, where the road keeps its distance.
-func _storefronts() -> void:
-	_storefront(Vector3(-100, 0, HALF), Vector3(0, 0, -1), 26.0, 11.0, Color(0.72, 0.62, 0.45), "MOTEL", Color(0.9, 0.28, 0.3))
-	_storefront(Vector3(36, 0, HALF), Vector3(0, 0, -1), 22.0, 9.0, Color(0.5, 0.62, 0.58), "LIQUOR", Color(0.3, 0.85, 0.45))
-	var donuts := _storefront(Vector3(HALF, 0, -30), Vector3(-1, 0, 0), 20.0, 8.0, Color(0.78, 0.72, 0.6), "DONUTS", Color(0.95, 0.55, 0.2))
-	var dough := MatKit.plain(MatKit.paint(Color(0.6, 0.4, 0.2), 0.5, 0.1, 0.7, 2.0, 0.8, 143))
-	MeshKit.torus(donuts, 3.0, 6.5, Vector3(0, 16.0, -1.0), dough, Vector3(90, 0, 0))
-	MeshKit.cylinder(donuts, 0.4, 6.0, Vector3(-3, 10.5, -1), _m.steel)
-	MeshKit.cylinder(donuts, 0.4, 6.0, Vector3(3, 10.5, -1), _m.steel)
-	_storefront(Vector3(HALF, 0, 100), Vector3(-1, 0, 0), 26.0, 13.0, Color(0.48, 0.28, 0.3), "THEATER", Color(0.95, 0.8, 0.3))
-	_storefront(Vector3(-HALF, 0, 55), Vector3(1, 0, 0), 22.0, 9.0, Color(0.66, 0.5, 0.32), "TACOS", Color(0.95, 0.5, 0.12))
-	_storefront(Vector3(-HALF, 0, -34), Vector3(1, 0, 0), 26.0, 10.0, Color(0.44, 0.48, 0.54), "AUTO PARTS", Color(0.95, 0.25, 0.2))
-	_storefront(Vector3(100, 0, -HALF), Vector3(0, 0, 1), 20.0, 9.0, Color(0.6, 0.57, 0.52), "PAWN", Color(0.4, 0.75, 0.95))
-
-
-func _storefront(on_wall: Vector3, inward: Vector3, width: float, height: float, color: Color, sign: String, sign_color: Color) -> Node3D:
-	var node := Node3D.new()
-	node.position = on_wall
-	node.basis = Basis.looking_at(inward, Vector3.UP)
-	add_child(node)
-	var paint := MeshKit.grime(color, color.darkened(0.35), 0.08, 0.9, 0.0, 0.25)
-	var mb := MeshBuilder.new()
-	mb.box(paint, Vector3(width, height, 2.0), MeshBuilder.at(Vector3(0, height * 0.5, -1.0)), 0.0)
-	_solid(Vector3(width, height, 2.0), node.transform * MeshBuilder.at(Vector3(0, height * 0.5, -1.0)))
-	var n_win := int(width / 5.0)
-	for i in n_win:
-		var x := -width * 0.5 + 2.5 + i * 5.0
-		if absf(x) < 2.0:
-			continue
-		mb.box(_m.window, Vector3(3.2, 2.6, 0.1), MeshBuilder.at(Vector3(x, 2.2, -2.02)), 0.0)
-		if height > 9.0:
-			mb.box(_m.window, Vector3(2.4, 1.8, 0.1), MeshBuilder.at(Vector3(x, 6.6, -2.02)), 0.0)
-	mb.box(_m.dark, Vector3(2.4, 3.2, 0.1), MeshBuilder.at(Vector3(0, 1.6, -2.02)), 0.0)
-	mb.box(MeshKit.mat(sign_color.darkened(0.45), 0.7), Vector3(width - 1.0, 0.3, 2.2), MeshBuilder.at(Vector3(0, 4.0, -3.0), Vector3(-12, 0, 0)), 0.0)
-	mb.commit(node)
-	var l := Label3D.new()
-	l.text = sign
-	l.font_size = 300
-	l.pixel_size = 0.012
-	l.outline_size = 30
-	l.modulate = sign_color * 1.1
-	l.outline_modulate = Color(0.08, 0.06, 0.05)
-	l.position = Vector3(0, height - 1.8, -2.1)
-	l.rotation_degrees.y = 180.0
-	node.add_child(l)
-	return node
 
 
 ## Twin tunnels on the north straight: the road runs through them along x, a divider between the
@@ -1222,7 +1237,8 @@ func _stand_mesh() -> ArrayMesh:
 	return _stand_mesh_cache
 
 
-## Palms along both edges of the road, on the low ground. They topple when hit.
+## Palms on the low ground: tall LA fan palms along the outside of the road, date palms on the
+## inside. They topple when hit.
 func _palms() -> void:
 	var pts := road_points()
 	var k := 0
@@ -1232,7 +1248,8 @@ func _palms() -> void:
 		var dir := (nxt - p).normalized()
 		var side := Vector3(-dir.z, 0, dir.x)
 		var s := 1.0 if (k / 9) % 2 == 0 else -1.0
-		var spot := p + side * s * (ROAD_W * 0.5 + 3.5)
+		var outside := s < 0.0
+		var spot := p + side * s * (ROAD_W * 0.5 + (4.6 if outside else 3.5))
 		k += 9 + _rng.randi_range(0, 4)
 		if absf(spot.x) < TUNNEL_X + 8.0 and spot.z < TUNNEL_Z1 + 4.0:
 			continue
@@ -1248,10 +1265,10 @@ func _palms() -> void:
 			if Vector2(spot.x, spot.z).distance_to(hill.p) < 16.0:
 				blocked = true
 		if not blocked:
-			_palm(ground(spot.x, spot.z))
+			_palm(ground(spot.x, spot.z), outside)
 
 
-func _palm(pos: Vector3) -> void:
+func _palm(pos: Vector3, fan := false) -> void:
 	var b := Breakable.new()
 	b.style = Breakable.Style.TOPPLE
 	b.health = 15.0
@@ -1261,10 +1278,57 @@ func _palm(pos: Vector3) -> void:
 	add_child(b)
 	b.add_box_shape(Vector3(1.0, 5.0, 1.0), Vector3(0, 2.5, 0))
 	var mi := MeshInstance3D.new()
-	mi.mesh = _palm_mesh(_rng.randi() % 3)
+	mi.mesh = _fan_palm_mesh(_rng.randi() % 2) if fan else _palm_mesh(_rng.randi() % 3)
 	var s := _rng.randf_range(0.85, 1.15)
 	mi.scale = Vector3(s, s, s)
 	b.visual.add_child(mi)
+
+
+## LA fan palm (the tall skinny one): slim ringed trunk, a shaggy skirt of dead fronds under a
+## round crown of fan leaves. Two variants, one mesh each.
+func _fan_palm_mesh(variant: int) -> ArrayMesh:
+	var key := "fan%d" % variant
+	if _palm_meshes.has(key):
+		return _palm_meshes[key]
+	var r := RandomNumberGenerator.new()
+	r.seed = 400 + variant
+	var bark := MatKit.paint(Color(0.42, 0.36, 0.28), 0.2, 0.0, 0.6, 0.5, 0.95, 154)
+	var skirt := MatKit.paint(Color(0.4, 0.31, 0.2), 0.1, 0.0, 0.7, 0.6, 0.97, 155)
+	var leaf := MatKit.paint(Color(0.26, 0.35, 0.17), 0.1, 0.0, 0.5, 1.0, 0.8, 156)
+	leaf.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var mb := MeshBuilder.new()
+	var height := 16.0 + variant * 3.0
+	var lean := Vector3(r.randf_range(0.4, 1.2), 0, 0)
+	var segs := 8
+	var prev := Vector3.ZERO
+	for k in segs:
+		var t := float(k + 1) / segs
+		var p := Vector3.UP * height * t + lean * t * t
+		var rad := lerpf(0.36, 0.24, t)
+		var dir := p - prev
+		mb.cylinder(bark, rad, dir.length() + 0.05, MeshBuilder.along((prev + p) * 0.5, dir), 8, rad * 0.96, false)
+		prev = p
+	var top := prev
+	mb.cylinder(skirt, 0.95, 2.6, MeshBuilder.at(top + Vector3(0, -1.0, 0)), 10, 0.6)
+	for k in 10: # ragged hanging ends of the skirt
+		var a := TAU * k / 10.0
+		mb.box(skirt, Vector3(0.35, 0.9, 0.05), MeshBuilder.at(top + Vector3(cos(a) * 0.95, -2.6, sin(a) * 0.95), Vector3(0, -rad_to_deg(a) + 90.0, 0)), 0.0)
+	for k in 16:
+		var yaw := TAU * k / 16.0 + r.randf_range(-0.1, 0.1)
+		var out := Vector3(cos(yaw), 0, sin(yaw))
+		var tilt := r.randf_range(-0.25, 0.55)
+		var stem_end := top + (out + Vector3.UP * tilt).normalized() * 1.8
+		var fwd := (stem_end - top).normalized()
+		var side := fwd.cross(Vector3.UP).normalized()
+		mb.box(leaf, Vector3(0.08, 0.05, 1.8), Transform3D(Basis(side, side.cross(fwd), -fwd), (top + stem_end) * 0.5), 0.0)
+		for f in 5: # the fan: five leaflet blades spread from the stem's end
+			var spread := (f - 2) * 0.32
+			var bdir := (fwd.rotated(Vector3.UP, spread) + Vector3.DOWN * 0.15).normalized()
+			var bend := stem_end + bdir * 1.3
+			var bside := bdir.cross(Vector3.UP).normalized()
+			mb.box(leaf, Vector3(0.32, 0.03, 1.3), Transform3D(Basis(bside, bside.cross(bdir), -bdir), (stem_end + bend) * 0.5), 0.0)
+	_palm_meshes[key] = mb.build_mesh(0.25)
+	return _palm_meshes[key]
 
 
 var _palm_meshes := {}
@@ -1328,66 +1392,179 @@ func _palm_mesh(variant: int) -> ArrayMesh:
 	return _palm_meshes[variant]
 
 
+## Low shrubs along the foot of the battleground's walls and around the ramps' sides:
+## one MultiMesh, so a hundred of them cost a couple of draw calls.
+func _bushes() -> void:
+	var xforms: Array[Transform3D] = []
+	for k in 260:
+		var a := TAU * k / 260.0 + _rng.randf_range(-0.01, 0.01)
+		var r := 1.0 / pow(pow(absf(cos(a)) / PLAT_A, 4.0) + pow(absf(sin(a)) / PLAT_B, 4.0), 0.25)
+		var p := Vector3(cos(a), 0, sin(a)) * (r + _rng.randf_range(2.2, 3.4))
+		if _rng.randf() < 0.35:
+			continue
+		var skip := false
+		for rp: Dictionary in ramp_list():
+			var rel := p - Vector3(rp.top.x, 0, rp.top.z)
+			if absf(rel.dot(rp.side)) < RAMP_W * 0.5 + 2.0 and rel.dot(rp.dir) < RAMP_L + 4.0:
+				skip = true
+		if absf(p.x) < 24.0 and p.z < -80.0:
+			skip = true # the tunnel-roof ramps
+		if skip or road_distance(p.x, p.z) < ROAD_W * 0.5 + 2.0:
+			continue
+		var s := _rng.randf_range(0.8, 1.5)
+		xforms.append(Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(s, s * _rng.randf_range(0.8, 1.2), s)), ground(p.x, p.z)))
+	add_child(_scatter(_bush_mesh(), xforms))
+
+
+## One shrub (a few lumps of dark and olive green), shared by every bush on the stage.
+func _bush_mesh() -> ArrayMesh:
+	if _shrub:
+		return _shrub
+	var mb := MeshBuilder.new()
+	var green := MatKit.paint(Color(0.2, 0.28, 0.14), 0.1, 0.0, 0.5, 1.0, 0.9, 170)
+	var olive := MatKit.paint(Color(0.32, 0.34, 0.18), 0.1, 0.0, 0.5, 1.0, 0.9, 171)
+	for k in 5:
+		var a := TAU * k / 5.0
+		mb.sphere(green if k % 2 == 0 else olive, 0.7, MeshBuilder.at(Vector3(cos(a) * 0.55, 0.45, sin(a) * 0.55), Vector3.ZERO, Vector3(1.0, 0.75, 1.0)), 8, 5)
+	mb.sphere(green, 0.75, MeshBuilder.at(Vector3(0, 0.7, 0), Vector3.ZERO, Vector3(1.0, 0.8, 1.0)), 8, 5)
+	_shrub = mb.build_mesh(0.4)
+	return _shrub
+
+
+## Many copies of one mesh in a single draw (per material): bushes, scrub.
+func _scatter(mesh: Mesh, xforms: Array[Transform3D]) -> MultiMeshInstance3D:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = xforms.size()
+	for i in xforms.size():
+		mm.set_instance_transform(i, xforms[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return mmi
+
+
 # ---------------------------------------------------------------- beyond the wall
 
-## HOLLYWOOD on a steel scaffold standing up from the city below, just past the north wall.
-## Each letter breaks when shot. Too high to hit from the ground: try the tunnel roof.
+## The hills north of the arena (outside the walls, out of reach) with the HOLLYWOOD sign on the
+## slope. Chaparral: scrub over dry earth, eroded ridges running down. Each letter breaks when
+## shot. Too high to hit from the ground: try the tunnel roof.
+static func hill_height(x: float, z: float) -> float:
+	var t := clampf((-165.0 - z) / 125.0, 0.0, 1.0)
+	var lateral := exp(-pow((x + 10.0) / 190.0, 2.0)) * 0.65 + 0.35
+	var rise := 88.0 * sin(t * PI * 0.5)
+	var peaks := 16.0 * exp(-pow((x + 10.0) / 45.0, 2.0)) + 12.0 * exp(-pow((x - 150.0) / 60.0, 2.0)) \
+		+ 9.0 * exp(-pow((x + 175.0) / 55.0, 2.0))
+	# Eroded spurs: sharp ridges and rounded gullies running down the slope. Gentler under the sign.
+	var spur := (0.45 - absf(sin(x * 0.052 + sin(z * 0.035) * 0.9))) * 14.0
+	spur *= lerpf(0.3, 1.0, smoothstep(35.0, 80.0, absf(x + 10.0)))
+	return -25.0 + (rise + (peaks + spur) * smoothstep(0.15, 0.7, t)) * lateral
+
+
+## Letter strokes (center lines) on a 4 x 6.5 grid; the HOLLYWOOD sign's tall, bold sans letters.
+const GLYPHS := {
+	"H": [[Vector2(0, 0), Vector2(0, 6.5)], [Vector2(4, 0), Vector2(4, 6.5)], [Vector2(0, 3.3), Vector2(4, 3.3)]],
+	"L": [[Vector2(0, 6.5), Vector2(0, 0), Vector2(3.8, 0)]],
+	"Y": [[Vector2(0, 6.5), Vector2(2, 3.1), Vector2(4, 6.5)], [Vector2(2, 3.1), Vector2(2, 0)]],
+	"W": [[Vector2(0, 6.5), Vector2(0.9, 0), Vector2(2, 4.3), Vector2(3.1, 0), Vector2(4, 6.5)]],
+	"D": [[Vector2(0, 0), Vector2(0, 6.5), Vector2(1.8, 6.5), Vector2(3.2, 5.8), Vector2(4, 4.4),
+		Vector2(4, 2.1), Vector2(3.2, 0.7), Vector2(1.8, 0), Vector2(0, 0)]],
+}
+
+
+func _glyph_strokes(ch: String) -> Array:
+	if ch == "O": # a tall rounded oval
+		var ring: Array[Vector2] = []
+		for k in 21:
+			var a := TAU * k / 20.0
+			var c := cos(a)
+			var sn := sin(a)
+			ring.append(Vector2(2.0 + 2.0 * signf(c) * pow(absf(c), 0.75), 3.25 + 3.25 * signf(sn) * pow(absf(sn), 0.75)))
+		return [ring]
+	return GLYPHS[ch]
+
+
 func _hollywood_sign() -> void:
-	var mb := MeshBuilder.new()
-	var steel := MatKit.steel(Color(0.2, 0.2, 0.21), 0.6, 1.0)
+	# Hills: a height grid, scrub texture, and 3D scrub clumps scattered on the slopes.
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var x0 := -320.0
+	var x1 := 300.0
+	var z0 := -380.0
+	var z1 := -163.0
+	var nx := 84
+	var nz := 32
+	var grid: Array[Vector3] = []
+	for j in nz + 1:
+		for i in nx + 1:
+			var x := lerpf(x0, x1, float(i) / nx)
+			var z := lerpf(z0, z1, float(j) / nz)
+			grid.append(Vector3(x, hill_height(x, z), z))
+	for j in nz:
+		for i in nx:
+			var a := grid[j * (nx + 1) + i]
+			var b := grid[j * (nx + 1) + i + 1]
+			var c := grid[(j + 1) * (nx + 1) + i]
+			var d := grid[(j + 1) * (nx + 1) + i + 1]
+			for v: Vector3 in [a, b, c, b, d, c]:
+				st.add_vertex(v)
+	st.generate_normals()
+	var hill := MeshInstance3D.new()
+	hill.mesh = st.commit()
+	hill.material_override = MatKit.chaparral(36.0, 21)
+	hill.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(hill)
+	var scrub: Array[Transform3D] = []
+	var sign_x0 := -10.0 - 4.5 * 9.0
+	var sign_x1 := -10.0 + 4.5 * 9.0
+	while scrub.size() < 420:
+		var x := _rng.randf_range(-260.0, 240.0)
+		var z := _rng.randf_range(-330.0, -172.0)
+		if x > sign_x0 and x < sign_x1 and absf(z - SIGN_Z) < 9.0:
+			continue # keep the letters clear
+		var y := hill_height(x, z)
+		if y < -12.0:
+			continue
+		var sc := _rng.randf_range(2.2, 4.5)
+		scrub.append(Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(sc, sc * 0.7, sc)), Vector3(x, y - 0.4, z)))
+	add_child(_scatter(_bush_mesh(), scrub))
+	# The letters: bold strokes, weathered white paint, two steel legs behind each.
 	var word := "HOLLYWOOD"
-	var cell := 1.1
-	var start_x := -10.0 - (word.length() - 1) * 8.0 * 0.5
-	var x0 := start_x - 4.0
-	var x1 := start_x + (word.length() - 1) * 8.0 + 4.0
-	for k in 11:
-		var x := lerpf(x0, x1, k / 10.0)
-		mb.box(steel, Vector3(0.35, 52.0, 0.35), MeshBuilder.at(Vector3(x, SIGN_BASE_Y + 8.0 - 26.0, SIGN_Z - 2.0)), 0.02)
-		mb.box(steel, Vector3(0.25, 0.25, 3.2), MeshBuilder.at(Vector3(x, SIGN_BASE_Y - 1.0, SIGN_Z - 0.6), Vector3(-30, 0, 0)), 0.02)
-	for y: float in [SIGN_BASE_Y - 1.0, SIGN_BASE_Y + 4.0, SIGN_BASE_Y + 9.5, SIGN_BASE_Y - 10.0, SIGN_BASE_Y - 20.0]:
-		mb.box(steel, Vector3(x1 - x0, 0.3, 0.3), MeshBuilder.at(Vector3((x0 + x1) * 0.5, y, SIGN_Z - 2.0)), 0.02)
-	for k in 10:
-		var xa := lerpf(x0, x1, k / 10.0)
-		var xb := lerpf(x0, x1, (k + 1) / 10.0)
-		for band in 2:
-			var ya := SIGN_BASE_Y - 1.0 - band * 10.0
-			var yb := ya - 9.0 if band == 1 else SIGN_BASE_Y + 9.5
-			var a := Vector3(xa, ya, SIGN_Z - 2.0)
-			var b := Vector3(xb, yb, SIGN_Z - 2.0)
-			if k % 2 == 1:
-				var t := a.y
-				a.y = b.y
-				b.y = t
-			mb.box(steel, Vector3(0.18, a.distance_to(b), 0.18), MeshBuilder.along((a + b) * 0.5, b - a), 0.0)
-	mb.commit(self, true, 0.0)
-	var glyphs := {
-		"H": ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
-		"O": ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
-		"L": ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
-		"Y": ["10001", "10001", "01010", "00100", "00100", "00100", "00100"],
-		"W": ["10001", "10001", "10001", "10101", "10101", "11011", "10001"],
-		"D": ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
-	}
+	var u := 1.3
+	var t := 0.95 * u
+	var paint := MatKit.paint(Color(0.88, 0.87, 0.83), 0.25, 0.15, 0.45, 3.0, 0.4, 150)
+	var posts := MeshBuilder.new()
+	var steel := MatKit.steel(Color(0.2, 0.2, 0.21), 0.6, 1.0)
 	for i in word.length():
+		var x := sign_x0 + 4.5 + i * 9.0
+		var base := Vector3(x, hill_height(x, SIGN_Z) + 0.8, SIGN_Z)
 		var letter := Breakable.new()
 		letter.style = Breakable.Style.TOPPLE
 		letter.smash_on_contact = false
 		letter.health = 20.0
-		letter.debris_color = Color(0.95, 0.95, 0.92)
-		letter.position = Vector3(start_x + i * 8.0, SIGN_BASE_Y, SIGN_Z)
-		letter.rotation_degrees.x = -8.0
+		letter.debris_color = Color(0.92, 0.92, 0.88)
+		letter.position = base
+		letter.rotation_degrees.x = -10.0
 		add_child(letter)
-		letter.add_box_shape(Vector3(5 * cell, 7 * cell, 1.2), Vector3(0, 3.5 * cell, 0))
-		var rows: Array = glyphs[word[i]]
+		letter.add_box_shape(Vector3(5.0 * u, 7.5 * u, 1.2), Vector3(0, 3.75 * u, 0))
 		var lmb := MeshBuilder.new()
-		for r in 7:
-			var row: String = rows[r]
-			for col in 5:
-				if row[col] == "1":
-					lmb.box(_m.white, Vector3(cell, cell, 0.6), MeshBuilder.at(Vector3((col - 2) * cell, (6 - r + 0.5) * cell, 0)), 0.0)
-		lmb.commit(letter.visual)
+		for stroke: Array in _glyph_strokes(word[i]):
+			for k in stroke.size() - 1:
+				var a: Vector2 = stroke[k]
+				var b: Vector2 = stroke[k + 1]
+				var pa := Vector3((a.x - 2.0) * u, (a.y + 0.5) * u, 0)
+				var pb := Vector3((b.x - 2.0) * u, (b.y + 0.5) * u, 0)
+				var dir := (pb - pa).normalized()
+				var across := Vector3(-dir.y, dir.x, 0)
+				var length := pa.distance_to(pb) + t # overlap at the joints
+				lmb.box(paint, Vector3(t, 0.5, length), Transform3D(Basis(across, Vector3.BACK, dir), (pa + pb) * 0.5), 0.0)
+		lmb.commit(letter.visual, true, 0.4)
 		letter.broken.connect(_on_letter_broken)
 		_letters_left += 1
+		for px: float in [-1.8, 1.8]:
+			posts.box(steel, Vector3(0.18, 7.0, 0.18), MeshBuilder.at(base + Vector3(px, 2.0, -1.6), Vector3(-20, 0, 0)), 0.0)
+	posts.commit(self)
 
 
 func _on_letter_broken(_letter: Breakable, _by: Vehicle) -> void:
