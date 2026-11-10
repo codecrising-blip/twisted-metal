@@ -84,6 +84,7 @@ static func paint(base: Color, wear := 0.3, rust := 0.2, dirt := 0.3, tile := 2.
 				albedo.set_pixel(px, py, albedo.get_pixel(px, py).lerp(rust_c.darkened(0.2), k))
 				rough.set_pixel(px, py, Color(lerpf(rough.get_pixel(px, py).r, 0.9, k), 0, 0))
 	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true # MeshBuilder bakes dust/grime into vertex colors
 	m.albedo_texture = ImageTexture.create_from_image(albedo)
 	m.roughness_texture = ImageTexture.create_from_image(rough)
 	m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
@@ -123,8 +124,12 @@ static func _blob(albedo: Image, rough: Image, height: Image, cx: int, cy: int, 
 
 ## Bare or dark steel (frames, armor plates, guns).
 static func steel(base := Color(0.22, 0.22, 0.23), rust := 0.25, tile := 1.5) -> StandardMaterial3D:
-	var m := paint(base, 0.6, rust, 0.4, tile, 0.5, 3).duplicate() as StandardMaterial3D
-	m.metallic = 0.75
+	var key := "steel_%s_%.2f_%.2f" % [base.to_html(), rust, tile]
+	if _cache.has(key):
+		return _cache[key]
+	var m := paint(base, 0.6, rust, 0.4, tile, 0.55, 3).duplicate() as StandardMaterial3D
+	m.metallic = 0.7
+	_cache[key] = m
 	return m
 
 
@@ -133,6 +138,7 @@ static func chrome(tint := Color(0.78, 0.78, 0.8)) -> StandardMaterial3D:
 	if _cache.has(key):
 		return _cache[key]
 	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true # MeshBuilder bakes dust/grime into vertex colors
 	m.albedo_color = tint
 	m.metallic = 1.0
 	m.roughness = 0.12
@@ -156,6 +162,7 @@ static func glass(tint := Color(0.08, 0.12, 0.16), alpha := 0.75) -> StandardMat
 	if _cache.has(key):
 		return _cache[key]
 	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true # MeshBuilder bakes dust/grime into vertex colors
 	m.albedo_color = Color(tint.r, tint.g, tint.b, alpha)
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.metallic = 0.6
@@ -170,6 +177,7 @@ static func lamp(color: Color, energy := 3.0) -> StandardMaterial3D:
 	if _cache.has(key):
 		return _cache[key]
 	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true # MeshBuilder bakes dust/grime into vertex colors
 	m.albedo_color = color
 	m.emission_enabled = true
 	m.emission = color
@@ -184,8 +192,96 @@ static func flat(color: Color, roughness := 0.8, metallic := 0.0) -> StandardMat
 	if _cache.has(key):
 		return _cache[key]
 	var m := StandardMaterial3D.new()
+	m.vertex_color_use_as_albedo = true # MeshBuilder bakes dust/grime into vertex colors
 	m.albedo_color = color
 	m.roughness = roughness
 	m.metallic = metallic
 	_cache[key] = m
 	return m
+
+
+## Ground surfaces in world space (triplanar), one texture tile = tile_m meters:
+##   kind "concrete": poured slabs with joints, cracks, oil stains and patches (lots, sidewalks)
+##   kind "asphalt":  coarse aggregate, sealed crack lines, darker tire tracks, patches
+## Drawn once per kind and cached. Two-sided so hand-built ground meshes never go black.
+static func pavement(kind: String, base: Color, tile_m := 16.0, seed := 1) -> StandardMaterial3D:
+	var key := "pave_%s_%s_%.1f_%d" % [kind, base.to_html(), tile_m, seed]
+	if _cache.has(key):
+		return _cache[key]
+	var size := 256
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var coarse := FastNoiseLite.new()
+	coarse.seed = rng.randi()
+	coarse.frequency = 0.012
+	coarse.fractal_octaves = 3
+	var grain := FastNoiseLite.new()
+	grain.seed = rng.randi()
+	grain.frequency = 0.35
+	var img := Image.create(size, size, false, Image.FORMAT_RGB8)
+	var rough := Image.create(size, size, false, Image.FORMAT_L8)
+	for y in size:
+		for x in size:
+			var n := coarse.get_noise_2d(x, y) * 0.5 + 0.5
+			var g := grain.get_noise_2d(x, y) * 0.5 + 0.5
+			var c := base.darkened((1.0 - n) * 0.22).lightened((g - 0.5) * 0.1)
+			var r := 0.88 + (g - 0.5) * 0.1
+			if kind == "concrete" and (x % 64 < 1 or y % 64 < 1):
+				c = c.darkened(0.35) # slab joints every 4 m (tile 16 m)
+			img.set_pixel(x, y, c)
+			rough.set_pixel(x, y, Color(r, 0, 0))
+	# Stains (oil, water) and patches.
+	for i in 10:
+		var cx := rng.randi_range(0, size - 1)
+		var cy := rng.randi_range(0, size - 1)
+		var rad := rng.randf_range(4.0, 18.0)
+		var dark := rng.randf_range(0.15, 0.4)
+		for dy in range(-int(rad), int(rad) + 1):
+			for dx in range(-int(rad), int(rad) + 1):
+				var d := Vector2(dx, dy).length() / rad
+				if d > 1.0:
+					continue
+				var px := posmod(cx + dx, size)
+				var py := posmod(cy + dy, size)
+				var k := (1.0 - d * d) * dark
+				img.set_pixel(px, py, img.get_pixel(px, py).darkened(k))
+				rough.set_pixel(px, py, Color(lerpf(rough.get_pixel(px, py).r, 0.55, k * 1.5), 0, 0))
+	# Cracks: wandering dark lines (asphalt also gets lighter sealant over some).
+	for i in (6 if kind == "concrete" else 4):
+		var p := Vector2(rng.randf_range(0, size), rng.randf_range(0, size))
+		var a := rng.randf_range(0, TAU)
+		var seal := kind == "asphalt" and rng.randf() < 0.5
+		for t in rng.randi_range(20, 70):
+			a += rng.randf_range(-0.5, 0.5)
+			p += Vector2(cos(a), sin(a))
+			var px := posmod(int(p.x), size)
+			var py := posmod(int(p.y), size)
+			var col := img.get_pixel(px, py)
+			img.set_pixel(px, py, col.darkened(0.28) if not seal else col.darkened(0.35))
+	img.generate_mipmaps()
+	rough.generate_mipmaps()
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = ImageTexture.create_from_image(img)
+	m.roughness_texture = ImageTexture.create_from_image(rough)
+	m.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+	m.roughness = 1.0
+	m.uv1_triplanar = true
+	m.uv1_world_triplanar = true
+	m.uv1_scale = Vector3.ONE / tile_m
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	_cache[key] = m
+	return m
+
+
+## The same material for plain primitive meshes (MeshKit boxes etc.), which carry no vertex
+## colors: MatKit materials read the dust baked into MeshBuilder's vertex colors.
+static func plain(m: StandardMaterial3D) -> StandardMaterial3D:
+	var key := "plain_%d" % m.get_instance_id()
+	if _cache.has(key):
+		return _cache[key]
+	var d := m.duplicate() as StandardMaterial3D
+	d.vertex_color_use_as_albedo = false
+	_cache[key] = d
+	return d
+

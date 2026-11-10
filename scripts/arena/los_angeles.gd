@@ -63,8 +63,15 @@ func build() -> void:
 	_power_tower()
 	_hot_dog_stands()
 	_palms()
-	_hills_and_sign()
-	_skyline()
+	_hollywood_sign()
+	var props := LaProps.new()
+	props.name = "Props"
+	add_child(props)
+	props.build()
+	var city := LaCity.new()
+	city.name = "City"
+	add_child(city)
+	city.build()
 	_blimp()
 	_points()
 
@@ -114,12 +121,11 @@ static func on_mesh(x: float, z: float, lift := 0.0) -> Vector3:
 # ---------------------------------------------------------------- look
 
 func _materials() -> void:
-	_m.ground = _two_sided(MeshKit.grime(Color(0.5, 0.49, 0.46), Color(0.34, 0.33, 0.31), 0.035, 0.95, 0.0, 0.08))
-	_m.scrub = MeshKit.grime(Color(0.46, 0.42, 0.3), Color(0.3, 0.32, 0.2), 0.02, 1.0, 0.0, 0.01)
-	_m.asphalt = _two_sided(MeshKit.grime(Color(0.24, 0.24, 0.25), Color(0.14, 0.14, 0.15), 0.08, 0.9, 0.0, 0.12))
+	_m.ground = MatKit.pavement("concrete", Color(0.34, 0.33, 0.31), 24.0, 7)
+	_m.asphalt = MatKit.pavement("asphalt", Color(0.25, 0.25, 0.26), 16.0, 9)
 	_m.yellow_line = _two_sided(MeshKit.mat(Color(0.95, 0.75, 0.12), 0.7))
 	_m.white_line = _two_sided(MeshKit.mat(Color(0.92, 0.92, 0.88), 0.7))
-	_m.crack = _two_sided(MeshKit.mat(Color(0.1, 0.09, 0.08), 1.0))
+	_m.crack = _two_sided(MeshKit.mat(Color(0.15, 0.14, 0.13), 1.0))
 	_m.concrete = MeshKit.grime(Color(0.6, 0.59, 0.56), Color(0.44, 0.43, 0.41), 0.05, 0.9, 0.0, 0.2)
 	_m.concrete_dark = MeshKit.grime(Color(0.55, 0.54, 0.52), Color(0.38, 0.37, 0.36), 0.05, 0.9, 0.0, 0.2)
 	_m.wall = _panel_material(Color(0.66, 0.64, 0.6), Color(0.38, 0.37, 0.35), 4.0)
@@ -129,8 +135,6 @@ func _materials() -> void:
 	_m.char = MeshKit.grime(Color(0.16, 0.14, 0.12), Color(0.05, 0.05, 0.05), 0.12, 1.0, 0.0, 0.3)
 	_m.brick = MeshKit.grime(Color(0.44, 0.24, 0.17), Color(0.14, 0.1, 0.08), 0.09, 0.95, 0.0, 0.3)
 	_m.scorched = _two_sided(MeshKit.grime(Color(0.2, 0.19, 0.18), Color(0.08, 0.075, 0.07), 0.06, 1.0, 0.0, 0.15))
-	_m.hill = MeshKit.grime(Color(0.55, 0.47, 0.3), Color(0.3, 0.34, 0.18), 0.02, 1.0, 0.0, 0.015)
-	_m.hill_far = MeshKit.grime(Color(0.46, 0.43, 0.34), Color(0.32, 0.34, 0.24), 0.02, 1.0, 0.0, 0.006)
 	_m.white = MeshKit.mat(Color(0.95, 0.95, 0.92), 0.6)
 	_m.red = MeshKit.mat(Color(0.8, 0.1, 0.08), 0.6)
 	_m.dark = MeshKit.mat(Color(0.06, 0.06, 0.07), 0.8)
@@ -138,7 +142,6 @@ func _materials() -> void:
 	_m.glass = MeshKit.mat(Color(0.55, 0.8, 0.95, 0.35), 0.05, 0.3)
 	_m.glass.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_m.chainlink = _chainlink_material()
-	_m.city = _window_material()
 
 
 func _two_sided(m: StandardMaterial3D) -> StandardMaterial3D:
@@ -189,44 +192,21 @@ func _chainlink_material() -> StandardMaterial3D:
 	return m
 
 
-## Office tower windows: a grid, a few of them lit.
-func _window_material() -> StandardMaterial3D:
-	var size := 64
-	var img := Image.create(size, size, false, Image.FORMAT_RGB8)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 3
-	for cy in 4:
-		for cx in 4:
-			var lit := rng.randf() < 0.18
-			var win := Color(0.85, 0.75, 0.5) if lit else Color(0.2, 0.27, 0.36).lightened(rng.randf() * 0.15)
-			for y in 16:
-				for x in 16:
-					var frame := x < 3 or x > 13 or y < 4 or y > 13
-					img.set_pixel(cx * 16 + x, cy * 16 + y, Color(0.58, 0.58, 0.6) if frame else win)
-	var m := StandardMaterial3D.new()
-	m.albedo_texture = ImageTexture.create_from_image(img)
-	m.roughness = 0.5
-	m.metallic = 0.2
-	m.uv1_triplanar = true
-	m.uv1_scale = Vector3.ONE / 16.0
-	return m
-
-
 func _environment() -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.3, 0.48, 0.78)
-	sky_mat.sky_horizon_color = Color(0.88, 0.76, 0.6)
-	sky_mat.sky_curve = 0.12
-	sky_mat.ground_horizon_color = Color(0.82, 0.72, 0.58)
-	sky_mat.ground_bottom_color = Color(0.45, 0.4, 0.33)
+	sky_mat.sky_top_color = Color(0.32, 0.46, 0.66)
+	sky_mat.sky_horizon_color = Color(0.74, 0.7, 0.64) # smog on the horizon
+	sky_mat.sky_curve = 0.1
+	sky_mat.ground_horizon_color = Color(0.66, 0.63, 0.58)
+	sky_mat.ground_bottom_color = Color(0.3, 0.29, 0.27)
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.58, 0.63, 0.74)
-	env.ambient_light_energy = 0.6
+	env.ambient_light_color = Color(0.6, 0.62, 0.68)
+	env.ambient_light_energy = 0.5
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 1.0
 	env.glow_enabled = true
@@ -234,14 +214,14 @@ func _environment() -> void:
 	env.glow_bloom = 0.02
 	env.glow_hdr_threshold = 1.5
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.74, 0.72, 0.68) # thin LA smog
-	env.fog_density = 0.0007
-	env.fog_sky_affect = 0.1
+	env.fog_light_color = Color(0.68, 0.66, 0.62) # LA smog: the city fades into it
+	env.fog_density = 0.00075
+	env.fog_sky_affect = 0.4
 	if RenderingServer.get_rendering_device() != null: # Forward+ / Mobile only
 		env.ssao_enabled = true
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 1.15
-	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = 0.9 # gritty, not candy (owner, session 5: "serious")
+	env.adjustment_contrast = 1.12
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
@@ -249,7 +229,7 @@ func _environment() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
 	sun.light_color = Color(1.0, 0.9, 0.74)
-	sun.light_energy = 1.2
+	sun.light_energy = 1.35
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 180.0
 	sun.rotation_degrees = Vector3(-38, -45, 0) # low sun in the south-west
@@ -318,19 +298,7 @@ func _terrain() -> void:
 			mi.mesh = st.commit()
 			mi.material_override = _m.ground
 			body.add_child(mi)
-	# Flat ground beyond the walls: a frame around the map (a single big plane would cut
-	# through the crater).
-	var far := 800.0
-	var m := float(MAP_HALF)
-	for r: Rect2 in [Rect2(-far, -far, far * 2.0, far - m), Rect2(-far, m, far * 2.0, far - m),
-			Rect2(-far, -m, far - m, m * 2.0), Rect2(m, -m, far - m, m * 2.0)]:
-		var mi := MeshInstance3D.new()
-		var plane := PlaneMesh.new()
-		plane.size = r.size
-		mi.mesh = plane
-		mi.material_override = _m.scrub
-		mi.position = Vector3(r.get_center().x, -0.02, r.get_center().y)
-		add_child(mi)
+	# Beyond the walls the plateau ends and the city lies below (LaCity).
 
 
 func _normal_at(x: float, z: float) -> Vector3:
@@ -431,7 +399,7 @@ func _cracks() -> void:
 			pts.append(p)
 			a += _rng.randf_range(-0.7, 0.7)
 			p += Vector3(cos(a), 0, sin(a)) * _rng.randf_range(1.5, 3.0)
-		_drape(pts, _rng.randf_range(0.35, 0.7), 0.09, _m.crack)
+		_drape(pts, _rng.randf_range(0.15, 0.32), 0.09, _m.crack)
 
 
 # ---------------------------------------------------------------- walls and buildings
@@ -450,23 +418,47 @@ func _outer_wall() -> void:
 		var dir := (b - a).normalized()
 		var yaw := rad_to_deg(atan2(-dir.z, dir.x))
 		var mid := (a + b) * 0.5 + out * 1.0
-		MeshKit.solid_box(self, Vector3(a.distance_to(b) + 2.2, h, 2.0), mid + Vector3.UP * h * 0.5, _m.wall, Vector3(0, yaw, 0))
-		# Cap and a painted hazard stripe along the bottom.
-		MeshKit.box(self, Vector3(a.distance_to(b) + 2.4, 0.4, 2.6), mid + Vector3.UP * (h + 0.2), _m.concrete_dark, Vector3(0, yaw, 0))
-		MeshKit.box(self, Vector3(a.distance_to(b) + 2.2, 0.7, 2.06), mid + Vector3.UP * 0.35, MeshKit.mat(Color(0.85, 0.66, 0.1), 0.8), Vector3(0, yaw, 0))
+		var length := a.distance_to(b) + 2.2
+		# Collider: as tall as before. What you see: a concrete barrier with a chain-link fence on
+		# top, so the city below the plateau shows through.
+		var body := StaticBody3D.new()
+		body.collision_layer = 1
+		body.collision_mask = 0
+		body.position = mid + Vector3.UP * h * 0.5
+		body.rotation_degrees.y = yaw
+		add_child(body)
+		var shape := CollisionShape3D.new()
+		var bs := BoxShape3D.new()
+		bs.size = Vector3(length, h, 2.0)
+		shape.shape = bs
+		body.add_child(shape)
+		var barrier_h := 2.6
+		MeshKit.box(self, Vector3(length, barrier_h, 2.0), mid + Vector3.UP * barrier_h * 0.5, _m.wall, Vector3(0, yaw, 0))
+		MeshKit.box(self, Vector3(length + 0.2, 0.25, 2.3), mid + Vector3.UP * (barrier_h + 0.12), _m.concrete_dark, Vector3(0, yaw, 0))
+		MeshKit.box(self, Vector3(length, 0.6, 2.06), mid + Vector3.UP * 0.3, MeshKit.mat(Color(0.62, 0.5, 0.12), 0.85), Vector3(0, yaw, 0))
+		var fence := MeshKit.box(self, Vector3(length, h - barrier_h - 0.3, 0.05), mid + Vector3.UP * (barrier_h + (h - barrier_h) * 0.5 + 0.1), _m.chainlink, Vector3(0, yaw, 0))
+		fence.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var posts := int(length / 4.0)
+		for k in posts + 1:
+			var t := -length * 0.5 + k * length / posts
+			var pp := mid + dir * t
+			MeshKit.cylinder(self, 0.07, h - barrier_h, pp + Vector3.UP * (barrier_h + (h - barrier_h) * 0.5), _m.steel, Vector3.ZERO, 6)
+		MeshKit.cylinder(self, 0.05, length, mid + Vector3.UP * (h - 0.1), _m.steel, Vector3(0, yaw, 90), 6)
+		for wire in 3:
+			MeshKit.cylinder(self, 0.015, length, mid + Vector3.UP * (h + 0.15 + wire * 0.22) + out * (0.15 + wire * 0.15), _m.steel, Vector3(0, yaw, 90), 4)
 	# Graffiti, Calypso's tournament everywhere.
 	var tags := [
-		["QUAKE ZONE", Vector3(-60, 3.2, HALF - 0.05), 0.0, Color(0.9, 0.2, 0.25)],
-		["CALYPSO LIES", Vector3(HALF - 0.05, 3.0, -70), 90.0, Color(0.2, 0.55, 0.95)],
-		["SWEET TOOTH WAS HERE", Vector3(-HALF + 0.05, 3.0, 70), -90.0, Color(0.95, 0.5, 0.75)],
-		["NO WISH IS FREE", Vector3(30, 3.4, -HALF + 0.05), 180.0, Color(0.95, 0.85, 0.2)],
+		["QUAKE ZONE", Vector3(-60, 1.45, HALF - 0.05), 0.0, Color(0.9, 0.2, 0.25)],
+		["CALYPSO LIES", Vector3(HALF - 0.05, 1.45, -70), 90.0, Color(0.2, 0.55, 0.95)],
+		["SWEET TOOTH WAS HERE", Vector3(-HALF + 0.05, 1.45, 70), -90.0, Color(0.95, 0.5, 0.75)],
+		["NO WISH IS FREE", Vector3(30, 1.45, -HALF + 0.05), 180.0, Color(0.95, 0.85, 0.2)],
 	]
 	for t in tags:
 		var l := Label3D.new()
 		l.text = t[0]
-		l.font_size = 260
-		l.pixel_size = 0.012
-		l.outline_size = 24
+		l.font_size = 220
+		l.pixel_size = 0.007
+		l.outline_size = 18
 		l.modulate = t[3]
 		l.outline_modulate = Color(0.05, 0.05, 0.05)
 		l.position = t[1]
@@ -813,14 +805,20 @@ func _power_tower() -> void:
 		line.thickness = 0.08
 		add_child(line)
 		line.draw(at + Vector3(x, y, 0), Vector3(HALF + 60.0, 22.0, HALF + 40.0 + x), 0.0, 6.0)
-	var sign := Label3D.new()
-	sign.text = "DANGER\nHIGH VOLTAGE"
-	sign.font_size = 90
-	sign.pixel_size = 0.012
-	sign.modulate = Color(1.3, 1.1, 0.2)
-	sign.outline_size = 14
-	sign.position = at + Vector3(0, 6.0, 4.0)
-	add_child(sign)
+	# Warning plate on the tower: yellow steel with black lettering on both faces.
+	MeshKit.box(self, Vector3(4.6, 2.4, 0.08), at + Vector3(0, 6.0, 4.0), MatKit.plain(MatKit.paint(Color(0.7, 0.55, 0.08), 0.6, 0.6, 0.6, 2.0, 0.7, 120)))
+	for face: float in [1.0, -1.0]:
+		var sign := Label3D.new()
+		sign.text = "DANGER\nHIGH VOLTAGE"
+		sign.font_size = 90
+		sign.pixel_size = 0.009
+		sign.modulate = Color(0.05, 0.04, 0.03)
+		sign.outline_size = 0
+		sign.shaded = true
+		sign.double_sided = false
+		sign.position = at + Vector3(0, 6.0, 4.0 + 0.05 * face)
+		sign.rotation_degrees.y = 0.0 if face > 0.0 else 180.0
+		add_child(sign)
 
 
 func _member(parent: Node3D, a: Vector3, b: Vector3, t: float, mat: Material) -> MeshInstance3D:
@@ -874,23 +872,26 @@ func _hot_dog_stand(pos: Vector3, yaw: float) -> void:
 	add_child(b)
 	b.add_box_shape(Vector3(4.2, 3.0, 3.0), Vector3(0, 1.5, 0))
 	var v := b.visual
-	MeshKit.box(v, Vector3(4.0, 2.4, 2.8), Vector3(0, 1.2, 0), _m.white)
-	MeshKit.box(v, Vector3(4.04, 0.4, 2.84), Vector3(0, 0.5, 0), _m.red)
+	var cart := MatKit.plain(MatKit.paint(Color(0.7, 0.67, 0.6), 0.7, 0.5, 0.75, 1.5, 0.6, 130))
+	var stripe := MatKit.plain(MatKit.paint(Color(0.48, 0.1, 0.08), 0.7, 0.4, 0.6, 1.5, 0.6, 131))
+	MeshKit.box(v, Vector3(4.0, 2.4, 2.8), Vector3(0, 1.2, 0), cart)
+	MeshKit.box(v, Vector3(4.04, 0.4, 2.84), Vector3(0, 0.5, 0), stripe)
 	MeshKit.box(v, Vector3(2.6, 1.0, 0.1), Vector3(0, 1.6, -1.42), _m.dark)
 	for i in 6:
-		MeshKit.box(v, Vector3(0.66, 0.22, 3.3), Vector3(-1.66 + i * 0.66, 2.55, 0), _m.red if i % 2 == 0 else _m.white, Vector3(10, 0, 0))
-	var bun := MeshKit.mat(Color(0.88, 0.62, 0.32), 0.8)
-	var sausage := MeshKit.mat(Color(0.62, 0.22, 0.12), 0.5)
+		MeshKit.box(v, Vector3(0.66, 0.22, 3.3), Vector3(-1.66 + i * 0.66, 2.55, 0), stripe if i % 2 == 0 else cart, Vector3(10, 0, 0))
+	var bun := MatKit.plain(MatKit.paint(Color(0.66, 0.46, 0.26), 0.6, 0.0, 0.6, 1.0, 0.8, 132))
+	var sausage := MatKit.plain(MatKit.paint(Color(0.42, 0.16, 0.1), 0.5, 0.0, 0.5, 1.0, 0.6, 133))
 	for s: float in [-1.0, 1.0]:
 		MeshKit.sphere(v, 0.6, Vector3(0, 3.25, s * 0.32), bun, Vector3(3.4, 0.7, 0.75), 12)
 	MeshKit.sphere(v, 0.45, Vector3(0, 3.55, 0), sausage, Vector3(5.0, 0.9, 0.9), 12)
 	for i in 7:
-		MeshKit.box(v, Vector3(0.5, 0.06, 0.1), Vector3(-1.5 + i * 0.5, 3.96, 0.1 * (1 if i % 2 == 0 else -1)), MeshKit.mat(Color(1.0, 0.82, 0.1), 0.6), Vector3(0, 30.0 * (1 if i % 2 == 0 else -1), 0))
+		MeshKit.box(v, Vector3(0.5, 0.06, 0.1), Vector3(-1.5 + i * 0.5, 3.96, 0.1 * (1 if i % 2 == 0 else -1)), MeshKit.mat(Color(0.7, 0.58, 0.12), 0.6), Vector3(0, 30.0 * (1 if i % 2 == 0 else -1), 0))
 	var l := Label3D.new()
 	l.text = "HOT DOGS"
 	l.font_size = 90
 	l.pixel_size = 0.01
-	l.modulate = Color(1.2, 0.15, 0.1)
+	l.shaded = true
+	l.modulate = Color(0.5, 0.08, 0.06)
 	l.position = Vector3(0, 2.15, -1.48)
 	l.rotation_degrees.y = 180.0
 	v.add_child(l)
@@ -946,17 +947,30 @@ func _palm(pos: Vector3) -> void:
 
 # ---------------------------------------------------------------- far away
 
-func _hills_and_sign() -> void:
-	# The Hollywood Hills rise behind the north wall.
-	MeshKit.prism(self, Vector3(100, 60, 760), Vector3(0, 30, -180), _m.hill, Vector3(0, -90, 0))
-	for k in 8:
-		var x := -480.0 + k * 135.0 + _rng.randf_range(-30, 30)
-		var r := _rng.randf_range(120, 180)
-		MeshKit.sphere(self, r, Vector3(x, 0, -290 - _rng.randf_range(0, 90)), _m.hill_far, Vector3(1.3, _rng.randf_range(0.5, 0.8), 0.9), 16)
-	for k in 6:
-		var a := deg_to_rad(-60 + k * 40.0)
-		var r := _rng.randf_range(90, 130)
-		MeshKit.sphere(self, r, Vector3(sin(a) * 560.0, 0, cos(a) * 560.0), _m.hill_far, Vector3(1.5, 0.35, 1.0), 14)
+func _hollywood_sign() -> void:
+	# The letters stand on a steel scaffold on the roof of the building just north of the arena
+	# (LaCity builds it, roof at y 6.5).
+	var mb := MeshBuilder.new()
+	var steel := MatKit.steel(Color(0.2, 0.2, 0.21), 0.6, 1.0)
+	var x0 := -60.0 - 4.0 * 8.0 - 4.0
+	var x1 := -60.0 + 4.0 * 8.0 + 4.0
+	for k in 11:
+		var x := lerpf(x0, x1, k / 10.0)
+		mb.box(steel, Vector3(0.3, 12.0, 0.3), MeshBuilder.at(Vector3(x, 12.5, SIGN_Z - 2.0)), 0.02)
+		mb.box(steel, Vector3(0.25, 0.25, 3.2), MeshBuilder.at(Vector3(x, 7.0, SIGN_Z - 0.6), Vector3(-30, 0, 0)), 0.02)
+	for y: float in [7.0, 12.0, 17.5]:
+		mb.box(steel, Vector3(x1 - x0, 0.3, 0.3), MeshBuilder.at(Vector3(-60.0, y, SIGN_Z - 2.0)), 0.02)
+	for k in 10:
+		var xa := lerpf(x0, x1, k / 10.0)
+		var xb := lerpf(x0, x1, (k + 1) / 10.0)
+		var a := Vector3(xa, 7.0, SIGN_Z - 2.0)
+		var b := Vector3(xb, 17.5, SIGN_Z - 2.0)
+		if k % 2 == 1:
+			var t := a.y
+			a.y = b.y
+			b.y = t
+		mb.box(steel, Vector3(0.18, a.distance_to(b), 0.18), MeshBuilder.along((a + b) * 0.5, b - a), 0.0)
+	mb.commit(self)
 	# HOLLYWOOD: each letter breaks when shot. Too high to hit from the ground: try the tunnel roof.
 	var glyphs := {
 		"H": ["10001", "10001", "10001", "11111", "10001", "10001", "10001"],
@@ -1000,38 +1014,13 @@ func _on_letter_broken(_letter: Breakable, _by: Vehicle) -> void:
 		Pickup.create(self, "power", Vector3(TUNNEL_X1 - 6.0, ROOF_Y, -10.0 + k * 10.0), true)
 
 
-## Downtown towers in the haze, some of them leaning after the quake. Smoke from fires in the city.
-func _skyline() -> void:
-	for k in 16:
-		var a := deg_to_rad(_rng.randf_range(100, 170))
-		var r := _rng.randf_range(260, 480)
-		var p := Vector3(sin(a) * r, 0, -cos(a) * r)
-		var w := _rng.randf_range(18, 40)
-		var h := _rng.randf_range(50, 190)
-		var tilt := _rng.randf_range(-6, 6) if _rng.randf() < 0.3 else 0.0
-		MeshKit.box(self, Vector3(w, h, w * _rng.randf_range(0.7, 1.2)), p + Vector3.UP * h * 0.5, _m.city, Vector3(tilt, _rng.randf_range(0, 90), 0))
-	for k in 10:
-		var a := deg_to_rad(_rng.randf_range(-100, 80))
-		var r := _rng.randf_range(220, 360)
-		var h := _rng.randf_range(15, 45)
-		MeshKit.box(self, Vector3(_rng.randf_range(20, 40), h, 25), Vector3(sin(a) * r, h * 0.5, cos(a) * r), _m.concrete_dark, Vector3(0, _rng.randf_range(0, 90), 0))
-	for p: Vector3 in [Vector3(300, 0, 250), Vector3(-320, 0, 160), Vector3(180, 0, -330)]:
-		var plume := FxKit.smoke(14.0, 40)
-		plume.lifetime = 14.0
-		plume.gravity = Vector3(1.5, 3.0, 0)
-		plume.color_ramp = null
-		plume.color = Color(0.28, 0.26, 0.25, 0.35)
-		plume.position = p + Vector3.UP * 20.0
-		add_child(plume)
-		plume.emitting = true
-
-
 ## Calypso's blimp, still far away in stage 1. It gets closer every stage.
 func _blimp() -> void:
 	var blimp := Node3D.new()
 	blimp.name = "CalypsoBlimp"
-	blimp.position = Vector3(240, 170, -400)
+	blimp.position = Vector3(620, 330, -1050) # far over the city: it gets closer every stage
 	blimp.rotation_degrees.y = 25.0
+	blimp.scale = Vector3.ONE * 1.7
 	add_child(blimp)
 	var skin := MeshKit.mat(Color(0.18, 0.17, 0.2), 0.5, 0.3)
 	var gold := MeshKit.mat(Color(0.85, 0.65, 0.2), 0.3, 1.0)
@@ -1062,8 +1051,25 @@ func _blimp() -> void:
 		var lamp := MeshKit.sphere(blimp, 0.8, Vector3(x, 0, 0), MeshKit.emissive(Color(1, 0.1, 0.05), 8.0))
 		blinker.group_a.append(lamp)
 	var tw := blimp.create_tween().set_loops()
-	tw.tween_property(blimp, "position:y", 176.0, 6.0).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(blimp, "position:y", 170.0, 6.0).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(blimp, "position:y", 338.0, 8.0).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(blimp, "position:y", 330.0, 8.0).set_trans(Tween.TRANS_SINE)
+
+
+## For the HUD radar: the outer wall and the ring road as (x, z) polylines.
+func radar_lines() -> Array:
+	var c := 20.0
+	var wall := PackedVector2Array([Vector2(-HALF + c, -HALF), Vector2(HALF - c, -HALF), Vector2(HALF, -HALF + c),
+		Vector2(HALF, HALF - c), Vector2(HALF - c, HALF), Vector2(-HALF + c, HALF), Vector2(-HALF, HALF - c),
+		Vector2(-HALF, -HALF + c), Vector2(-HALF + c, -HALF)])
+	var road := PackedVector2Array()
+	var pts := _ring_points(ROAD_H, ROAD_R, 6.0)
+	for p in pts:
+		road.append(Vector2(p.x, p.z))
+	if road.size() > 0:
+		road.append(road[0])
+	var tunnel := PackedVector2Array([Vector2(TUNNEL_X0, -TUNNEL_Z), Vector2(TUNNEL_X1, -TUNNEL_Z), Vector2(TUNNEL_X1, TUNNEL_Z),
+		Vector2(TUNNEL_X0, TUNNEL_Z), Vector2(TUNNEL_X0, -TUNNEL_Z)])
+	return [wall, road, tunnel]
 
 
 # ---------------------------------------------------------------- gameplay points

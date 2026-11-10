@@ -38,11 +38,15 @@ func _flush(mat: Material, st: SurfaceTool, xf: Transform3D, smooth: bool) -> vo
 
 
 ## One mesh per material under `parent`. Returns the created MeshInstance3D nodes.
-func commit(parent: Node3D, shadows := true) -> Array[MeshInstance3D]:
+## grime 0..1 bakes road dust into the vertex colors: brown dirt rising from the bottom (up to
+## about 1.4 m), darker undersides and a little blotchy variation, so cars sit in the world instead
+## of looking factory clean. y_offset = height of `parent` above the ground (for parts on the roof).
+## Materials show it when vertex_color_use_as_albedo is on (every MatKit material).
+func commit(parent: Node3D, shadows := true, grime := 0.0, y_offset := 0.0) -> Array[MeshInstance3D]:
 	var out: Array[MeshInstance3D] = []
 	for mat: Material in _masters:
 		var mi := MeshInstance3D.new()
-		mi.mesh = (_masters[mat] as SurfaceTool).commit()
+		mi.mesh = _with_grime((_masters[mat] as SurfaceTool).commit(), grime, y_offset)
 		mi.material_override = mat
 		if not shadows:
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -262,6 +266,44 @@ func torus(mat: Material, radius: float, tube: float, xf := Transform3D.IDENTITY
 		var a := -PI * 0.5 + TAU * float(i) / tube_seg
 		prof.append(Vector2(radius + cos(a) * tube, sin(a) * tube))
 	lathe(mat, prof, xf, seg, true)
+
+
+## Everything added so far as ONE mesh with a surface per material (for MultiMesh instancing).
+func build_mesh(grime := 0.0, y_offset := 0.0) -> ArrayMesh:
+	var out := ArrayMesh.new()
+	for mat: Material in _masters:
+		var part := _with_grime((_masters[mat] as SurfaceTool).commit(), grime, y_offset)
+		if part.get_surface_count() == 0:
+			continue
+		out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, part.surface_get_arrays(0))
+		out.surface_set_material(out.get_surface_count() - 1, mat)
+	_masters.clear()
+	return out
+
+
+static func _with_grime(mesh: ArrayMesh, grime: float, y_offset: float) -> ArrayMesh:
+	if mesh.get_surface_count() == 0:
+		return mesh
+	var arrays := mesh.surface_get_arrays(0)
+	var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var norms: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var cols := PackedColorArray()
+	cols.resize(verts.size())
+	var mud := Color(0.5, 0.42, 0.33)
+	for i in verts.size():
+		var v := verts[i]
+		var y := v.y + y_offset
+		var dust := (1.0 - smoothstep(0.1, 1.5, y)) * 0.8 + 0.12
+		var blotch := fposmod(sin(v.x * 12.9898 + v.y * 78.233 + v.z * 37.719) * 43758.5453, 1.0)
+		dust = clampf(dust + (blotch - 0.5) * 0.25, 0.0, 1.0) * grime
+		var c := Color(1, 1, 1).lerp(mud, dust)
+		var under := clampf(-norms[i].y, 0.0, 1.0) if i < norms.size() else 0.0
+		c = c.darkened(under * 0.5 * grime)
+		cols[i] = c
+	arrays[Mesh.ARRAY_COLOR] = cols
+	var out := ArrayMesh.new()
+	out.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return out
 
 
 ## Transform helpers.

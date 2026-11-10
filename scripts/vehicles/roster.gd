@@ -19,7 +19,7 @@ const CARS := {
 		"name": "Sweet Tooth", "driver": "Needles Kane",
 		"spd": 4, "arm": 8, "hnd": 4, "spc": 8, "class": "heavy",
 		"special": "napalm_cone", "freeze_cost": 35.0, # perk: Brain Freeze
-		"size": Vector3(2.5, 2.6, 6.3), "camera": [6.4, 13.0],
+		"size": Vector3(2.5, 2.8, 6.6), "camera": [6.4, 13.0],
 		"tagline": "He laughs louder than the engine.",
 	},
 	"outlaw": {

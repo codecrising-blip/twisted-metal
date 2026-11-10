@@ -72,6 +72,8 @@ func _ready() -> void:
 	hud.drivers.assign(drivers.map(func(id: String): return String(Roster.get_car(id).get("name", id))))
 	hud.set_enemies_left(enemies.size())
 	hud.set_lives(lives - 1)
+	if arena.has_method("radar_lines"):
+		hud.set_radar_lines(arena.radar_lines())
 	var stage_line: String = arena.title + ("  -  " + arena.subtitle if arena.subtitle != "" else "")
 	hud.show_message(arena.title, "%s\n%s  -  %s\n%s\n(ESC: pick another driver)" % [arena.subtitle, player.display_name, player.stats.get("driver", ""), player.stats.get("tagline", "")], 4.0)
 	print("Stage: ", stage_line)

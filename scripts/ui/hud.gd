@@ -1,7 +1,8 @@
 class_name Hud
 extends CanvasLayer
-## Everything on screen: bars, weapons, target lock, kill feed, messages, help,
-## lives, respawn countdown, plus a light full-screen filter (faint grain and vignette, damage flash).
+## Everything on screen: status panel (bottom left: health, turbo, energy, lives), weapons panel
+## (bottom right), radar (top right), target lock, kill feed, messages, help, respawn countdown,
+## plus a light full-screen filter (faint grain and vignette, damage flash).
 ## Runs while paused so it can handle pause / restart.
 
 signal restart_requested
@@ -66,13 +67,10 @@ var game_over := false
 var drivers: Array[String] = [] # names for the pause menu's driver pick (keys 1-5)
 
 var _post: ShaderMaterial
-var _player_name: Label
-var _driver: Label
 var _title_font: SystemFont
-var _health: ProgressBar
-var _turbo: ProgressBar
-var _energy: ProgressBar
-var _weapons: VBoxContainer
+var _status: HudStatus
+var _weapons: HudWeapons
+var _radar: Radar
 var _target_box: VBoxContainer
 var _target_name: Label
 var _target_health: ProgressBar
@@ -80,8 +78,6 @@ var _reticle: Reticle
 var _title: Label
 var _sub: Label
 var _feed: VBoxContainer
-var _enemies: Label
-var _lives: Label
 var _countdown: Label
 var _notice: Label
 var _notice_tween: Tween
@@ -102,8 +98,9 @@ func _ready() -> void:
 func bind(p: Vehicle, cam: Camera3D) -> void:
 	player = p
 	camera = cam
-	_player_name.text = player.display_name.to_upper()
-	_driver.text = String(player.stats.get("driver", ""))
+	_status.player = p
+	_weapons.player = p
+	_radar.player = p
 	player.weapons_changed.connect(func(_v): _refresh_weapons())
 	player.damaged.connect(_on_player_damaged)
 	player.notice.connect(func(_v, text): show_notice(text))
@@ -133,20 +130,11 @@ func _build() -> void:
 	_reticle.visible = false
 	root.add_child(_reticle)
 
-	# Top-left: who you are and your bars.
-	var status := VBoxContainer.new()
-	status.position = Vector2(28, 22)
-	status.add_theme_constant_override("separation", 4)
-	root.add_child(status)
-	_player_name = _label("", 34, Color(0.92, 0.9, 0.85), true)
-	status.add_child(_player_name)
-	_driver = _label("", 16, Color(0.6, 0.58, 0.55))
-	status.add_child(_driver)
-	_lives = _label("", 22, Color(1.0, 0.85, 0.35), true)
-	status.add_child(_lives)
-	_health = _bar(status, "HEALTH", Color(0.85, 0.1, 0.08), 320)
-	_turbo = _bar(status, "TURBO", Color(1.0, 0.55, 0.1), 220)
-	_energy = _bar(status, "ENERGY", Color(0.25, 0.55, 1.0), 220)
+	# Bottom-left: who you are, health, turbo, energy, lives.
+	_status = HudStatus.new()
+	_status.font = _title_font
+	_pin(_status, 0.0, 1.0, Rect2(24, -24 - HudStatus.H, HudStatus.W, HudStatus.H))
+	root.add_child(_status)
 
 	# Top-center: locked target.
 	_target_box = VBoxContainer.new()
@@ -159,26 +147,27 @@ func _build() -> void:
 	_target_health = _plain_bar(Color(0.85, 0.1, 0.08), 320)
 	_target_box.add_child(_target_health)
 
-	# Top-right: enemies left and kill feed.
+	# Top-right: radar (enemies left under it), kill feed below.
+	_radar = Radar.new()
+	_radar.font = _title_font
+	_pin(_radar, 1.0, 0.0, Rect2(-24 - Radar.SIZE, 20, Radar.SIZE, Radar.SIZE + 30))
+	root.add_child(_radar)
 	var right := VBoxContainer.new()
-	_pin(right, 1.0, 0.0, Rect2(-420, 22, 396, 0))
+	_pin(right, 1.0, 0.0, Rect2(-420, 262, 396, 0))
 	right.alignment = BoxContainer.ALIGNMENT_END
 	root.add_child(right)
-	_enemies = _label("", 22, Color(0.92, 0.9, 0.85), true)
-	_enemies.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	right.add_child(_enemies)
 	_feed = VBoxContainer.new()
 	right.add_child(_feed)
 
 	# Bottom-right: weapons.
-	_weapons = VBoxContainer.new()
-	_pin(_weapons, 1.0, 1.0, Rect2(-520, -220, 496, 196))
-	_weapons.alignment = BoxContainer.ALIGNMENT_END
+	_weapons = HudWeapons.new()
+	_weapons.font = _title_font
+	_pin(_weapons, 1.0, 1.0, Rect2(-24 - HudWeapons.W, -24 - HudWeapons.H, HudWeapons.W, HudWeapons.H))
 	root.add_child(_weapons)
 
-	# Bottom-left: controls.
-	_help = _label(HELP_TEXT, 15, Color(0.8, 0.78, 0.72, 0.85))
-	_pin(_help, 0.0, 1.0, Rect2(28, -290, 480, 266))
+	# Left: controls (hidden after a few seconds, F1 shows them again).
+	_help = _label(HELP_TEXT, 15, Color(0.85, 0.83, 0.77, 0.9))
+	_pin(_help, 0.0, 0.0, Rect2(28, 30, 480, 266))
 	root.add_child(_help)
 	get_tree().create_timer(14.0, true).timeout.connect(func(): _help.visible = false)
 
@@ -201,7 +190,7 @@ func _build() -> void:
 	# Lower center: short notices (taser link lost, teleported...).
 	_notice = _label("", 26, Color(0.75, 0.88, 1.0), true)
 	_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_pin(_notice, 0.5, 1.0, Rect2(-400, -150, 800, 40))
+	_pin(_notice, 0.5, 1.0, Rect2(-300, -210, 600, 40))
 	root.add_child(_notice)
 
 
@@ -233,21 +222,9 @@ func _label(text: String, size: int, color: Color, title := false) -> Label:
 	return l
 
 
-func _bar(parent: Control, caption: String, color: Color, width: float) -> ProgressBar:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 10)
-	parent.add_child(row)
-	var cap := _label(caption, 14, Color(0.7, 0.68, 0.64))
-	cap.custom_minimum_size = Vector2(70, 0)
-	row.add_child(cap)
-	var bar := _plain_bar(color, width)
-	row.add_child(bar)
-	return bar
-
-
 func _plain_bar(color: Color, width: float) -> ProgressBar:
 	var bar := ProgressBar.new()
-	bar.custom_minimum_size = Vector2(width, 16)
+	bar.custom_minimum_size = Vector2(width, 10)
 	bar.show_percentage = false
 	bar.max_value = 100.0
 	var bg := StyleBoxFlat.new()
@@ -270,9 +247,6 @@ func _process(delta: float) -> void:
 		_post.set_shader_parameter("damage", _damage_flash)
 	if not is_instance_valid(player):
 		return
-	_health.value = player.health / player.max_health * 100.0
-	_turbo.value = player.turbo
-	_energy.value = player.energy
 	_update_target()
 
 
@@ -335,40 +309,31 @@ func _update_target() -> void:
 
 
 func _refresh_weapons() -> void:
-	for c in _weapons.get_children():
-		c.queue_free()
-	if not is_instance_valid(player):
-		return
-	var current := player.selected_weapon()
-	for id in player.weapon_order:
-		var def := WeaponData.get_def(id)
-		var count: int = player.ammo.get(id, 0)
-		var is_sel: bool = id == current
-		var text := "%s%s  x%d" % ["> " if is_sel else "  ", String(def.get("label", id)).to_upper(), count]
-		if def.get("special", false):
-			text += "  SP"
-		var color: Color = def.get("color", Color.WHITE) if is_sel else Color(0.6, 0.58, 0.55)
-		var l := _label(text, 24 if is_sel else 18, color, is_sel)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		_weapons.add_child(l)
+	_weapons.queue_redraw() # the panel redraws itself every frame anyway
 
 
 func _on_player_damaged(_v: Vehicle, amount: float, _attacker: Vehicle) -> void:
 	if amount <= 0.0:
 		return
 	_damage_flash = maxf(_damage_flash, clampf(amount / 20.0, 0.08, 1.0))
+	_status.hit()
 	_post.set_shader_parameter("damage", _damage_flash)
 
 
 # ---------------------------------------------------------------- public
 
 func set_enemies_left(n: int) -> void:
-	_enemies.text = "ENEMIES LEFT: %d" % n
+	_radar.enemies_left = n
+
+
+## Arena outline for the radar: polylines of world (x, z) points.
+func set_radar_lines(lines: Array) -> void:
+	_radar.lines = lines
 
 
 ## Spare lives (owner: 3 lives for the whole tournament, shown as 2, 1, 0 spare).
 func set_lives(spare: int) -> void:
-	_lives.text = "SPARE LIVES  %d" % spare
+	_status.spare_lives = spare
 
 
 ## Big respawn countdown in the middle; -1 hides it.

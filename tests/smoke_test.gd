@@ -351,7 +351,7 @@ func _run() -> void:
 	main.player._fire_guns()
 	await _frames(5)
 	_check(not spinner.transform.basis.is_equal_approx(spin_before), "firing the guns spins the gatling barrels")
-	_check(main.player.model.has_meta("bobble"), "the Scoop mascot sits on its spring")
+	_check(not main.player.model.find_children("*", "CPUParticles3D", true, false).is_empty(), "the cone sign on Sweet Tooth's roof burns")
 	var was_high := GraphicsSettings.high
 	GraphicsSettings.high = true
 	GraphicsSettings.apply(self)

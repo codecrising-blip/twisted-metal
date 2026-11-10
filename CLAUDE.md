@@ -172,11 +172,18 @@ scripts/vehicles/           Vehicle (driving, wall rule, rams, states, combat), 
 scripts/weapons/            WeaponData (all balance numbers), Projectile, Pickup, Specials (fires specials),
                             TaserLink, ChainBomb, FirePool
 scripts/arena/los_angeles.gd  stage 1 / test stage (TM2 Quake Zone): heightmap ground, roads, tunnels, cage...
+scripts/arena/la_city.gd    the city below the LA plateau: retaining walls, street grid texture, ~2200 buildings
+                            in one MultiMesh (windows drawn by a shader), freeways, palms, mountains, smoke
+scripts/arena/la_props.gd   LA street furniture: toppling street lights, burnt wrecks, billboards, power lines,
+                            traffic lights, barriers, dumpsters, containers, rubble, manholes, stains
 scripts/arena/junkyard.gd   the old prototype stage, now free play (`-- junkyard`)
 scripts/arena/breakable.gd  props that shatter/topple (stands, glass, palms, letters, tower legs)
 scripts/arena/teleporter.gd teleport pad
 scripts/fx/                 FxKit (fire/smoke/explosions), FlickerLight, Blinker, ZigLine (bolts, chains, cables)
-scripts/ui/hud.gd           HUD (bars, lives, respawn countdown, notices) + light grain/vignette shader
+scripts/ui/hud.gd           HUD layout (target, feed, messages, help, countdown, pause) + grain/vignette shader
+scripts/ui/hud_status.gd    bottom-left panel: name, lives, segmented health (trail), turbo, energy, state chips
+scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, ammo), other weapons as chips
+scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickups, walls/road from radar_lines()
 tests/                      smoke_test.gd (headless, ~65 checks), screenshot.gd
 audio/music/                drop .ogg/.mp3 here; first file alphabetically plays in a loop
 docs/GDD.md                 game design document (living); docs/design/ = design bible (Arabic)
@@ -201,6 +208,10 @@ docs/GDD.md                 game design document (living); docs/design/ = design
   SurfaceTool meshes must be clockwise seen from the visible side, or two-sided materials light them from behind
   (that made LA's roads pitch black until session 5).
 - Car models are **our own designs** carrying each character's idea and colors, never copies of the originals.
+- **Serious look (owner, session 5):** no toy look. Real proportions, wheels under fender arches, dark worn metal
+  (no shiny chrome), heavy dirt/rust, armor, welded mesh over glass, muted colors, no cartoon faces.
+- MatKit materials read vertex colors (MeshBuilder writes them). On plain primitives (MeshKit boxes, BoxMesh in
+  a MultiMesh) use `MatKit.plain(mat)`, or the missing vertex color can turn the surface black.
 - Keep balance numbers in `WeaponData` / `Roster`, not scattered in logic.
 
 ## Status
@@ -215,12 +226,23 @@ Test aid: pause menu keys 1-5 pick the player's driver (`main.gd` static `player
 Not built yet from the design: Sweet Bot, the other energy moves (shield, mines, invisibility, rear moves),
 sub-boss arrivals, story, character select, detailed car models, sounds.
 
-**Quality preview (done, session 5):** Sweet Tooth vs Outlaw, 1-on-1 in Los Angeles, rebuilt in detail as our
-own designs. Sweet Tooth = armored ice-cream truck (plow with spikes, twin gatlings, chrome stacks, serving window,
-roof mortar) with an original mascot on a spring, **"the Scoop"**: a strawberry scoop with a carved wicked face in a
-waffle cone (replaces the old clown head; no flaming head). Outlaw = armored police interceptor (push bar, hood guns,
-light bar, taser coil on the roof). Effects: spinning gatlings + muzzle flash, turbo flames, mascot sway, tire smoke.
-Graphics: LOW (default, owner's laptop) / HIGH, G in the pause menu. LA roads fixed (were pitch black).
+**Quality preview (session 5, second pass after the owner's review):** Sweet Tooth vs Outlaw, 1-on-1 in LA.
+Owner's verdict on pass 1: cars looked goofy/toy-like, LA looked like a school backyard, sand hills made no sense,
+blimp too close, HUD weak, radar missing. Pass 2 (current):
+- **Sweet Tooth** = armored ice-cream step van: welded wedge plow with spikes, gatlings in the nose, steel mesh
+  over the windshield, slit armor on the cab windows, roll-up steel shutter on the serving hatch, napalm mortar
+  with fuel cans, blackened stacks, spare wheel, faded "ICE CREAM" lettering. Roof: a scorched, cracked fiberglass
+  cone sign that burns from inside (replaces the cartoon "Scoop" face, which read as goofy; no clown, no face).
+- **Outlaw** = armored police interceptor: real wheel openings, black steel wheels, louvered steel over the
+  windshield, mesh on side windows, bullet strikes, twin hood guns in an armored box, low light bar, caged taser
+  coil on the trunk.
+- **LA** is a plateau above the city: retaining walls drop 22 m to a street grid with ~2200 buildings, freeways,
+  palms and smog, mountains far away; the outer wall is a low barrier + chain-link fence (collider still 8 m);
+  HOLLYWOOD sign on a scaffold on a building north of the arena; blimp far over the city. Inside: toppling street
+  lights, wrecks, billboards, power lines, traffic lights, barriers, dumpsters, containers, rubble, stains;
+  gritty concrete/asphalt; muted grading (saturation 0.9).
+- **HUD**: status panel, weapons panel, radar (see code map).
+- Effects: spinning gatlings + muzzle flash, turbo flames, tire smoke. Graphics: LOW (default) / HIGH, G in pause.
 Owner also wants, later: main menu, car select, stage select, world map, opponent preview.
 
 **Next candidates (agree with owner first):**
@@ -250,3 +272,6 @@ Owner also wants, later: main menu, car select, stage select, world map, opponen
   (see Status). Bugs met: SurfaceTool `append_from()` silently drops non-indexed parts once the merged mesh is
   indexed (MeshBuilder now indexes every part); LA road strips were wound the wrong way, so the two-sided asphalt
   was lit from below and looked black; `get_meta(key, null)` prints an error when the key is missing.
+  Second pass (owner: "goofy, toy-like, school backyard"): serious rebuild of both cars, LA city + props, new HUD
+  and radar. Gotchas: a procedural window grid shimmers far away (fade it with `fwidth`); distant mountains turn
+  white in fog (their material uses `disable_fog`); MatKit materials need vertex colors (see Conventions).
