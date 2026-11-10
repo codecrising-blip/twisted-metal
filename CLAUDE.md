@@ -177,10 +177,10 @@ Build these with the owner next session (he asked to keep them for then):
 - **Pickups:** less bright; each shows its weapon's shape and color (fire vs homing must be obvious), health clear.
 - **Energy combos** (quick, ~0.5 s, on the D-pad AND the left stick): jump U U L, shield U U R, front freeze L R U,
   secondary weapon R L U, rear freeze L R D, invisibility R L D, mines D D R, rear attack D D L.
-- **Pad layout (PS):** Square drive, **double-tap Square = turbo**, X handbrake, Circle headlights, Triangle rear view,
+- **Pad layout (PS):** Square drive, **double-tap Square and hold the second press = turbo** (stops on release), X handbrake, Circle headlights, Triangle rear view,
   R1/L1 switch weapon, R2 fire weapon, L2 machine guns, R3 camera mode, L3/left stick = D-pad (steer + combos),
   D-pad left/right steer, down reverse, up drive.
-- **Camera modes (R3):** near chase, far chase, **in-car view showing the driver's hands** (TM2 had it).
+- **Camera modes (R3):** near chase, far chase, **in-car view showing the driver's hands** (TM2 had it; our own driver design, later).
 - **Headlights:** reveal invisible cars from the start; the key tool against Calypso's clones later.
 - **Later (after the above):** serious daytime stage look; real buildings with depth (motel, taco place, hot dog stand
   read as thin as a finger), believable palms (now "chopsticks"); act as a model designer with taste.
