@@ -17,6 +17,7 @@ and Warhawk fights, Outlaw/Grimm/Shadow/Slam special changes, Tokyo/London/Antar
 | Owner revisions 2 | [06-owner-revisions-2.md](06-owner-revisions-2.md) | **Authoritative** (wins over 05) |
 | Calypso: owner's plan | [08-calypso-owner-plan.md](08-calypso-owner-plan.md) | **Authoritative** over ch4 (proposal in progress) |
 | Owner revisions 3: sub bosses | [07-owner-revisions-3.md](07-owner-revisions-3.md) | **Authoritative** (wins over 05, 06 and ch3) |
+| Owner revisions 4: first play-test | [09-owner-playtest-1.md](09-owner-playtest-1.md) | **Authoritative, not built yet** (AI, Napalm Cone, movement, turbo, pickups, energy combos, pad layout) |
 
 Written in Arabic for the owner; names of characters, stages and weapons stay in English.
 Only what the owner asked for is built; see `CLAUDE.md` for what exists in code.

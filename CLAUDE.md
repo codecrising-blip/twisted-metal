@@ -163,6 +163,30 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 - **TM2 source code:** not public (Sony's, never released); not needed — we write everything in Godot. Useful
   inputs instead: top-down map shots, gameplay video frames, the owner's memories, side/back car images.
 
+## Owner play-test 1 (session 5, end) — full text in `docs/design/09-owner-playtest-1.md`. APPROVED, NOT BUILT YET
+Build these with the owner next session (he asked to keep them for then):
+- **AI:** chase but not like a magnet; attack with missiles/specials; when the player turns to face them they keep
+  attacking from the same direction (head-on), no sliding back behind; only at low health do they slide away and
+  look for health. **No limit on AI special use** (owner rejected that idea).
+- **Napalm Cone (Sweet Tooth, rated 1/10 now):** Head-On style. Tap = homing napalm shot, burns on contact,
+  30 + burning. Hold to charge (up to 2 s) = 50 + normal burning, **no tracking**, power-missile path.
+  Other cars' weapons need the same kind of review later, car by car.
+- **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo. **Turbo never regenerates**:
+  full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
+  item on every map.
+- **Pickups:** less bright; each shows its weapon's shape and color (fire vs homing must be obvious), health clear.
+- **Energy combos** (quick, ~0.5 s, on the D-pad AND the left stick): jump U U L, shield U U R, front freeze L R U,
+  secondary weapon R L U, rear freeze L R D, invisibility R L D, mines D D R, rear attack D D L.
+- **Pad layout (PS):** Square drive, **double-tap Square = turbo**, X handbrake, Circle headlights, Triangle rear view,
+  R1/L1 switch weapon, R2 fire weapon, L2 machine guns, R3 camera mode, L3/left stick = D-pad (steer + combos),
+  D-pad left/right steer, down reverse, up drive.
+- **Camera modes (R3):** near chase, far chase, **in-car view showing the driver's hands** (TM2 had it).
+- **Headlights:** reveal invisible cars from the start; the key tool against Calypso's clones later.
+- **Later (after the above):** serious daytime stage look; real buildings with depth (motel, taco place, hot dog stand
+  read as thin as a finger), believable palms (now "chopsticks"); act as a model designer with taste.
+- Also noted: the game lags a lot on the owner's laptop (FPS counter + lighter graphics still to do); PS5 pad wanted;
+  Shield, Sweet Bot and the other energy moves are not built yet.
+
 ## Code map
 ```
 scenes/main.tscn            single scene; everything is spawned from scripts/main.gd
@@ -257,6 +281,8 @@ blimp too close, HUD weak, radar missing. Pass 2 (current):
 Owner also wants, later: main menu, car select, stage select, world map, opponent preview.
 
 **Next candidates (agree with owner first):**
+0. **The play-test 1 fixes above** (AI, Napalm Cone, movement/turbo, pickups, combos, pad layout, cameras,
+   headlights), plus performance for the owner's laptop. Then the stage look rework.
 1. Owner play-test of the LA stage: driving feel, wall slide, damage/health, AI, the new specials.
 2. Owner's verdict on the preview cars; then the same detail for the other cars, new Laughing Ghost look.
 3. Remaining energy moves and Sweet Bot; napalm pickup (needed for the Tokyo puzzle).
