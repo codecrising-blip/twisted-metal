@@ -54,6 +54,13 @@ func drive(v: Vehicle, delta: float) -> void:
 		_retarget = 0.6
 		v.target = _choose_target(v)
 
+	if v.flipped: # on its roof: handbrake and roll back over, always the same way
+		v.in_throttle = 0.0
+		v.in_handbrake = true
+		v.in_steer = 1.0
+		v.in_turbo = false
+		v.in_fire_guns = false
+		return
 	_drift = false
 	_no_jump -= delta
 	for key in _bad_ramps.keys():
@@ -109,7 +116,7 @@ func drive(v: Vehicle, delta: float) -> void:
 	v.in_handbrake = handbrake
 	_try_jump_up(v)
 	# Turbo never refills by itself: spend it on chasing a runner, closing a long gap or escaping.
-	var want_turbo: bool = plan.get("turbo", false) or not _ramp_goal.is_empty()
+	var want_turbo: bool = plan.get("turbo", false) and _ramp_goal.is_empty() # no turbo onto a ramp: too fast to line up
 	v.in_turbo = want_turbo and absf(angle) < 0.3 and v.turbo > 10.0
 	_shoot(v, delta)
 
@@ -303,7 +310,8 @@ func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
 	if lateral > 9.0 and v.global_position.y < top.y - 1.0 and rel.dot(axis) > 2.0:
 		_ramp_failed()
 		return foot
-	return top
+	# Steer for the ramp's centre line a little ahead, not straight at the top: keeps it off the rails.
+	return top + axis * maxf(rel.dot(axis) - 9.0, 0.0)
 
 
 func _ramp_key(r: Dictionary) -> String:

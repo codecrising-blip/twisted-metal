@@ -361,7 +361,7 @@ func _run() -> void:
 	await _frames(3)
 	_check(not is_instance_valid(mine) or mine.is_queued_for_deletion(), "driving onto the armed mine sets it off")
 	_check(n_hp - outlaw.health >= 45.0, "...for about 50 (%.1f)" % (n_hp - outlaw.health))
-	_check(outlaw.velocity.y > 5.0 or outlaw._tumble_time > 0.0, "...and throws the car into the air")
+	_check(outlaw.velocity.y > 5.0 or outlaw._spinning, "...and throws the car into the air")
 	await _frames(90)
 	# Friendly fire: your own mine hurts you too, and so does your own fire.
 	var own_hp := player.health
@@ -380,6 +380,8 @@ func _run() -> void:
 	FirePool.spawn(main, player.global_position, 3.0, 2.0, 3.0, player)
 	await _frames(40)
 	_check(player.burn_time > 0.0, "friendly fire: your own napalm fire burns you")
+	player.flipped = false # the mine may have left it on its roof
+	player._spinning = false
 	player.burn_time = 0.0
 	_place(player, 40, 70, 90)
 	await _frames(30)
@@ -438,6 +440,39 @@ func _run() -> void:
 	await _frames(4)
 	_check(is_equal_approx(player.turbo, 100.0) and heard.has(Pickup.MSG_TURBO), "a turbo pickup fills the bar completely")
 	player.notice.disconnect(listen)
+	# Flips (owner, session 6): on its roof a car rolls back with handbrake + left/right.
+	player.flipped = true
+	Input.action_press("handbrake")
+	Input.action_press("steer_left")
+	await _frames(50)
+	Input.action_release("steer_left")
+	Input.action_release("handbrake")
+	_check(not player.flipped, "handbrake + left/right rolls a flipped car back onto its wheels")
+	# A slow car hanging most of its length over the battleground edge tips over onto its roof...
+	var ex := 80.0
+	while LosAngelesArena.edge_distance(ex, 45.0) > 0.0:
+		ex += 0.1
+	var psize: Vector3 = player.stats.size
+	player.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(-90)), Vector3(ex + psize.z * 0.3, 5.1, 45.0))
+	player.velocity = Vector3.ZERO
+	player.speed = 0.0
+	await _frames(150)
+	_check(player.flipped, "a car hanging over the edge tips over and lands on its roof")
+	player.flipped = false
+	# ...while one driving off it at speed flies and lands on its wheels.
+	player.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(-90)), Vector3(ex - 4.0, 5.1, 45.0))
+	player.velocity = Vector3(22, 0, 0)
+	player.speed = 22.0
+	await _frames(120)
+	_check(not player.flipped and player.global_position.y < 1.5, "driving off the edge fast lands on the wheels")
+	# A power missile throws the car it hits up and rolls it over.
+	_place(outlaw, 0, 70, 90)
+	await _frames(3)
+	Projectile.spawn(main, "power", outlaw.aim_point() + Vector3(-6, 0, 0), Vector3(1, 0, 0), player, outlaw)
+	await _frames(8)
+	_check(outlaw._spinning or outlaw.velocity.y > 3.0, "a power missile throws the car and rolls it")
+	await _frames(90)
+	outlaw.flipped = false
 	var st_car := Roster.get_car("sweet_tooth")
 	_check(float(st_car.max_speed) < float(Roster.get_car("outlaw").max_speed) and float(st_car.max_speed) < 27.0 and float(st_car.max_speed) > 24.0, "Sweet Tooth is a heavy truck, 15%% under the old speed (%.1f m/s)" % st_car.max_speed)
 	_check(float(st_car.drift_grip) > float(Roster.get_car("spectre").drift_grip), "heavy cars slide less with the handbrake")

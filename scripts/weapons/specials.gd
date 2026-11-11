@@ -41,7 +41,7 @@ static func _cone(v: Vehicle, id: String, def: Dictionary, charged: bool) -> voi
 			dir = to_t # aimed at launch like a power missile, then no tracking
 	Projectile.spawn(v.get_parent(), id, from, dir, v, null, {
 		"damage": def.get("charged_damage", 90.0), "speed": def.get("charged_speed", 64.0),
-		"homing": 0.0, "charged": true, "push": 11.0,
+		"homing": 0.0, "charged": true, "push": 11.0, "squish": 0.1, "shake": 0.8, "trail_w": 1.8, "trail_len": 0.4,
 	})
 
 

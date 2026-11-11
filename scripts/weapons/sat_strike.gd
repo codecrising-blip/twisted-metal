@@ -85,4 +85,9 @@ func _strike() -> void:
 	_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var world := get_parent()
 	FxKit.explosion(world, global_position + Vector3.UP, 3.2, Color(0.7, 0.8, 1.0))
+	for o in Specials.cars_near(world, global_position + Vector3.UP, radius + 1.0, null):
+		if o.is_player:
+			GameFeel.flash_bang(float(def.get("flashbang", 1.0)))
+			if GameFeel.camera:
+				GameFeel.camera.add_shake(float(def.get("shake", 1.0)))
 	Specials.blast(world, global_position + Vector3.UP, radius, float(def.get("damage", 112.0)), shooter)

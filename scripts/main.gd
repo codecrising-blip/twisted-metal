@@ -68,6 +68,7 @@ func _ready() -> void:
 	hud = Hud.new()
 	hud.name = "Hud"
 	add_child(hud)
+	GameFeel.hud = hud
 	hud.bind(player, camera)
 	hud.restart_requested.connect(_restart)
 	hud.driver_requested.connect(_pick_driver)

@@ -190,6 +190,27 @@ func _thrown() -> bool:
 	return def.has("lift")
 
 
+## What a hit does to the car beyond damage, by weapon (owner, session 6): an elastic dip for some
+## weight classes, a steering twitch (homing), a roll-over (power), camera shake and a white-out
+## for the player.
+static func hit_feel(v: Vehicle, d: Dictionary, dir: Vector3) -> void:
+	var cls: String = v.stats.get("class", "medium")
+	var classes: Array = d.get("squish_classes", ["light", "medium", "heavy", "super"])
+	if d.has("squish") and classes.has(cls):
+		var by_weight := {"light": 1.0, "medium": 0.85, "heavy": 0.6, "super": 0.35}
+		v.squish(dir, float(d["squish"]) * float(by_weight.get(cls, 0.8)))
+	if d.has("wobble"):
+		v.wobble(float(d["wobble"]))
+	if d.get("flip", false):
+		var along := Vector3(dir.x, 0.0, dir.z).normalized()
+		v.blast_knock(along * 5.0 + Vector3.UP * float(WeaponData.FLIP_UP.get(cls, 7.0)), float(WeaponData.FLIP_ROLL.get(cls, 1.0)), false)
+	if v.is_player:
+		if d.has("shake") and GameFeel.camera:
+			GameFeel.camera.add_shake(float(d["shake"]))
+		if d.has("flashbang"):
+			GameFeel.flash_bang(float(d["flashbang"]))
+
+
 ## The next fire press after throwing: a napalm can drops straight down.
 func fire_again() -> void:
 	if def.get("kind", "") == "gas":
@@ -210,6 +231,7 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 		if collider is Vehicle:
 			(collider as Vehicle).take_damage(dmg, shooter)
 			(collider as Vehicle).ignite(float(def.get("burn", 5.0)), shooter)
+			Projectile.hit_feel(collider as Vehicle, def, direction) # a direct hit whites out the screen
 	elif collider is Vehicle:
 		var v := collider as Vehicle
 		v.take_damage(dmg, shooter)
@@ -219,6 +241,7 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 			var along := Vector3(direction.x, 0.0, direction.z).normalized()
 			v.apply_impulse(along * push * v.knockback + Vector3.UP * push * 0.3 * v.knockback)
 		v.hit_react(direction, dmg)
+		Projectile.hit_feel(v, def, direction)
 		if dmg >= 30.0 and (v.is_player or (is_instance_valid(shooter) and shooter.is_player)):
 			GameFeel.hitstop(get_tree(), 0.05 + minf(dmg, 90.0) / 1500.0)
 		if def.has("freeze"):

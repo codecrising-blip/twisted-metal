@@ -14,6 +14,10 @@ extends RefCounted
 ##   icon     HUD icon when it differs from kind
 ##   trail / trail_len / trail_w   ribbon behind the shot: colour, seconds of history (length), width
 ##   push     m/s shove on the car it hits (along the shot, scaled by the car's weight class)
+##   squish   radians of elastic body dip on the car it hits (squish_classes: which weight classes feel it)
+##   wobble   seconds the steering twitches after a hit (homing)
+##   flip     the hit throws the car up and rolls it over (power missile; up speed by class: FLIP_UP)
+##   shake    camera shake when it hits the player;  flashbang  seconds of white-out on a direct hit
 ##   Friendly fire (owner, play-test 2): blasts, fire pools, mines and the SAT beam hurt their own
 ##   shooter too. Only a direct hit can't strike the car that fired it.
 
@@ -29,16 +33,19 @@ const DEFS := {
 		"label": "Homing Missile", "kind": "missile", "color": Color(0.62, 0.3, 1.0),
 		"speed": 46.0, "damage": 12.0, "homing": 3.2, "life": 5.0, "cooldown": 0.45, "ammo": 3, "push": 2.5,
 		"trail": Color(0.6, 0.2, 1.0), "trail_len": 0.3, "trail_w": 0.8,
+		"squish": 0.035, "wobble": 0.35, "shake": 0.25,
 	},
 	"fire": {
 		"label": "Fire Missile", "kind": "missile", "color": Color(1.0, 0.42, 0.08),
 		"speed": 78.0, "damage": 14.0, "homing": 1.1, "life": 3.0, "cooldown": 0.45, "ammo": 3, "burn": 4.0, "push": 3.0,
 		"trail": Color(1.0, 0.45, 0.05), "trail_len": 0.18, "trail_w": 0.9,
+		"squish": 0.06, "squish_classes": ["light", "medium"], "shake": 0.3,
 	},
 	"power": {
 		"label": "Power Missile", "kind": "missile", "color": Color(0.95, 0.12, 0.15),
 		"speed": 58.0, "damage": 45.0, "homing": 0.0, "life": 3.5, "cooldown": 1.0, "ammo": 1, "push": 9.0,
 		"trail": Color(0.95, 0.06, 0.05), "trail_len": 0.4, "trail_w": 1.3, "model_scale": 1.6,
+		"flip": true, "shake": 0.7,
 	},
 	# TM: Black's gas can. Thrown up and ahead; press fire again to drop it on the spot.
 	# It bursts into a pool of fire: everything inside burns.
@@ -46,6 +53,7 @@ const DEFS := {
 		"label": "Napalm", "kind": "gas", "handler": "napalm", "color": Color(1.0, 0.55, 0.1),
 		"throw": 34.0, "lift": 15.0, "drop_speed": 26.0, "life": 4.0, "cooldown": 0.6, "ammo": 1,
 		"damage": 30.0, "radius": 6.0, "burn": 5.0, "pool_radius": 4.5, "pool_time": 6.0,
+		"flashbang": 0.3, "shake": 0.5,
 	},
 	# Remote (owner, play-test 2): a mine dropped behind the car. Press fire again to blow it, or
 	# it goes off when any car (yours too) drives onto it. Big push: cars on top fly high and flip,
@@ -66,12 +74,14 @@ const DEFS := {
 		"speed": 62.0, "damage": 6.0, "homing": 1.6, "life": 3.0, "cooldown": 1.0, "ammo": 1, "push": 0.8,
 		"salvo": 10, "salvo_gap": 0.06, "small": true, "model_scale": 0.6,
 		"trail": Color(0.97, 0.97, 0.95), "trail_len": 0.55, "trail_w": 0.42,
+		"squish": 0.025, "squish_classes": ["light", "medium", "heavy"], "shake": 0.1,
 	},
 	# Satellite strike (owner, play-test 2): the strike zone is locked in front of YOUR car and moves
 	# with you for 4 s; steer to keep the enemy inside it, then the beam hits the zone for 112.
 	"sat": {
 		"label": "SAT", "kind": "sat", "handler": "sat", "color": Color(0.3, 0.95, 0.8),
 		"damage": 112.0, "radius": 7.5, "delay": 4.0, "ahead": 24.0, "cooldown": 1.0, "ammo": 1,
+		"flashbang": 1.0, "shake": 1.0,
 	},
 	# Energy move only (front / rear freeze), never a pickup.
 	"freeze": {
@@ -85,6 +95,7 @@ const DEFS := {
 	"napalm_cone": {
 		"label": "Napalm Cone", "kind": "cone", "handler": "cone", "color": Color(1.0, 0.5, 0.15), "special": true,
 		"speed": 60.0, "damage": 45.0, "homing": 2.4, "life": 3.0, "burn": 4.0, "push": 6.0,
+		"squish": 0.06, "shake": 0.45, "trail": Color(1.0, 0.32, 0.05), "trail_len": 0.3, "trail_w": 1.1,
 		"charge_time": 2.0, "charged_damage": 90.0, "charged_speed": 64.0,
 		"cooldown": 0.8, "charges": 2, "recharge": 16.0,
 	},
@@ -107,11 +118,13 @@ const DEFS := {
 	"reaper_skull": {
 		"label": "Reaper Skull", "kind": "skull", "color": Color(1.0, 0.55, 0.15), "special": true,
 		"speed": 85.0, "damage": 65.0, "homing": 0.6, "life": 2.5, "cooldown": 3.0, "charges": 2, "recharge": 20.0, "push": 8.0,
+		"squish": 0.08, "shake": 0.6,
 	},
 	# Spectre: ghost missile that flies through walls.
 	"ghost_missile": {
 		"label": "Ghost Missile", "kind": "ghost", "color": Color(0.5, 0.9, 1.0), "special": true,
 		"speed": 50.0, "damage": 24.0, "homing": 3.0, "life": 4.0, "cooldown": 0.6, "charges": 3, "recharge": 18.0, "push": 3.5,
+		"squish": 0.05, "shake": 0.3,
 		"through_walls": true,
 	},
 }
@@ -130,6 +143,10 @@ const WEAPON_RESPAWN := 14.0
 const TURBO_RESPAWN := 10.0
 
 const BURN_DPS := 3.0
+
+## Power missile flip: up speed (m/s) and how far it rolls (1 = once round) by weight class.
+const FLIP_UP := {"light": 9.0, "medium": 8.0, "heavy": 6.5, "super": 4.0}
+const FLIP_ROLL := {"light": 1.0, "medium": 1.0, "heavy": 1.0, "super": 0.2}
 
 
 static func get_def(id: String) -> Dictionary:

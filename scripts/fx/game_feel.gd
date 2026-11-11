@@ -9,6 +9,7 @@ extends RefCounted
 const MAX_SCORCH := 14
 
 static var camera: ChaseCamera # set by main.gd: shakes are scaled by distance to it
+static var hud: Node # set by main.gd: screen white-outs
 static var _time_until := 0 # ms: an active hit-stop / slow-motion ends then
 static var _scorches: Array[Node3D] = []
 static var _sounds := {} # name -> AudioStream or null (missing)
@@ -194,3 +195,9 @@ static func prewarm(parent: Node3D, cam: Camera3D) -> void:
 	holder.add_child(smoke)
 	smoke.emitting = true
 	holder.get_tree().create_timer(0.6).timeout.connect(holder.queue_free)
+
+
+## White-out like a flash-bang (napalm right on you: 0.3 s, a SAT strike: 1 s).
+static func flash_bang(seconds: float) -> void:
+	if hud and is_instance_valid(hud) and hud.has_method("flash_bang"):
+		hud.flash_bang(seconds)

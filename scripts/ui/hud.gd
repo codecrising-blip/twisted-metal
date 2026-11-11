@@ -69,6 +69,8 @@ var game_over := false
 var drivers: Array[String] = [] # names for the pause menu's driver pick (keys 1-5)
 
 var _post: ShaderMaterial
+var _whiteout: ColorRect
+var _whiteout_tween: Tween
 var _title_font: SystemFont
 var _status: HudStatus
 var _weapons: HudWeapons
@@ -209,6 +211,12 @@ func _build() -> void:
 	_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_pin(_notice, 0.5, 1.0, Rect2(-300, -210, 600, 40))
 	root.add_child(_notice)
+	# Full-screen white-out (napalm right on you, a SAT strike).
+	_whiteout = ColorRect.new()
+	_whiteout.color = Color(1.0, 0.98, 0.92, 0.0)
+	_whiteout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_whiteout.set_anchors_preset(Control.PRESET_FULL_RECT)
+	root.add_child(_whiteout)
 
 
 ## Anchor a control to a screen point (0..1) with an offset rect in pixels from that point.
@@ -370,6 +378,16 @@ func set_lives(spare: int) -> void:
 ## Big respawn countdown in the middle; -1 hides it.
 func set_countdown(seconds: int) -> void:
 	_countdown.text = str(seconds) if seconds >= 0 else ""
+
+
+## Flash-bang: the screen goes white and clears over `seconds`.
+func flash_bang(seconds: float) -> void:
+	if _whiteout_tween:
+		_whiteout_tween.kill()
+	_whiteout.color.a = 0.92
+	_whiteout_tween = create_tween()
+	_whiteout_tween.tween_interval(seconds * 0.35)
+	_whiteout_tween.tween_property(_whiteout, "color:a", 0.0, seconds * 0.65)
 
 
 func show_notice(text: String) -> void:
