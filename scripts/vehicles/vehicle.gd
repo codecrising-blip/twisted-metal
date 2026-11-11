@@ -9,9 +9,11 @@ signal destroyed(vehicle: Vehicle, killer: Vehicle)
 signal damaged(vehicle: Vehicle, amount: float, attacker: Vehicle)
 signal weapons_changed(vehicle: Vehicle)
 signal notice(vehicle: Vehicle, text: String) # short feedback for the player's HUD
+signal wall_slammed(vehicle: Vehicle, impact: float) # camera shake, sparks, sound
 
 const GRAVITY := 30.0
-const BRAKE := 38.0
+const BRAKE := 26.0 # m/s^2 on the forward speed (about a second from full speed)
+const HANDBRAKE_DECEL := 7.0
 const COAST := 7.0
 ## Turbo (owner, play-test 1): weaker than before and it never refills by itself. Full at the start
 ## and after a respawn; every turbo pickup fills it up again (Pickup).
@@ -21,7 +23,7 @@ const TURBO_DRAIN := 22.0 # a full bar lasts about 4.5 s
 const ENERGY_REGEN := 2.5
 const ENERGY_PAUSE := 1.5 # no regen for this long after spending energy
 const JUMP_COST := 25.0
-const JUMP_VELOCITY := 13.4
+const JUMP_VELOCITY := 19.0 # 6 m high (owner, session 6): over the 5 m battleground walls for surprise entries
 const FREEZE_COST := 50.0
 const FREEZE_BREAK := 15.0 # a single hit this big shatters the ice
 const GRIT_TIME := 3.0 # immune to full disables after one ends
@@ -96,6 +98,10 @@ var _wall_cooldown := 0.0
 var _wall_contact := 0.0
 var _last_wall_normal := Vector3.ZERO
 var _yaw_fix := 0.0 # pending heading correction from wall deflection (radians)
+var _speed_out := 0.0 # forward speed at the end of the last frame (detects outside changes to `speed`)
+var _wall_pin := 0.0 # after slamming into a wall: scraping against it is slow until you steer away or back off
+var _air_basis := Basis.IDENTITY # body attitude at takeoff: kept through the air (no fake tilting)
+var _airborne := false
 var _stuck_time := 0.0
 var _wreck_time := 0.0
 var _active_special: Node # live taser link, chain bomb, napalm can or mine: repeat fire presses go to it
@@ -250,21 +256,19 @@ func _tick(delta: float) -> void:
 			take_damage(WeaponData.BURN_DPS * 0.5 * WeaponData.DAMAGE_SCALE, _burn_source)
 		if burn_time <= 0.0:
 			_burn_fx.emitting = false
-	# Specials recharge one charge at a time.
+	# Specials recharge one charge at a time; the slot comes back with the first one.
 	if ammo.get(special_id, 0) < special_charges:
 		_special_timer += delta
 		if _special_timer >= float(WeaponData.get_def(special_id).get("recharge", 20.0)):
 			_special_timer = 0.0
 			ammo[special_id] = ammo.get(special_id, 0) + 1
-			weapons_changed.emit(self)
-	# A napalm can or mine that is gone frees its empty weapon slot.
+			if ammo[special_id] == 1 and is_player:
+				notice.emit(self, "%s READY" % String(WeaponData.get_def(special_id).get("label", special_id)).to_upper())
+			_refresh_slots()
+	# A napalm can, mine or taser link that is over frees its empty slot.
 	if _live_weapon != "" and not has_live_special():
-		if ammo.get(_live_weapon, 0) <= 0 and _live_weapon != special_id:
-			ammo.erase(_live_weapon)
-			weapon_order.erase(_live_weapon)
-			selected = clampi(selected, 0, maxi(weapon_order.size() - 1, 0))
-			weapons_changed.emit(self)
 		_live_weapon = ""
+		_refresh_slots()
 	if auto_target:
 		_target_timer -= delta
 		if _target_timer <= 0.0:
@@ -272,6 +276,10 @@ func _tick(delta: float) -> void:
 			target = find_target()
 
 
+## Driving model: the car's velocity is split into forward and sideways parts. Gas, brake and
+## handbrake act on the forward part; tyre grip pulls the sideways part toward zero. So a car that
+## brakes while sliding keeps skidding sideways and slows over a short distance instead of stopping
+## dead (owner, session 6), and the handbrake (less grip, sharper turn) makes the drifts.
 func _drive(delta: float) -> void:
 	var frozen := frozen_time > 0.0
 	var throttle := 0.0 if frozen else in_throttle
@@ -279,6 +287,7 @@ func _drive(delta: float) -> void:
 	var handbrake := in_handbrake and not frozen
 	var on_floor := is_on_floor()
 	var brake: float = BRAKE * float(stats.get("brake_mult", 1.0))
+	_wall_pin -= delta
 
 	var top: float = stats.max_speed
 	var boosting := in_turbo and turbo > 0.0 and throttle > 0.1 and not frozen
@@ -287,48 +296,63 @@ func _drive(delta: float) -> void:
 		top *= TURBO_MULT
 		turbo = maxf(0.0, turbo - TURBO_DRAIN * delta)
 
-	if on_floor:
-		var accel: float = stats.accel * (TURBO_ACCEL if boosting else 1.0)
-		if throttle > 0.05:
-			if speed < -0.5:
-				speed = move_toward(speed, 0.0, brake * delta)
-			else:
-				speed = move_toward(speed, top * throttle, accel * delta)
-		elif throttle < -0.05:
-			if speed > 0.5:
-				speed = move_toward(speed, 0.0, brake * delta)
-			else:
-				speed = move_toward(speed, -float(stats.reverse) * -throttle, accel * 0.7 * delta)
-		else:
-			speed = move_toward(speed, 0.0, COAST * delta)
-		if handbrake:
-			speed = move_toward(speed, 0.0, 12.0 * delta)
-		if frozen:
-			speed = move_toward(speed, 0.0, 60.0 * delta)
-		if speed > top:
-			speed = move_toward(speed, top, 12.0 * delta)
-
-	# Steering: needs speed, reverses when backing up, sharper with the handbrake.
+	# Steering first: needs speed, reverses when backing up, sharper with the handbrake.
 	var authority := clampf(absf(speed) / 7.0, 0.0, 1.0)
 	if not on_floor:
-		authority *= 0.3
+		authority *= 0.25
 	var turn: float = stats.handling * (float(stats.drift_turn) if handbrake else 1.0)
 	turn *= lerpf(1.0, 0.78, clampf(absf(speed) / float(stats.max_speed), 0.0, 1.0)) # wider turns when fast
 	var dir := 1.0 if speed >= 0.0 else -1.0
 	rotate_y(-steer * turn * authority * dir * delta)
-	# Wall deflection turns the car over a few frames instead of snapping.
-	if absf(_yaw_fix) > 0.001:
+	if absf(_yaw_fix) > 0.001: # a glancing wall hit turns the car along the wall over a few frames
 		var step := _yaw_fix * minf(1.0, 14.0 * delta)
 		rotate_y(step)
 		_yaw_fix -= step
 
 	var forward := flat_forward()
-	var desired := forward * speed
+	var right := Vector3(-forward.z, 0.0, forward.x)
 	var hv := Vector3(velocity.x, 0.0, velocity.z)
-	var grip: float = stats.grip * (float(stats.drift_grip) if handbrake else 1.0) # heavy cars barely slide
-	if not on_floor:
-		grip = 0.3
-	hv = hv.lerp(desired, 1.0 - exp(-grip * delta))
+	var v_f := hv.dot(forward)
+	var v_l := hv.dot(right)
+	if absf(speed - _speed_out) > 0.01:
+		v_f = speed # someone set the speed directly (spawn, tests, a ram): take it as the new forward speed
+
+	if on_floor:
+		var sliding := clampf(absf(v_l) / 10.0, 0.0, 1.0) # tyres busy holding a slide brake less
+		var accel: float = stats.accel * (TURBO_ACCEL if boosting else 1.0)
+		var braking := false
+		if throttle > 0.05:
+			if v_f < -0.5:
+				v_f = move_toward(v_f, 0.0, brake * delta)
+				braking = true
+			else:
+				v_f = move_toward(v_f, top * throttle, accel * delta)
+		elif throttle < -0.05:
+			if v_f > 0.5:
+				v_f = move_toward(v_f, 0.0, brake * (1.0 - 0.45 * sliding) * delta)
+				braking = true
+			else:
+				v_f = move_toward(v_f, -float(stats.reverse) * -throttle, accel * 0.7 * delta)
+		else:
+			v_f = move_toward(v_f, 0.0, COAST * delta)
+		if handbrake:
+			v_f = move_toward(v_f, 0.0, HANDBRAKE_DECEL * delta)
+		if frozen:
+			v_f = move_toward(v_f, 0.0, 60.0 * delta)
+		if v_f > top:
+			v_f = move_toward(v_f, top, 12.0 * delta)
+		if _wall_pin > 0.0 and forward.dot(-_last_wall_normal) > 0.3:
+			v_f = minf(v_f, 4.0) # nose against the wall: scraping out is slow
+		# Sideways: grip pulls the slide back in. Handbrake or locked brakes in a slide grip less.
+		var grip: float = stats.grip * (float(stats.drift_grip) if handbrake else 1.0)
+		if braking and absf(v_l) > 3.0:
+			grip *= 0.55
+		v_l *= exp(-grip * delta)
+	else:
+		v_l *= exp(-0.3 * delta) # in the air: momentum carries on
+	speed = v_f
+	_speed_out = speed
+	hv = forward * v_f + right * v_l
 	velocity.x = hv.x
 	velocity.z = hv.z
 	velocity.y -= GRAVITY * delta
@@ -342,6 +366,7 @@ func _drive(delta: float) -> void:
 	move_and_slide()
 	_resolve_collisions(before)
 	_unstick(delta, throttle)
+	_speed_out = speed
 
 
 func _resolve_collisions(before: Vector3) -> void:
@@ -357,50 +382,51 @@ func _resolve_collisions(before: Vector3) -> void:
 				velocity = Vector3(before.x, velocity.y, before.z)
 				speed *= 0.9
 			elif absf(n.y) < 0.55:
-				_wall_hit(n)
+				_wall_hit(n, before)
 		elif absf(n.y) < 0.55:
-			_wall_hit(n)
+			_wall_hit(n, before)
 
 
-## Twisted Metal wall rule: a wall never stops the car. Glancing hits slide along it, square hits
-## bounce back a little and turn the nose toward the open side (design 1.3).
-func _wall_hit(n: Vector3) -> void:
+## Wall hits (owner, session 6, replacing the old "never stop" rule):
+##   55-90 degrees into the wall: a slam. The car stops against it with a small bounce; steering out
+##     along the wall is slow (heavy friction) for a moment, or back away from it.
+##   30-55 degrees: it scrapes along the wall, losing about a third of its speed.
+##   under 30 degrees: it slides along, losing a little.
+func _wall_hit(n: Vector3, before: Vector3) -> void:
 	var hn := Vector3(n.x, 0.0, n.z).normalized()
 	_last_wall_normal = hn
 	_wall_contact = 0.3
-	if _wall_cooldown > 0.0 or absf(speed) < 1.5:
+	var moving := Vector3(before.x, 0.0, before.z)
+	if _wall_cooldown > 0.0 or moving.length() < 1.5:
 		return
-	var fwd := flat_forward()
-	var travel := fwd * signf(speed)
+	var travel := moving.normalized()
 	var into := -travel.dot(hn) # 0 = sliding along the wall, 1 = straight into it
 	if into < 0.05:
 		return
 	_wall_cooldown = 0.25
+	var impact := moving.length() * into
 	var mass_factor := 0.75 if mass >= 2.0 else (1.25 if mass < 1.2 else 1.0)
 	var tangent := travel - hn * travel.dot(hn)
-	if tangent.length() < 0.15:
-		# Dead square hit: go the way the driver steers, else toward the middle of the arena.
-		var side := hn.cross(Vector3.UP)
-		var pick := -signf(in_steer) if absf(in_steer) > 0.1 else 0.0
-		if pick == 0.0:
-			pick = 1.0 if side.dot(arena_center - global_position) >= 0.0 else -1.0
-		tangent = side * pick
-	tangent = tangent.normalized()
-	var loss: float
-	if into < 0.5: # under 30 degrees
-		loss = 0.05
-	elif into < 0.866: # 30 to 60 degrees
-		loss = 0.15
-	else:
-		loss = 0.35
-		velocity += hn * 6.0
+	tangent = tangent.normalized() if tangent.length() > 0.05 else hn.cross(Vector3.UP)
+	if into >= 0.82: # 55 degrees or more: slam
+		var keep := tangent * moving.dot(tangent) * 0.15
+		velocity.x = keep.x + hn.x * minf(2.0 + impact * 0.06, 4.0)
+		velocity.z = keep.z + hn.z * minf(2.0 + impact * 0.06, 4.0)
+		speed = velocity.dot(flat_forward())
+		_wall_pin = 0.7
+		_yaw_fix = 0.0
+		wall_slammed.emit(self, impact)
+		return
+	var loss := 0.3 if into >= 0.5 else 0.08
+	var kept := moving.length() * (1.0 - loss * mass_factor)
+	var slide := tangent * kept
+	velocity.x = slide.x + hn.x * 0.5
+	velocity.z = slide.z + hn.z * 0.5
 	speed *= 1.0 - loss * mass_factor
 	if speed < 0.0:
 		return # backing into a wall: lose speed, keep the heading
-	var target_dir := tangent
-	if into >= 0.866:
-		target_dir = fwd.rotated(Vector3.UP, signf(fwd.signed_angle_to(tangent, Vector3.UP)) * deg_to_rad(35.0))
-	_yaw_fix = fwd.signed_angle_to(target_dir, Vector3.UP)
+	var fwd := flat_forward()
+	_yaw_fix = fwd.signed_angle_to(tangent, Vector3.UP) * (0.6 if into >= 0.5 else 1.0)
 
 
 ## Stuck helper (design 2.0.1 rule 9): pressing the gas for 2 s against the world without moving
@@ -409,7 +435,7 @@ func _unstick(delta: float, throttle: float) -> void:
 	var hspeed := Vector2(velocity.x, velocity.z).length()
 	if absf(throttle) > 0.5 and _wall_contact > 0.0 and hspeed < 1.0 and frozen_time <= 0.0:
 		_stuck_time += delta
-		if _stuck_time > 2.0:
+		if _stuck_time > 4.0: # only a real trap: normally you steer out or back off
 			_stuck_time = 0.0
 			velocity += _last_wall_normal * 9.0 + Vector3.UP * 2.0
 			_yaw_fix += deg_to_rad(90.0) * (1.0 if randf() < 0.5 else -1.0)
@@ -448,10 +474,9 @@ func apply_impulse(v: Vector3) -> void:
 
 ## A blast throws the car (heavy cars less). flip 1 = one full roll through the air away from the
 ## blast, small values only tilt it; the body lands back on its wheels.
-func blast_knock(push: Vector3, flip := 0.0) -> void:
-	var v := push * knockback
+func blast_knock(push: Vector3, flip := 0.0, by_weight := true) -> void:
+	var v := push * knockback if by_weight else push
 	velocity += v
-	speed *= 0.5
 	if flip <= 0.0 or v.y < 2.0:
 		return
 	var air := maxf(0.5, 2.0 * v.y / GRAVITY)
@@ -587,11 +612,31 @@ func _fire_selected(charged := false) -> void:
 	ammo[id] -= 1
 	_weapon_cooldowns[id] = float(WeaponData.get_def(id).get("cooldown", 0.5))
 	Specials.fire(self, id, charged)
-	if ammo[id] <= 0 and id != special_id and not (has_live_special() and _live_weapon == id):
-		ammo.erase(id)
-		weapon_order.erase(id)
-		selected = clampi(selected, 0, weapon_order.size() - 1)
+	if has_live_special() and _live_weapon == "":
+		_live_weapon = id # a taser link or chain bomb: its slot stays until it is over
+	_refresh_slots()
+
+
+## Owner, session 6: an empty weapon leaves the list and comes back when there is ammo again
+## (the special too, as it recharges). A weapon still out in the world (mine, napalm can, taser
+## link, chain bomb) keeps its slot until it is detonated or over. Keeps the same weapon selected.
+func _refresh_slots() -> void:
+	var keep := selected_weapon()
+	for id: String in weapon_order.duplicate():
+		if ammo.get(id, 0) <= 0 and not (has_live_special() and _live_weapon == id):
+			weapon_order.erase(id)
+			if id != special_id:
+				ammo.erase(id)
+	if ammo.get(special_id, 0) > 0 and not weapon_order.has(special_id):
+		weapon_order.insert(0, special_id)
+	var at := weapon_order.find(keep)
+	selected = at if at >= 0 else clampi(selected, 0, maxi(weapon_order.size() - 1, 0))
 	weapons_changed.emit(self)
+
+
+## True while the selected weapon is out in the world waiting for a fire press (DETONATE / DROP / MASH).
+func selected_is_live() -> bool:
+	return has_live_special() and _live_weapon != "" and _live_weapon == selected_weapon()
 
 
 func launch_point() -> Vector3:
@@ -625,8 +670,11 @@ func selected_weapon() -> String:
 
 
 func add_ammo(id: String, amount: int) -> void:
-	if not ammo.has(id):
-		weapon_order.append(id)
+	if not weapon_order.has(id):
+		if id == special_id:
+			weapon_order.insert(0, id)
+		else:
+			weapon_order.append(id)
 	ammo[id] = ammo.get(id, 0) + amount
 	weapons_changed.emit(self)
 
@@ -759,16 +807,25 @@ func _animate(delta: float) -> void:
 	for s in _steer_pivots:
 		(s as Node3D).rotation.y = lerpf((s as Node3D).rotation.y, -in_steer * 0.45, 12.0 * delta)
 
-	# Lean the body into the ground slope, roll a little in turns, pitch in the air.
-	var up := Vector3.UP
-	if is_on_floor():
-		up = global_transform.basis.inverse() * get_floor_normal()
-	var roll := -in_steer * clampf(absf(speed) / stats.max_speed, 0.0, 1.0) * float(model.get_meta("lean", 0.06))
-	var pitch := 0.0 if is_on_floor() else clampf(velocity.y * 0.02, -0.3, 0.3)
-	var target_basis := Basis(Quaternion(Vector3.UP, up.normalized())) * Basis.from_euler(Vector3(pitch, 0, roll))
+	# Lean the body into the ground slope and roll a little in turns. In the air the body keeps the
+	# attitude it took off with (owner, session 6: no fake tilting): level from flat ground, nose-up
+	# off a ramp, until it lands. Blast flips roll it through the air.
+	var grounded := is_on_floor()
 	if _tumble_time > 0.0: # thrown by a blast: roll through the air
 		_tumble_time -= delta
 		_tumble_angle += _tumble_rate * delta
 		_visual.basis = Basis(_tumble_axis, _tumble_angle)
+		_airborne = true
+		_air_basis = Basis.IDENTITY
 		return
+	if not grounded:
+		if not _airborne:
+			_airborne = true
+			_air_basis = _visual.basis.orthonormalized()
+		_visual.basis = _visual.basis.slerp(_air_basis, clampf(10.0 * delta, 0.0, 1.0))
+		return
+	_airborne = false
+	var up := global_transform.basis.inverse() * get_floor_normal()
+	var roll := -in_steer * clampf(absf(speed) / stats.max_speed, 0.0, 1.0) * float(model.get_meta("lean", 0.06))
+	var target_basis := Basis(Quaternion(Vector3.UP, up.normalized())) * Basis.from_euler(Vector3(0.0, 0, roll))
 	_visual.basis = _visual.basis.slerp(target_basis.orthonormalized(), clampf(10.0 * delta, 0.0, 1.0))

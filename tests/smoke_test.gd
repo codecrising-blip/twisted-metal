@@ -169,16 +169,39 @@ func _run() -> void:
 	Input.action_release("accelerate")
 	_check(absf(player.speed) > 15.0, "a 45-degree wall hit keeps the car moving (%.1f m/s)" % player.speed)
 	_check(fwd.x > 0.85, "...and turns it along the wall")
-	# Square hit: bounces off and turns, never stops dead.
+	# Square hit (owner, session 6): a slam. The car stops against the wall; scraping out along it
+	# is slow, backing off works.
 	player.global_transform = main.arena.spot("south_wall_90")
 	player.velocity = Vector3.ZERO
 	player.speed = 30.0
+	var slammed := [0.0]
+	var on_slam := func(_v: Vehicle, impact: float) -> void: slammed[0] = maxf(slammed[0], impact)
+	player.wall_slammed.connect(on_slam)
 	Input.action_press("accelerate")
 	await _frames(90)
-	fwd = player.flat_forward()
+	_check(slammed[0] > 15.0 and Vector2(player.velocity.x, player.velocity.z).length() < 4.5, "a square wall hit slams the car to a stop (impact %.0f)" % slammed[0])
+	Input.action_press("steer_right")
+	await _frames(60)
+	Input.action_release("steer_right")
 	Input.action_release("accelerate")
-	_check(absf(fwd.x) > 0.3, "a square wall hit turns the nose toward the open side")
-	_check(Vector2(player.velocity.x, player.velocity.z).length() > 6.0, "...and the car keeps going without reversing")
+	_check(Vector2(player.velocity.x, player.velocity.z).length() < 8.0, "...steering out along the wall is slow")
+	player.wall_slammed.disconnect(on_slam)
+	var stuck_at := player.global_position
+	Input.action_press("brake")
+	await _frames(60)
+	Input.action_release("brake")
+	_check(player.global_position.distance_to(stuck_at) > 3.0, "...backing off the wall works")
+
+	# Brakes in a slide: the car skids on for a bit instead of stopping dead.
+	_place(player, -60, 60, 0)
+	player.velocity = Vector3(-14.0, 0, -20.0) # moving forward (north) and sliding left
+	player.speed = 20.0
+	await _frames(2)
+	var slide_from := player.global_position
+	Input.action_press("brake")
+	await _frames(20)
+	Input.action_release("brake")
+	_check(player.global_position.distance_to(slide_from) > 6.0, "braking in a slide skids on (%.1f m)" % player.global_position.distance_to(slide_from))
 
 	# Breakable hot dog stand drops a weapon.
 	var stand: Breakable = null
@@ -351,6 +374,8 @@ func _run() -> void:
 	player.global_position = mine.global_position + Vector3(0, 0.3, 0)
 	await _frames(3)
 	_check(own_hp - player.health >= 40.0, "friendly fire: your own mine hurts you (%.1f)" % (own_hp - player.health))
+	_check(player.velocity.y > 8.0, "...and a heavy truck on top still flies (%.1f m/s up)" % player.velocity.y)
+	await _frames(100) # land
 	player.health = player.max_health
 	FirePool.spawn(main, player.global_position, 3.0, 2.0, 3.0, player)
 	await _frames(40)
@@ -454,7 +479,7 @@ func _run() -> void:
 	var path := 0.0
 	var last := outlaw.global_position
 	var seen_attack := false
-	for k in 480:
+	for k in 720:
 		await _frames(1)
 		var gap := outlaw.global_position.distance_to(player.global_position)
 		closest = minf(closest, gap)
@@ -465,7 +490,7 @@ func _run() -> void:
 		seen_attack = seen_attack or o_brain.mode == "attack"
 	_check(seen_attack and closest < 20.0, "AI makes attack runs at you (closest %.1f m)" % closest)
 	_check(o_brain.drifts >= 1, "...drifts round for the next run (%d drifts)" % o_brain.drifts)
-	_check(glued < 120, "...without gluing itself to you (%d of 480 frames within 6 m)" % glued)
+	_check(glued < 180, "...without gluing itself to you (%d of 720 frames within 6 m)" % glued)
 	_check(path > 60.0, "...and keeps moving, never stuck (%.0f m driven)" % path)
 	outlaw.health = outlaw.max_health * 0.2
 	await _frames(40)

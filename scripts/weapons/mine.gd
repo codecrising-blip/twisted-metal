@@ -88,12 +88,15 @@ func detonate() -> void:
 		o.take_damage(lerpf(full, edge, clampf((flat - core) / (radius - core), 0.0, 1.0)) * WeaponData.DAMAGE_SCALE, owner_car)
 		var away := Vector3(rel.x, 0.0, rel.z)
 		away = away.normalized() if away.length() > 0.3 else o.flat_forward()
-		if flat < 2.8: # right on top: straight up, one full flip
-			o.blast_knock(Vector3.UP * float(def.get("pop", 15.0)) + away * 3.0, 1.0)
+		var heights: Dictionary = def.get("launch", {})
+		var h := float(heights.get(o.stats.get("class", "medium"), 8.4))
+		if flat < 2.8: # right on top: thrown straight up by its weight class, one full flip
+			o.blast_knock(Vector3.UP * sqrt(2.0 * Vehicle.GRAVITY * h) + away * 3.0, 1.0, false)
 		else:
+			# Close side hits throw the car up and away and roll it over; farther ones shove and tilt.
 			var k := 1.0 - clampf(flat / radius, 0.0, 1.0)
-			# Close side hits roll the car over; farther ones just shove and tilt it.
-			o.blast_knock(away * float(def.get("push", 16.0)) * k + Vector3.UP * float(def.get("lift", 9.0)) * k, 1.0 if k > 0.55 else 0.15)
+			var up := sqrt(2.0 * Vehicle.GRAVITY * h * k * k)
+			o.blast_knock(away * float(def.get("push", 16.0)) * k * (h / 8.4) + Vector3.UP * up, 1.0 if k > 0.55 else 0.15, false)
 	FxKit.explosion(world, global_position + Vector3.UP * 0.5, 2.8, Color(1.0, 0.45, 0.12))
 	if is_instance_valid(owner_car) and owner_car.live_special() == self:
 		owner_car.set_live_special(null)

@@ -344,7 +344,7 @@ func _shoot(v: Vehicle, delta: float) -> void:
 		return # busy getting away
 	if _special_timer <= 0.0 and v.ammo.get(v.special_id, 0) > 0 and _special_makes_sense(v, dist, angle):
 		_special_timer = randf_range(3.0, 6.0) / aggression
-		v.selected = 0
+		v.selected = maxi(v.weapon_order.find(v.special_id), 0)
 		v.want_fire_weapon = true
 		if v.special_id == "napalm_cone" and angle < 0.12 and dist > 18.0 and dist < 50.0 and randf() < 0.35:
 			_hold = Vehicle.charge_full("napalm_cone") + 0.1 # charged shot: straight, double damage

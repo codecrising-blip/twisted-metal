@@ -3,9 +3,11 @@ extends RefCounted
 ## Character / vehicle stats. Add new cars here and a builder in VehicleModels.
 ## Stats follow docs/design/01-characters.md section 1.1: four stats from 1 to 10 (sum 24) give
 ##   max_speed = 21.3 + 1.1 * SPD m/s   accel = (10.2 + 0.85 * SPD) * class accel m/s^2
-##   health    = 200 + 16 * ARM         handling = 1.5 + 0.12 * HND rad/s   grip = 6.0 + 0.35 * HND
+##   health    = 200 + 16 * ARM         handling = 1.5 + 0.12 * HND rad/s   grip = 5.0 + 0.325 * HND
 ## Owner, play-test 1: speeds like TM: Black (slower, not lazy); play-test 2: 25% slower was too much,
-## so it is 15% under the first numbers (25 + 1.3 x SPD). No crazy drifts for big cars,
+## so it is 15% under the first numbers (25 + 1.3 x SPD). Drifts: session 6 put grip and the
+## handbrake numbers halfway back between the first (very loose) and play-test 1 (too stiff) values,
+## the same step for every class so the cast stays balanced. No crazy drifts for big cars,
 ## so heavy classes keep more grip with the handbrake on and turn less sharply.
 ## mass class: light 1.0, medium 1.4, heavy 2.0, super 2.8 (rams, knockback, wall speed loss).
 ## size = collision box (width, height, length); camera = chase camera [height, distance].
@@ -18,8 +20,8 @@ const MASS := {"light": 1.0, "medium": 1.4, "heavy": 2.0, "super": 2.8}
 const KNOCKBACK := {"light": 1.3, "medium": 1.0, "heavy": 0.7, "super": 0.5}
 ## Per class: acceleration factor, grip kept with the handbrake on, turn rate with the handbrake on.
 const CLASS_ACCEL := {"light": 1.1, "medium": 1.0, "heavy": 0.9, "super": 0.8}
-const DRIFT_GRIP := {"light": 0.3, "medium": 0.38, "heavy": 0.5, "super": 0.6}
-const DRIFT_TURN := {"light": 1.55, "medium": 1.4, "heavy": 1.22, "super": 1.12}
+const DRIFT_GRIP := {"light": 0.26, "medium": 0.3, "heavy": 0.36, "super": 0.41}
+const DRIFT_TURN := {"light": 1.62, "medium": 1.55, "heavy": 1.46, "super": 1.41}
 
 const CARS := {
 	"sweet_tooth": {
@@ -78,7 +80,7 @@ static func get_car(id: String) -> Dictionary:
 	c["reverse"] = 10.0
 	c["max_health"] = (200.0 + 16.0 * arm) * HEALTH_SCALE
 	c["handling"] = 1.5 + 0.12 * hnd
-	c["grip"] = 6.0 + 0.35 * hnd
+	c["grip"] = 5.0 + 0.325 * hnd
 	c["drift_grip"] = DRIFT_GRIP.get(cls, 0.38)
 	c["drift_turn"] = DRIFT_TURN.get(cls, 1.4)
 	c["mass"] = MASS.get(c.get("class", "medium"), 1.4)

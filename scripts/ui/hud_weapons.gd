@@ -37,11 +37,21 @@ func _draw() -> void:
 	var label := String(def.get("label", current)).to_upper()
 	draw_string(font, Vector2(144, 46), label, HORIZONTAL_ALIGNMENT_LEFT, 200, 26, Color(0.94, 0.91, 0.85))
 	if def.get("special", false):
-		draw_rect(Rect2(144, 56, 76, 20), Color(0.95, 0.75, 0.2, 0.22))
-		draw_string(font, Vector2(151, 71), "SPECIAL", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.98, 0.8, 0.3))
+		_special_badge(Vector2(122, 22), 13.0) # the gold S: your driver's own weapon, ready
+		draw_string(font, Vector2(144, 71), "SPECIAL", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.98, 0.8, 0.3))
 	var count: int = player.ammo.get(current, 0)
 	draw_string(font, Vector2(W - 140, 98), "x%d" % count, HORIZONTAL_ALIGNMENT_RIGHT, 120, 46, color.lightened(0.15))
-	if player.charging_id == current:
+	if player.selected_is_live():
+		# It is out in the world: the next press sets it off.
+		var verb := "DETONATE"
+		if current == "napalm":
+			verb = "DROP"
+		elif def.get("handler", "") == "taser":
+			verb = "MASH FIRE"
+		var pulse := fmod(Time.get_ticks_msec() * 0.004, 1.0) < 0.6
+		draw_rect(Rect2(144, 80, 170, 22), Color(0.9, 0.15, 0.1, 0.35 if pulse else 0.18))
+		draw_string(font, Vector2(152, 97), "FIRE: " + verb, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.9, 0.8))
+	elif player.charging_id == current:
 		# Charge meter (Napalm Cone): hold fire until it is full, then let go.
 		var r := player.charge_ratio()
 		var full := r >= 1.0
@@ -65,8 +75,23 @@ func _draw() -> void:
 		draw_rect(chip, Color(c.r, c.g, c.b, 0.3 if sel else 0.1))
 		draw_rect(chip, Color(c.r, c.g, c.b, 0.9 if sel else 0.35), false, 1.5)
 		_icon(String(d.get("icon", d.get("kind", "missile"))), chip.position + Vector2(17, 17), 10.0, c if sel else c.darkened(0.35))
+		if d.get("special", false):
+			_special_badge(chip.position + Vector2(52, 6), 6.0)
 		draw_string(font, chip.position + Vector2(30, 24), str(player.ammo.get(id, 0)), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.92, 0.9, 0.85) if sel else Color(0.6, 0.58, 0.55))
 		x += 64.0
+
+
+## Gold hexagon with an S: marks the driver's special weapon (owner, session 6).
+func _special_badge(c: Vector2, r: float) -> void:
+	var hexa := PackedVector2Array()
+	for k in 6:
+		var a := TAU * k / 6.0 + PI / 6.0
+		hexa.append(c + Vector2(cos(a), sin(a)) * r)
+	draw_colored_polygon(hexa, Color(0.12, 0.09, 0.03, 0.95))
+	hexa.append(hexa[0])
+	draw_polyline(hexa, Color(1.0, 0.78, 0.25), maxf(1.5, r * 0.14))
+	var fs := int(r * 1.5)
+	draw_string(font, c + Vector2(-r * 0.42, r * 0.52), "S", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1.0, 0.82, 0.3))
 
 
 ## Weapon icons from simple shapes, centered on c, about 2*s wide.

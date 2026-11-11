@@ -47,12 +47,15 @@ const DEFS := {
 		"damage": 30.0, "radius": 6.0, "burn": 5.0, "pool_radius": 4.5, "pool_time": 6.0,
 	},
 	# Remote (owner, play-test 2): a mine dropped behind the car. Press fire again to blow it, or
-	# it goes off when any car (yours too) drives onto it. Big push: cars on top fly and flip,
+	# it goes off when any car (yours too) drives onto it. Big push: cars on top fly high and flip,
 	# cars at the side get thrown away. Full damage in the middle, less at the edge.
 	"remote": {
 		"label": "Remote", "kind": "mine", "handler": "mine", "icon": "remote", "color": Color(0.95, 0.2, 0.15),
 		"cooldown": 0.6, "ammo": 1, "arm": 0.8, "trigger": 2.4, "life": 90.0,
-		"damage": 50.0, "edge_damage": 20.0, "radius": 8.0, "core": 3.5, "push": 16.0, "lift": 9.0, "pop": 15.0,
+		"damage": 50.0, "edge_damage": 20.0, "radius": 8.0, "core": 3.5, "push": 16.0,
+		# Height (m) a car right on top is thrown, by weight (owner, session 6): light cars like Grimm
+		# and Twister fly highest, super-heavy Darkside the least.
+		"launch": {"light": 12.0, "medium": 8.4, "heavy": 5.4, "super": 3.0},
 	},
 	# Ten light missiles with mid tracking (owner): 6 each, 60 if all hit. Driving straight takes
 	# them all; a hard drift shakes off about half.
