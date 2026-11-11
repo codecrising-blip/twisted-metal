@@ -37,6 +37,15 @@ static func spawn(parent: Node, id: String, from: Vector3, dir: Vector3, by: Veh
 	p._orient()
 	p._build_visual()
 	p._add_streak()
+	if p.def.get("kind", "bullet") != "bullet":
+		var col: Color = p.def.get("color", Color(1, 0.6, 0.2))
+		var big := float(p.def.get("damage", 10.0)) >= 40.0
+		GameFeel.muzzle(parent, from, col, 1.6 if big else (0.5 if p.def.get("small", false) else 1.0))
+		GameFeel.play("launch_" + id, from, parent)
+		if big and is_instance_valid(by): # a heavy shot kicks the car back a little
+			by.apply_impulse(-p.direction * 1.5)
+			if by.is_player:
+				GameFeel.shake(from, 0.18)
 	spawned_total += 1
 	return p
 
@@ -204,6 +213,14 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 	elif collider is Vehicle:
 		var v := collider as Vehicle
 		v.take_damage(dmg, shooter)
+		# Feel it: shove the car the way the shot was going, jolt the body, freeze a blink on big hits.
+		var push := float(def.get("push", 0.0))
+		if push > 0.0:
+			var along := Vector3(direction.x, 0.0, direction.z).normalized()
+			v.apply_impulse(along * push * v.knockback + Vector3.UP * push * 0.3 * v.knockback)
+		v.hit_react(direction, dmg)
+		if dmg >= 30.0 and (v.is_player or (is_instance_valid(shooter) and shooter.is_player)):
+			GameFeel.hitstop(get_tree(), 0.05 + minf(dmg, 90.0) / 1500.0)
 		if def.has("freeze"):
 			v.freeze(float(def["freeze"]))
 		if def.has("burn"):

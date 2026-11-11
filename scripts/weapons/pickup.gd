@@ -104,6 +104,7 @@ func _on_body_entered(body: Node3D) -> void:
 	else:
 		v.add_ammo(kind, int(WeaponData.get_def(kind).get("ammo", 1)))
 		v.notice.emit(v, loaded_message(kind))
+	GameFeel.play("pickup_health" if is_health() else ("pickup_turbo" if is_turbo() else "pickup_weapon"), global_position, get_parent())
 	if not respawns:
 		queue_free()
 		return

@@ -85,7 +85,9 @@ func detonate() -> void:
 		var flat := Vector2(rel.x, rel.z).length()
 		if flat > radius or absf(rel.y) > 4.0:
 			continue
-		o.take_damage(lerpf(full, edge, clampf((flat - core) / (radius - core), 0.0, 1.0)) * WeaponData.DAMAGE_SCALE, owner_car)
+		var hit := lerpf(full, edge, clampf((flat - core) / (radius - core), 0.0, 1.0)) * WeaponData.DAMAGE_SCALE
+		o.take_damage(hit, owner_car)
+		o.hit_react(rel, hit)
 		var away := Vector3(rel.x, 0.0, rel.z)
 		away = away.normalized() if away.length() > 0.3 else o.flat_forward()
 		var heights: Dictionary = def.get("launch", {})

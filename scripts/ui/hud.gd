@@ -76,6 +76,9 @@ var _radar: Radar
 var _target_box: VBoxContainer
 var _target_name: Label
 var _target_health: ProgressBar
+var _target_trail: ProgressBar # pale bar that catches up after a hit: shows how much it just lost
+var _trail_target: Vehicle
+var _trail_hold := 0.0
 var _reticle: Reticle
 var _title: Label
 var _sub: Label
@@ -147,8 +150,14 @@ func _build() -> void:
 	_target_name = _label("", 22, Color(1, 0.35, 0.3), true)
 	_target_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_target_box.add_child(_target_name)
+	var bars := Control.new()
+	bars.custom_minimum_size = Vector2(320, 10)
+	_target_box.add_child(bars)
+	_target_trail = _plain_bar(Color(0.95, 0.92, 0.85), 320)
+	bars.add_child(_target_trail)
 	_target_health = _plain_bar(Color(0.85, 0.1, 0.08), 320)
-	_target_box.add_child(_target_health)
+	_target_health.add_theme_stylebox_override("background", StyleBoxEmpty.new())
+	bars.add_child(_target_health)
 
 	# Top-right: radar (enemies left under it), kill feed below.
 	_radar = Radar.new()
@@ -304,7 +313,17 @@ func _update_target() -> void:
 	if not valid:
 		return
 	_target_name.text = t.display_name.to_upper()
-	_target_health.value = t.health / t.max_health * 100.0
+	var hp := t.health / t.max_health * 100.0
+	if t != _trail_target:
+		_trail_target = t
+		_target_trail.value = hp
+	if hp < _target_health.value - 0.01:
+		_trail_hold = 0.45 # just hit: hold the pale part a moment, then let it drain
+	_target_health.value = hp
+	_trail_hold -= get_process_delta_time()
+	if _trail_hold <= 0.0:
+		_target_trail.value = move_toward(_target_trail.value, hp, 45.0 * get_process_delta_time())
+	_target_trail.value = maxf(_target_trail.value, hp)
 	if camera == null:
 		return
 	var p := t.global_position + Vector3.UP * 1.4

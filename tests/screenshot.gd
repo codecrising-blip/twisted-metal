@@ -110,6 +110,21 @@ func _run() -> void:
 					Projectile.spawn(main, ids[i], from, Vector3(1, 0, 0.05), e, null)
 				await _frames(16)
 				_place(cam, base + Vector3(-12, 8, 17), base + Vector3(1, 1, -7), 64.0)
+			"impact": # a power missile hitting Outlaw: flash, shockwave, debris, jolt
+				var e: Vehicle = main.enemies[0]
+				var base := LosAngelesArena.ground(-40, 40)
+				player.global_position = Vector3(0, -200, 0)
+				e.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(90)), base + Vector3(0, 0.05, 0))
+				await _frames(5)
+				Engine.max_physics_steps_per_frame = 1
+				Projectile.spawn(main, "power", e.aim_point() + Vector3(-7, 0.3, 0), Vector3(1, 0, 0), player, e)
+				var after := OS.get_cmdline_user_args()
+				await _frames(int(after[2]) if after.size() > 2 else 9)
+				_place(cam, base + Vector3(-9, 4.5, 11), base + Vector3(0, 1.5, 0), 60.0)
+				await RenderingServer.frame_post_draw
+				root.get_viewport().get_texture().get_image().save_png(out)
+				quit()
+				return
 			"duel":
 				var c := player.global_position
 				var e: Vehicle = main.enemies[0]

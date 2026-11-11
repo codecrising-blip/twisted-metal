@@ -62,6 +62,7 @@ func _ready() -> void:
 	add_child(camera)
 	camera.current = true
 	camera.follow(player)
+	GameFeel.camera = camera
 
 	hud = Hud.new()
 	hud.name = "Hud"
@@ -90,6 +91,7 @@ func _spawn(id: String, xform: Transform3D, is_player: bool) -> Vehicle:
 	v.global_transform = xform
 	v.destroyed.connect(_on_destroyed)
 	v.damaged.connect(_on_damaged)
+	v.wall_slammed.connect(_on_wall_slammed)
 	return v
 
 
@@ -183,6 +185,17 @@ func _on_damaged(v: Vehicle, amount: float, _attacker: Vehicle) -> void:
 		camera.add_shake(amount / 90.0)
 
 
+## Slamming into a wall: sparks off the nose, a jolt, the camera kicks if it was you.
+func _on_wall_slammed(v: Vehicle, impact: float) -> void:
+	var nose := v.global_position + Vector3.UP * 0.8 - v._last_wall_normal * 1.2
+	for k in 3:
+		FxKit.spark(self, nose + Vector3(randf_range(-0.8, 0.8), randf_range(0, 0.6), randf_range(-0.8, 0.8)), v._last_wall_normal)
+	v.hit_react(-v._last_wall_normal, impact * 0.6)
+	GameFeel.play("wall_slam", nose, self)
+	if v == player:
+		camera.add_shake(clampf(impact / 45.0, 0.1, 0.7))
+
+
 func _on_easter_egg(title: String, text: String) -> void:
 	hud.show_message(title, text, 4.0)
 
@@ -192,6 +205,8 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 	hud.add_feed("%s WRECKED%s" % [v.display_name.to_upper(), by])
 	if is_instance_valid(player) and v.global_position.distance_to(player.global_position) < 30.0:
 		camera.add_shake(0.6)
+	if v == player or killer == player: # the kill moment: everything slows for a breath
+		GameFeel.slowmo(get_tree(), 0.45, 0.3)
 	if state != "playing":
 		return
 	if v == player:

@@ -13,6 +13,7 @@ extends RefCounted
 ##   handler  weapons with their own behaviour (see Specials)
 ##   icon     HUD icon when it differs from kind
 ##   trail / trail_len / trail_w   ribbon behind the shot: colour, seconds of history (length), width
+##   push     m/s shove on the car it hits (along the shot, scaled by the car's weight class)
 ##   Friendly fire (owner, play-test 2): blasts, fire pools, mines and the SAT beam hurt their own
 ##   shooter too. Only a direct hit can't strike the car that fired it.
 
@@ -26,17 +27,17 @@ const DEFS := {
 	},
 	"homing": {
 		"label": "Homing Missile", "kind": "missile", "color": Color(0.62, 0.3, 1.0),
-		"speed": 46.0, "damage": 12.0, "homing": 3.2, "life": 5.0, "cooldown": 0.45, "ammo": 3,
+		"speed": 46.0, "damage": 12.0, "homing": 3.2, "life": 5.0, "cooldown": 0.45, "ammo": 3, "push": 2.5,
 		"trail": Color(0.6, 0.2, 1.0), "trail_len": 0.3, "trail_w": 0.8,
 	},
 	"fire": {
 		"label": "Fire Missile", "kind": "missile", "color": Color(1.0, 0.42, 0.08),
-		"speed": 78.0, "damage": 14.0, "homing": 1.1, "life": 3.0, "cooldown": 0.45, "ammo": 3, "burn": 4.0,
+		"speed": 78.0, "damage": 14.0, "homing": 1.1, "life": 3.0, "cooldown": 0.45, "ammo": 3, "burn": 4.0, "push": 3.0,
 		"trail": Color(1.0, 0.45, 0.05), "trail_len": 0.18, "trail_w": 0.9,
 	},
 	"power": {
 		"label": "Power Missile", "kind": "missile", "color": Color(0.95, 0.12, 0.15),
-		"speed": 58.0, "damage": 45.0, "homing": 0.0, "life": 3.5, "cooldown": 1.0, "ammo": 1,
+		"speed": 58.0, "damage": 45.0, "homing": 0.0, "life": 3.5, "cooldown": 1.0, "ammo": 1, "push": 9.0,
 		"trail": Color(0.95, 0.06, 0.05), "trail_len": 0.4, "trail_w": 1.3, "model_scale": 1.6,
 	},
 	# TM: Black's gas can. Thrown up and ahead; press fire again to drop it on the spot.
@@ -61,7 +62,7 @@ const DEFS := {
 	# them all; a hard drift shakes off about half.
 	"zoomy": {
 		"label": "Zoomy", "kind": "missile", "handler": "salvo", "icon": "salvo", "color": Color(0.85, 0.9, 0.2),
-		"speed": 62.0, "damage": 6.0, "homing": 1.6, "life": 3.0, "cooldown": 1.0, "ammo": 1,
+		"speed": 62.0, "damage": 6.0, "homing": 1.6, "life": 3.0, "cooldown": 1.0, "ammo": 1, "push": 0.8,
 		"salvo": 10, "salvo_gap": 0.06, "small": true, "model_scale": 0.6,
 		"trail": Color(0.97, 0.97, 0.95), "trail_len": 0.55, "trail_w": 0.42,
 	},
@@ -82,7 +83,7 @@ const DEFS := {
 	# flies straight like a power missile (no tracking).
 	"napalm_cone": {
 		"label": "Napalm Cone", "kind": "cone", "handler": "cone", "color": Color(1.0, 0.5, 0.15), "special": true,
-		"speed": 60.0, "damage": 45.0, "homing": 2.4, "life": 3.0, "burn": 4.0,
+		"speed": 60.0, "damage": 45.0, "homing": 2.4, "life": 3.0, "burn": 4.0, "push": 6.0,
 		"charge_time": 2.0, "charged_damage": 90.0, "charged_speed": 64.0,
 		"cooldown": 0.8, "charges": 2, "recharge": 16.0,
 	},
@@ -104,12 +105,12 @@ const DEFS := {
 	# instant kills (a medium car, 280, takes five).
 	"reaper_skull": {
 		"label": "Reaper Skull", "kind": "skull", "color": Color(1.0, 0.55, 0.15), "special": true,
-		"speed": 85.0, "damage": 65.0, "homing": 0.6, "life": 2.5, "cooldown": 3.0, "charges": 2, "recharge": 20.0,
+		"speed": 85.0, "damage": 65.0, "homing": 0.6, "life": 2.5, "cooldown": 3.0, "charges": 2, "recharge": 20.0, "push": 8.0,
 	},
 	# Spectre: ghost missile that flies through walls.
 	"ghost_missile": {
 		"label": "Ghost Missile", "kind": "ghost", "color": Color(0.5, 0.9, 1.0), "special": true,
-		"speed": 50.0, "damage": 24.0, "homing": 3.0, "life": 4.0, "cooldown": 0.6, "charges": 3, "recharge": 18.0,
+		"speed": 50.0, "damage": 24.0, "homing": 3.0, "life": 4.0, "cooldown": 0.6, "charges": 3, "recharge": 18.0, "push": 3.5,
 		"through_walls": true,
 	},
 }

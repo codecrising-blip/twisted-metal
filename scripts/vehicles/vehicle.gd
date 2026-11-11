@@ -101,6 +101,12 @@ var _yaw_fix := 0.0 # pending heading correction from wall deflection (radians)
 var _speed_out := 0.0 # forward speed at the end of the last frame (detects outside changes to `speed`)
 var _wall_pin := 0.0 # after slamming into a wall: scraping against it is slow until you steer away or back off
 var _air_basis := Basis.IDENTITY # body attitude at takeoff: kept through the air (no fake tilting)
+var _flash_meshes: Array[MeshInstance3D] = [] # flash white when hit
+var _flash_time := 0.0
+var _jolt := Vector3.ZERO # body knocked off its seat by a hit, springs back
+var _charge_fx: Node3D # glow growing on the launcher while a charged shot builds
+var _wreck_spin := Vector3.ZERO # a wreck tumbles through the air when it blows
+static var _white: StandardMaterial3D
 var _airborne := false
 var _stuck_time := 0.0
 var _wreck_time := 0.0
@@ -153,6 +159,8 @@ func setup(id: String, player: bool) -> void:
 	_wheels = model.get_meta("wheels", [])
 	_steer_pivots = model.get_meta("steer", [])
 	_wheel_radius = model.get_meta("wheel_radius", 0.5)
+	for mi in model.find_children("*", "MeshInstance3D", true, false):
+		_flash_meshes.append(mi as MeshInstance3D)
 	_fx = VehicleFx.new()
 	_fx.name = "Fx"
 	add_child(_fx)
@@ -472,6 +480,26 @@ func apply_impulse(v: Vector3) -> void:
 	velocity += v
 
 
+## A hit lands (game feel): the body jolts away from it and big hits flash the car white.
+func hit_react(dir: Vector3, amount: float) -> void:
+	if is_dead:
+		return
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length() > 0.01:
+		_jolt += global_basis.inverse() * flat.normalized() * clampf(amount * 0.012, 0.05, 0.4)
+	if amount >= 4.0:
+		if _flash_time <= 0.0:
+			if _white == null:
+				_white = StandardMaterial3D.new()
+				_white.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+				_white.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+				_white.albedo_color = Color(1.0, 0.97, 0.9, 0.6)
+			for mi in _flash_meshes:
+				if is_instance_valid(mi):
+					mi.material_overlay = _white
+		_flash_time = maxf(_flash_time, 0.05 + minf(amount, 60.0) / 1200.0)
+
+
 ## A blast throws the car (heavy cars less). flip 1 = one full roll through the air away from the
 ## blast, small values only tilt it; the body lands back on its wheels.
 func blast_knock(push: Vector3, flip := 0.0, by_weight := true) -> void:
@@ -564,6 +592,31 @@ func _cancel_charge() -> void:
 	charge_time = 0.0
 
 
+## The charged shot builds up where everyone can see it: a fireball swelling on the launcher,
+## white-hot and pulsing once it is full.
+func _update_charge_fx() -> void:
+	if charging_id == "":
+		if is_instance_valid(_charge_fx):
+			_charge_fx.queue_free()
+		_charge_fx = null
+		return
+	if not is_instance_valid(_charge_fx):
+		_charge_fx = Node3D.new()
+		model.add_child(_charge_fx)
+		_charge_fx.position = model.get_meta("launcher", Vector3(0, 2, -2.5))
+		var ball := MeshKit.sphere(_charge_fx, 0.25, Vector3.ZERO, MeshKit.emissive(Color(1.0, 0.45, 0.1), 4.0), Vector3.ONE, 10)
+		ball.name = "Ball"
+		ball.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var flames := FxKit.fire(0.7, 20)
+		_charge_fx.add_child(flames)
+		flames.emitting = true
+	var r := charge_ratio()
+	var ball := _charge_fx.get_node("Ball") as MeshInstance3D
+	var pulse := 1.0 + (0.18 * sin(_clock * 30.0) if r >= 1.0 else 0.0)
+	ball.scale = Vector3.ONE * (0.5 + r * 2.2) * pulse
+	(ball.material_override as StandardMaterial3D).emission = Color(1.0, 0.45, 0.1).lerp(Color(1.0, 0.95, 0.8), r)
+
+
 ## A turbo pickup fills the bar up again (turbo never refills by itself).
 func refill_turbo() -> void:
 	turbo = 100.0
@@ -598,6 +651,8 @@ func _fire_guns() -> void:
 	dir = (dir + Vector3(randf_range(-1, 1), randf_range(-0.5, 0.5), randf_range(-1, 1)) * 0.012).normalized()
 	Projectile.spawn(get_parent(), "guns", from, dir, self, null)
 	_fx.gun_fired(_gun_index)
+	if _gun_index == 0:
+		GameFeel.play("guns", from, get_parent(), -6.0)
 
 
 func _fire_selected(charged := false) -> void:
@@ -765,7 +820,9 @@ func _die() -> void:
 	_ice.visible = false
 	_visual.visible = true
 	FxKit.explosion(get_parent(), global_position + Vector3.UP * 1.5, 2.6)
-	velocity += Vector3(randf_range(-3, 3), 9.0, randf_range(-3, 3))
+	velocity += Vector3(randf_range(-3, 3), 11.0, randf_range(-3, 3))
+	_wreck_spin = Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized() * randf_range(2.5, 4.5)
+	_charge_fx = null
 	_char(model)
 	_smoke.emitting = true
 	_fire.emitting = true
@@ -787,6 +844,10 @@ func _char(node: Node) -> void:
 
 func _wreck_physics(delta: float) -> void:
 	_wreck_time += delta
+	if not is_on_floor() and _wreck_spin.length() > 0.1: # the shell tumbles until it hits the ground
+		_visual.rotate_object_local(_wreck_spin.normalized(), _wreck_spin.length() * delta)
+	elif is_on_floor():
+		_wreck_spin = Vector3.ZERO
 	if _wreck_time > WRECK_SOLID_TIME and collision_layer != 0:
 		collision_layer = 0 # other cars drive through the burnt shell
 		_fire.emitting = false
@@ -801,6 +862,15 @@ func _wreck_physics(delta: float) -> void:
 
 func _animate(delta: float) -> void:
 	_fx.update(delta, self, velocity, _boosting, in_handbrake and is_on_floor() and absf(speed) > 8.0)
+	if _flash_time > 0.0:
+		_flash_time -= delta
+		if _flash_time <= 0.0:
+			for mi in _flash_meshes:
+				if is_instance_valid(mi):
+					mi.material_overlay = null
+	_jolt = _jolt.lerp(Vector3.ZERO, 1.0 - exp(-12.0 * delta))
+	_visual.position = _jolt
+	_update_charge_fx()
 	var spin := speed * delta / _wheel_radius
 	for w in _wheels:
 		(w as Node3D).rotate_x(-spin)

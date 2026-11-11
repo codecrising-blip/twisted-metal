@@ -165,13 +165,48 @@ static func explosion(parent: Node, pos: Vector3, size := 1.0, tint := Color(1.0
 	root.add_child(sparks)
 	sparks.emitting = true
 
-	var light := OmniLight3D.new()
-	light.light_color = tint
-	light.light_energy = 6.0 * size
-	light.omni_range = 9.0 * size
-	root.add_child(light)
+	# Debris: dark metal chunks thrown out and falling back (one draw call).
+	if size >= 0.9:
+		var chunks := CPUParticles3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(0.22, 0.12, 0.3)
+		var metal := StandardMaterial3D.new()
+		metal.albedo_color = Color(0.12, 0.11, 0.1)
+		metal.roughness = 0.7
+		box.material = metal
+		chunks.mesh = box
+		chunks.one_shot = true
+		chunks.explosiveness = 1.0
+		chunks.amount = int(6 * size) + 2
+		chunks.lifetime = 1.4
+		chunks.local_coords = false
+		chunks.direction = Vector3.UP
+		chunks.spread = 70.0
+		chunks.gravity = Vector3(0, -24, 0)
+		chunks.initial_velocity_min = 6.0 * size
+		chunks.initial_velocity_max = 12.0 * size
+		chunks.angular_velocity_min = -720.0
+		chunks.angular_velocity_max = 720.0
+		chunks.scale_amount_min = 0.6 * size
+		chunks.scale_amount_max = 1.4 * size
+		root.add_child(chunks)
+		chunks.emitting = true
+	# The first instant: a white-hot flash, a ring racing along the ground on big ones, a burn mark.
+	GameFeel.flash(parent, pos, 1.8 * size, tint.lerp(Color(1, 0.95, 0.8), 0.5), 0.14)
+	if size >= 1.6:
+		GameFeel.shockwave(parent, pos, 4.5 * size, tint)
+	if size >= 1.0:
+		GameFeel.scorch(parent, pos, 1.2 * size)
+	GameFeel.shake(pos, 0.25 * size)
+	GameFeel.play("explosion_big" if size >= 2.0 else "explosion", pos, parent)
 	var tw := root.create_tween()
-	tw.tween_property(light, "light_energy", 0.0, 0.45)
+	if GraphicsSettings.high: # a moving light per explosion is too costly on LOW: the flash does it
+		var light := OmniLight3D.new()
+		light.light_color = tint
+		light.light_energy = 6.0 * size
+		light.omni_range = 9.0 * size
+		root.add_child(light)
+		tw.tween_property(light, "light_energy", 0.0, 0.45)
 	tw.tween_interval(2.4)
 	tw.tween_callback(root.queue_free)
 

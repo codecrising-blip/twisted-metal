@@ -41,7 +41,7 @@ static func _cone(v: Vehicle, id: String, def: Dictionary, charged: bool) -> voi
 			dir = to_t # aimed at launch like a power missile, then no tracking
 	Projectile.spawn(v.get_parent(), id, from, dir, v, null, {
 		"damage": def.get("charged_damage", 90.0), "speed": def.get("charged_speed", 64.0),
-		"homing": 0.0, "charged": true,
+		"homing": 0.0, "charged": true, "push": 11.0,
 	})
 
 
@@ -90,7 +90,9 @@ static func blast(world: Node, pos: Vector3, radius: float, damage: float, shoot
 		if d > radius + 1.0:
 			continue
 		var t := clampf((d - core) / maxf(radius - core, 0.01), 0.0, 1.0)
-		o.take_damage(lerpf(damage, rim, t) * WeaponData.DAMAGE_SCALE, shooter)
+		var hit := lerpf(damage, rim, t) * WeaponData.DAMAGE_SCALE
+		o.take_damage(hit, shooter)
+		o.hit_react(o.global_position - pos, hit)
 		if burn > 0.0:
 			o.ignite(burn, shooter)
 

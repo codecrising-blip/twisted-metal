@@ -55,12 +55,19 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
   `tests/_perf.gd` prints draw calls at fixed camera spots (run it with xvfb like a screenshot). After the session 6
   look rework: worst view ~1090. Small props (hydrants, cones, trash cans): no shadow, `visibility_range_end` 80 m.
   Scatter many copies with `LosAngelesArena._scatter()` (one MultiMesh) like bushes and hill scrub.
+  **Static batching (session 6, owner's idea): worst view 1050 -> ~560.** Anything that never moves or breaks goes
+  through `LosAngelesArena.batch_mesh()` / `batch_builder()` / `batch_text()` (merged per material at the end of
+  `build()`); never `mb.commit(self)` or `Label3D` for static stage pieces. `MeshBuilder.build_mesh(grime, 0, true)`
+  (collapse) folds plain paint/flat/steel parts into the shared `MatKit.neutral` materials (colour in the vertices),
+  so a palm, prop or pickup is 1-2 draw calls. MeshBuilder writes box UVs in meters; ground and neutral materials
+  read UVs (not triplanar). Shadows are still on (owner: test first). The F3 toggle menu is postponed.
 - The game starts in the **preview match** (Sweet Tooth vs Outlaw only). `-- full` = all five cars (tests use it).
   `-- high` / `-- low` force a graphics level for one run.
 
 ## Owner play-test feedback (session 1)
 1. ~~Too easy (health too low, damage too high)~~ — done in session 3 (chapter 1 numbers).
-2. ~~Getting stuck on walls~~ — done: TM wall rule (deflect/slide, never stop) + stuck helper.
+2. ~~Getting stuck on walls~~ — done in session 1 (deflect, never stop); **replaced in session 6** by the owner's
+   slam rule (55-90 degrees stops you; scrape out slowly or reverse; stuck helper after 4 s).
 3. ~~Cluttered first stage~~ — replaced by the owner's later choice: TM2 Los Angeles, clean and big.
    (The TM1 ring idea is dropped; breakable props that hide weapons live on in LA.)
 4. **Car models:** still to do. Sweet Tooth's model is too crude. Rebuild cars with much more detail, using
@@ -195,6 +202,15 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   **Remote is a mine** dropped behind (fire again to blow, or any car driving onto it after 0.8 s; big push, a car
   on top flies and flips: `Vehicle.blast_knock`); **friendly fire**: fire pools, blasts, mines, SAT hurt their owner
   too (only direct hits can't); speed **15%** under the original (not 25%); taser drawn as a crackling arc.
+- **Driving (session 6, third round):** velocity split into forward and sideways parts (`Vehicle._drive`): brakes act
+  forward, grip pulls the slide in, so braking in a drift skids on. Drift numbers halfway back toward the first values
+  for every class. Wall slams at 55-90 degrees (`wall_slammed` signal). **Jump 6 m** (19 m/s) to clear the 5 m
+  battleground walls; in the air the body keeps its takeoff attitude. **Warhawk gap is now 22 m** (doc 06).
+  Empty weapons leave the list (the special too) and return with ammo; live ones keep a DETONATE/DROP/MASH slot; gold
+  S badge on the special. Remote launch by class: 12 / 8.4 / 5.4 / 3 m. AI: escapes along walls, lines up with ramps,
+  retries, avoids a failed ramp, jumps onto the battleground with a run-up. Game feel in `GameFeel` (hit-stop,
+  kill slow-mo, shake by distance, flash, shockwave, scorch, muzzle pops, sound hooks) + `Vehicle.hit_react` (white
+  flash, jolt), per-weapon `push`, charge glow, wreck tumble, target health catch-up trail. Sounds: `audio/sfx/`.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -239,7 +255,8 @@ scripts/arena/la_props.gd   LA street furniture: toppling street lights, burnt w
 scripts/arena/junkyard.gd   the old prototype stage, now free play (`-- junkyard`)
 scripts/arena/breakable.gd  props that shatter/topple (stands, glass, palms, letters, tower legs)
 scripts/arena/teleporter.gd teleport pad
-scripts/fx/                 FxKit (fire/smoke/explosions), Streak (missile trail ribbons), FlickerLight, Blinker,
+scripts/fx/                 FxKit (fire/smoke/explosions + debris), GameFeel (hit-stop, slow-mo, shake, flash,
+                            shockwave, scorch, sound hooks), Streak (missile trail ribbons), FlickerLight, Blinker,
                             ZigLine (bolts, chains, cables)
 scripts/ui/hud.gd           HUD layout (target, feed, messages, help, countdown, pause) + grain/vignette shader
 scripts/ui/hud_status.gd    bottom-left panel: name, lives, segmented health (trail), turbo, energy, state chips
@@ -248,6 +265,7 @@ scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickup
 tests/                      smoke_test.gd (headless, ~65 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py
 assets/backdrops/           stage backdrops (equirectangular panoramas shown as the sky)
 audio/music/                drop .ogg/.mp3 here; first file alphabetically plays in a loop
+audio/sfx/                  sound effects by name (see its README); missing ones are silent
 docs/GDD.md                 game design document (living); docs/design/ = design bible (Arabic)
 ```
 
@@ -373,3 +391,8 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
   not `Vehicle.speed` (that is the engine's target, still high while shoving another car); additive trails wash
   out to white over the bright pavers (Streak uses alpha blending); a live mine/napalm can only takes fire presses
   while its weapon is selected (`Vehicle.set_live_special(node, weapon)`), so other weapons still fire.
+  Third round (owner's list): static batching, driving model, walls, 6 m jump, slots, AI ramps, game feel (see
+  "Driving (session 6, third round)" above). Gotchas: TextMesh needs one-sided materials or blade signs show both
+  faces; `SceneTreeTimer(ignore_time_scale)` did not reliably end a hit-stop, so `GameFeel` restores
+  `Engine.time_scale` from a small always-processing node polling real time; hit-stop is skipped headless (tests);
+  `Vehicle.speed` is now the real forward speed, and setting it from outside (spawn, tests) is still honoured.
