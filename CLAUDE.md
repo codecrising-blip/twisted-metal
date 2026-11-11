@@ -283,8 +283,9 @@ scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, amm
 scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickups, walls/road from radar_lines()
 tests/                      smoke_test.gd (headless, ~65 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py
 assets/backdrops/           stage backdrops (equirectangular panoramas shown as the sky)
-audio/music/                one track per stage, named after `arena.music` (los_angeles.mp3, paris.mp3, egypt.mp3, ...);
-                            clips/ = owner's short 9-20 s TM3/TMB clips (purpose not decided, not played)
+audio/music/                one track per stage, named after `arena.music`: los_angeles, paris, egypt, chernobyl, amazonia,
+                            calypso (final). Owner's tracks waiting for a use: main_menu, intro, south_central_opening,
+                            hangar_18, neon_city, more_human_than_human_remix. clips/ = short 9-20 s TM3/TMB clips
 audio/sfx/                  sound effects by name (see its README): owner's TM2/TM4 sounds as mono .ogg; unsorted/ =
                             TM4 clips not yet identified. Owner uploads land in the repo root: sort them (see README)
 docs/GDD.md                 game design document (living); docs/design/ = design bible (Arabic)
