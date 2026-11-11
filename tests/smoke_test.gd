@@ -525,6 +525,18 @@ func _run() -> void:
 		seen_attack = seen_attack or o_brain.mode == "attack"
 	_check(seen_attack and closest < 20.0, "AI makes attack runs at you (closest %.1f m)" % closest)
 	_check(o_brain.drifts >= 1, "...drifts round for the next run (%d drifts)" % o_brain.drifts)
+	# A homing missile coming at it: it breaks to one side (always, at this test's aggression).
+	var aggr := o_brain.aggression
+	o_brain.aggression = 2.0
+	o_brain._dodge_t = 0.0
+	o_brain._dodge_scan = 0.0
+	Projectile.spawn(main, "homing", outlaw.aim_point() + outlaw.flat_forward() * 22.0 + Vector3.UP, -outlaw.flat_forward(), player, outlaw)
+	var dodged := false
+	for k in 30:
+		await _frames(1)
+		dodged = dodged or o_brain._dodge_t > 0.0
+	_check(dodged, "AI drifts out of the way of a homing missile")
+	o_brain.aggression = aggr
 	_check(glued < 180, "...without gluing itself to you (%d of 720 frames within 6 m)" % glued)
 	_check(path > 60.0, "...and keeps moving, never stuck (%.0f m driven)" % path)
 	# Stuck in the pocket beside a ramp, nose to the battleground wall, with you up top: it backs

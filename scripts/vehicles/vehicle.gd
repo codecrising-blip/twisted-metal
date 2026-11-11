@@ -189,10 +189,10 @@ func setup(id: String, player: bool) -> void:
 		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		_blob_mat.albedo_texture = FxKit.soft_texture()
-		_blob_mat.albedo_color = Color(0, 0, 0, 0.62)
+		_blob_mat.albedo_color = Color(0, 0, 0, 0.75)
 	_blob = MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(size.x * 1.35, size.z * 1.15)
+	plane.size = Vector2(size.x * 1.5, size.z * 1.25)
 	_blob.mesh = plane
 	_blob.material_override = _blob_mat
 	_blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -785,7 +785,7 @@ func _place_blob() -> void:
 	var n: Vector3 = hit.normal
 	var height := from.y - 1.0 - (hit.position as Vector3).y
 	var fade := clampf(1.0 - height / 12.0, 0.15, 1.0)
-	_blob.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, n)) * Basis(Vector3.UP, rotation.y) * Basis.from_scale(Vector3.ONE * (1.0 + (1.0 - fade) * 0.6)), (hit.position as Vector3) + n * 0.07)
+	_blob.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, n)) * Basis(Vector3.UP, rotation.y) * Basis.from_scale(Vector3.ONE * (1.0 + (1.0 - fade) * 0.6)), (hit.position as Vector3) + n * 0.12)
 	_blob.transparency = 1.0 - fade
 
 

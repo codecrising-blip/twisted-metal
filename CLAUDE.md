@@ -60,7 +60,12 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
   `build()`); never `mb.commit(self)` or `Label3D` for static stage pieces. `MeshBuilder.build_mesh(grime, 0, true)`
   (collapse) folds plain paint/flat/steel parts into the shared `MatKit.neutral` materials (colour in the vertices),
   so a palm, prop or pickup is 1-2 draw calls. MeshBuilder writes box UVs in meters; ground and neutral materials
-  read UVs (not triplanar). Shadows are still on (owner: test first). The F3 toggle menu is postponed.
+  read UVs (not triplanar). The F3 toggle menu is postponed.
+  **Round 4 (owner: 17-18 FPS best, ~7 at the start, at the fire pit and in collisions):** LOW = no sun shadows (a soft
+  blob under each car, group `GraphicsSettings.BLOB_GROUP`) and no dynamic lights at all (`GraphicsSettings` hides every
+  non-directional light added on LOW: they re-shaded the merged stage, the fire-pit and taser lag). `GameFeel.prewarm`
+  draws each effect once at match start (shader build stalls). Worst view 449, centre 272 draw calls. Real FPS only
+  from the owner's F3 numbers.
 - The game starts in the **preview match** (Sweet Tooth vs Outlaw only). `-- full` = all five cars (tests use it).
   `-- high` / `-- low` force a graphics level for one run.
 
@@ -207,10 +212,24 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   for every class. Wall slams at 55-90 degrees (`wall_slammed` signal). **Jump 6 m** (19 m/s) to clear the 5 m
   battleground walls; in the air the body keeps its takeoff attitude. **Warhawk gap is now 22 m** (doc 06).
   Empty weapons leave the list (the special too) and return with ammo; live ones keep a DETONATE/DROP/MASH slot; gold
-  S badge on the special. Remote launch by class: 12 / 8.4 / 5.4 / 3 m. AI: escapes along walls, lines up with ramps,
+  S badge on the special. Remote launch by class: 12 / 8.4 / 5.4 / 3 m (x1.5 in round 4: 18 / 12.6 / 8.1 / 4.5). AI: escapes along walls, lines up with ramps,
   retries, avoids a failed ramp, jumps onto the battleground with a run-up. Game feel in `GameFeel` (hit-stop,
   kill slow-mo, shake by distance, flash, shockwave, scorch, muzzle pops, sound hooks) + `Vehicle.hit_react` (white
   flash, jolt), per-weapon `push`, charge glow, wreck tumble, target health catch-up trail. Sounds: `audio/sfx/`.
+- **Round 4 (owner's verdicts: drifts 8/10, wall slams 9/10, jump 10/10 - keep them):**
+  **Flips:** a car hanging over a ledge tips under gravity and lands on its roof (`Vehicle._edge_tip`); blasts and
+  power missiles spin it (`_start_spin`); upside down = handbrake + left/right rolls it back (`_recover_input`). Visual
+  attitude only, the collision box stays upright. **Turbo:** 5 s per tank (`TURBO_DRAIN` 20), works in the air (thrust
+  18 m/s^2 along the nose: jump + turbo onto a ledge) and in reverse (double reverse speed), puts out burning after 0.5 s.
+  **Only 5 turbo pickups** on LA; **each weapon spot always spawns the same weapon** (seeded shuffle in `main.gd`).
+  Detonated Remote/napalm with no ammo left: slot vanishes at once. **Green "S SPECIAL" emblem** (owner's Head-On
+  reference) for every car's special. **Remote blast x1.5** (push 24, launch above). **Per-weapon feel** (`WeaponData`
+  `squish`/`squish_classes`/`wobble`/`flip`/`shake`/`flashbang`, applied by `Projectile.hit_feel`): every hit shakes;
+  power flips light/medium cars; homing wobbles the steering; Remote throws and can roll a car onto its roof; napalm
+  direct hit = 0.3 s white-out, SAT = 1 s; fire squishes light/medium, zoomy all but super-heavy (elastic, 3-5 %, a
+  damped spring on the body, never goofy). Napalm Cone now has its own projectile (spinning cone, molten scoop,
+  fireball halo; white-hot when charged). **AI:** dodges incoming missiles with a drift, keeps attack runs on its own
+  level (no more up-and-down on the ramp), no turbo onto ramps. Music plays per stage.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -264,7 +283,7 @@ scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, amm
 scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickups, walls/road from radar_lines()
 tests/                      smoke_test.gd (headless, ~65 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py
 assets/backdrops/           stage backdrops (equirectangular panoramas shown as the sky)
-audio/music/                drop .ogg/.mp3 here; first file alphabetically plays in a loop
+audio/music/                one track per stage, named after `arena.music` (los_angeles.mp3, paris.mp3, egypt.mp3, ...)
 audio/sfx/                  sound effects by name (see its README); missing ones are silent
 docs/GDD.md                 game design document (living); docs/design/ = design bible (Arabic)
 ```
@@ -346,7 +365,7 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
 1. Owner play-test of the LA stage: driving feel, wall slide, damage/health, AI, the new specials.
 2. Owner's verdict on the preview cars; then the same detail for the other cars, new Laughing Ghost look.
 3. Remaining energy moves and Sweet Bot; napalm pickup (needed for the Tokyo puzzle).
-4. Sound effects (engine, guns, explosions). Music needs the owner's tracks in `audio/music/`.
+4. Sound effects: the owner has ~74 files; names in `audio/sfx/README.md` (map them if they arrive under other names).
 5. Story skeleton, sub-boss arrival sequence (replays, silence, break-in), save after sub bosses.
 6. Next stage: Paris.
 
@@ -396,3 +415,6 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
   faces; `SceneTreeTimer(ignore_time_scale)` did not reliably end a hit-stop, so `GameFeel` restores
   `Engine.time_scale` from a small always-processing node polling real time; hit-stop is skipped headless (tests);
   `Vehicle.speed` is now the real forward speed, and setting it from outside (spawn, tests) is still honoured.
+  Round 4 (see above). Gotchas: an edge-tip test parked on a ramp tipped nothing (place it on flat ground); the coast
+  brake ate the tipping push (move the body directly); a car resting on a slope never "landed" from a spin (landing
+  also accepts resting, `|velocity.y| < 1`); `floor_max_angle` 38 broke AI ramp climbs, keep 48.

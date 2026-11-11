@@ -18,6 +18,7 @@ var direction := Vector3.FORWARD
 var velocity := Vector3.ZERO # thrown shots only
 var _life := 1.0
 var _trail: CPUParticles3D
+var _body: Node3D # parts that spin in flight (cones)
 
 
 ## overrides: changes to the weapon's numbers for this one shot (a charged Napalm Cone).
@@ -37,6 +38,7 @@ static func spawn(parent: Node, id: String, from: Vector3, dir: Vector3, by: Veh
 	p._orient()
 	p._build_visual()
 	p._add_streak()
+	p.add_to_group("projectiles") # the AI watches for homing shots coming at it
 	if p.def.get("kind", "bullet") != "bullet":
 		var col: Color = p.def.get("color", Color(1, 0.6, 0.2))
 		var big := float(p.def.get("damage", 10.0)) >= 40.0
@@ -80,13 +82,27 @@ func _build_visual() -> void:
 			_add_trail(t)
 			_add_light(color, 2.5, 6.0)
 		"cone":
-			# A burning waffle cone, point first; the charged one is bigger and burns harder.
-			var big := 1.5 if def.get("charged", false) else 1.0
-			var waffle := MeshKit.mat(Color(0.72, 0.48, 0.22), 0.9)
-			var c1 := MeshKit.cylinder(self, 0.36 * big, 1.0 * big, Vector3(0, 0, -0.2 * big), waffle, Vector3(-90, 0, 0), 8, 0.02)
+			# Sweet Tooth's flaming cone, point first and spinning: a scorched waffle cone, a molten
+			# scoop and a fireball halo around it, flames pouring off the back. The charged one is
+			# twice the size and white-hot.
+			var charged: bool = def.get("charged", false)
+			var big := 2.3 if charged else 1.5
+			_body = Node3D.new()
+			add_child(_body)
+			var waffle := MeshKit.mat(Color(0.55, 0.34, 0.14), 0.9)
+			var c1 := MeshKit.cylinder(_body, 0.36 * big, 1.0 * big, Vector3(0, 0, -0.2 * big), waffle, Vector3(-90, 0, 0), 8, 0.02)
 			c1.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			MeshKit.sphere(self, 0.4 * big, Vector3(0, 0, 0.35 * big), MeshKit.emissive(Color(1.0, 0.42, 0.12), 2.2), Vector3.ONE, 10)
-			_add_trail(FxKit.fire(1.0 * big, int(30 * big)))
+			MeshKit.torus(_body, 0.3 * big, 0.38 * big, Vector3(0, 0, 0.12 * big), MeshKit.mat(Color(0.18, 0.1, 0.05), 0.9), Vector3(90, 0, 0))
+			var core := Color(1.0, 0.9, 0.6) if charged else Color(1.0, 0.45, 0.12)
+			MeshKit.sphere(_body, 0.42 * big, Vector3(0, 0, 0.35 * big), MeshKit.emissive(core, 3.5), Vector3.ONE, 10)
+			var halo := MeshKit.emissive(Color(1.0, 0.4, 0.08), 2.0)
+			halo.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			halo.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			halo.albedo_color = Color(1.0, 0.45, 0.1, 0.35)
+			halo.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			var h := MeshKit.sphere(self, 0.85 * big, Vector3(0, 0, 0.2 * big), halo, Vector3(1, 1, 1.3), 10)
+			h.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_add_trail(FxKit.fire(1.2 * big, int(30 * big)))
 			_add_light(color, 3.0 * big, 8.0)
 		"gas":
 			# A dented red gas can tumbling through the air, leaking fire.
@@ -155,6 +171,8 @@ func _physics_process(delta: float) -> void:
 		_explode(global_position, Vector3.UP, null)
 		return
 
+	if _body:
+		_body.rotate_object_local(Vector3.FORWARD, 14.0 * delta)
 	var step: Vector3
 	if _thrown():
 		velocity.y -= LOB_GRAVITY * delta

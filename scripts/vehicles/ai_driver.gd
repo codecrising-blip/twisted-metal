@@ -39,6 +39,9 @@ var _bad_ramps := {} # ramp foot (rounded) -> seconds to avoid it after failing 
 var _ramp_fails := 0
 var _no_jump := 0.0 # a jump-up attempt failed: use ramps for a while
 var _side := 1.0 # attack run: pass on the target's right (1) or left (-1)
+var _dodge_t := 0.0 # drifting out of a homing missile's way
+var _dodge_steer := 1.0
+var _dodge_scan := 0.0
 var _feinted := false
 var _phase_t := 0.0
 var _drift := false
@@ -90,6 +93,16 @@ func drive(v: Vehicle, delta: float) -> void:
 		drifts += 1
 
 	steer = clampf(steer + _avoid(v, fwd), -1.0, 1.0)
+	# A homing missile coming in: break hard to one side with a drift (not every time: beatable).
+	_dodge_scan -= delta
+	if _dodge_scan <= 0.0 and _dodge_t <= 0.0:
+		_dodge_scan = 0.15
+		_watch_missiles(v)
+	if _dodge_t > 0.0:
+		_dodge_t -= delta
+		steer = _dodge_steer
+		handbrake = v.speed > 10.0
+		throttle = 1.0
 
 	# Stuck against something (a corner, a wall, a car): back out, turning the other way.
 	if _reverse > 0.0:
@@ -119,6 +132,23 @@ func drive(v: Vehicle, delta: float) -> void:
 	var want_turbo: bool = plan.get("turbo", false) and _ramp_goal.is_empty() # no turbo onto a ramp: too fast to line up
 	v.in_turbo = want_turbo and absf(angle) < 0.3 and v.turbo > 10.0
 	_shoot(v, delta)
+
+
+func _watch_missiles(v: Vehicle) -> void:
+	for node in v.get_tree().get_nodes_in_group("projectiles"):
+		var p := node as Projectile
+		if p == null or p.target != v or float(p.def.get("homing", 0.0)) <= 0.0:
+			continue
+		var to := v.global_position - p.global_position
+		if to.length() > 28.0 or p.direction.dot(to.normalized()) < 0.7:
+			continue
+		if randf() < 0.55 * aggression: # 1.2 aggression: about two missiles in three get a dodge
+			_dodge_t = 0.55
+			var side := p.direction.cross(Vector3.UP)
+			_dodge_steer = 1.0 if side.dot(v.flat_forward().cross(Vector3.UP)) > 0.0 else -1.0
+		else:
+			_dodge_scan = 1.0 # this one gets through: don't try again at once
+		return
 
 
 ## Where to drive, how hard, and whether to use turbo.
@@ -205,16 +235,32 @@ func _attack_run(v: Vehicle, t: Vehicle, d: float, flat_to: Vector3, delta: floa
 			if _phase_t <= 0.0:
 				phase = "turn"
 			var away := -flat_to
-			return {"goal": v.global_position + (v.flat_forward() + away * 0.9).normalized() * 25.0, "throttle": 1.0}
+			return {"goal": _keep_level(v, v.global_position + (v.flat_forward() + away * 0.9).normalized() * 25.0), "throttle": 1.0}
 		_: # "turn": get some room, then drift round to face it again
 			_drift = true
 			if d < 16.0:
-				return {"goal": v.global_position - flat_to * 20.0 + v.flat_forward() * 6.0, "throttle": 1.0}
+				return {"goal": _keep_level(v, v.global_position - flat_to * 20.0 + v.flat_forward() * 6.0), "throttle": 1.0}
 			if facing < 0.45 or d > 40.0:
 				phase = "approach"
 				_feinted = false
 				_side = 1.0 if randf() < 0.5 else -1.0
 			return {"goal": t.global_position, "throttle": 0.9}
+
+
+## Attack runs swing away to make room; never off the level we fight on (down a ramp or off the
+## battleground edge, which made the AI go up and down the ramp instead of fighting). Tries the
+## goal, then turned 60 and 120 degrees either way, then the stage centre.
+func _keep_level(v: Vehicle, goal: Vector3) -> Vector3:
+	if arena == null or not arena.has_method("ground"):
+		return goal
+	var here := v.global_position
+	var off := goal - here
+	off.y = 0.0
+	for turn: float in [0.0, 1.05, -1.05, 2.1, -2.1]:
+		var p := here + off.rotated(Vector3.UP, turn)
+		if absf((arena.ground(p.x, p.z) as Vector3).y - here.y) < 1.5:
+			return p
+	return arena.center if "center" in arena else goal
 
 
 func _wander_plan(v: Vehicle) -> Dictionary:

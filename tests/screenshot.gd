@@ -104,7 +104,7 @@ func _run() -> void:
 				Mine.drop(player, WeaponData.get_def("remote"))
 				SatStrike.start(player, "sat", WeaponData.get_def("sat"))
 				TaserLink.start(e, WeaponData.get_def("omni_taser"))
-				var ids := ["fire", "homing", "power", "zoomy"]
+				var ids := ["fire", "homing", "power", "zoomy", "napalm_cone"]
 				for i in ids.size():
 					var from := base + Vector3(-26, 3.0 + i * 0.4, -4.0 - i * 4.5)
 					Projectile.spawn(main, ids[i], from, Vector3(1, 0, 0.05), e, null)
