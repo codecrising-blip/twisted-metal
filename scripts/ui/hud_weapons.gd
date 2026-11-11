@@ -33,11 +33,13 @@ func _draw() -> void:
 	var box := Rect2(46, 16, 84, 84)
 	draw_rect(box, Color(color.r, color.g, color.b, 0.16))
 	draw_rect(box, Color(color.r, color.g, color.b, 0.7), false, 2.0)
-	_icon(String(def.get("icon", def.get("kind", "missile"))), box.get_center(), 30.0, color)
+	if def.get("special", false):
+		_special_emblem(box, false) # every driver's special shows the same green S (owner's reference)
+	else:
+		_icon(String(def.get("icon", def.get("kind", "missile"))), box.get_center(), 30.0, color)
 	var label := String(def.get("label", current)).to_upper()
 	draw_string(font, Vector2(144, 46), label, HORIZONTAL_ALIGNMENT_LEFT, 200, 26, Color(0.94, 0.91, 0.85))
 	if def.get("special", false):
-		_special_badge(Vector2(122, 22), 13.0) # the gold S: your driver's own weapon, ready
 		draw_string(font, Vector2(144, 71), "SPECIAL", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.98, 0.8, 0.3))
 	var count: int = player.ammo.get(current, 0)
 	draw_string(font, Vector2(W - 140, 98), "x%d" % count, HORIZONTAL_ALIGNMENT_RIGHT, 120, 46, color.lightened(0.15))
@@ -74,24 +76,37 @@ func _draw() -> void:
 		var chip := Rect2(x, 112, 58, 34)
 		draw_rect(chip, Color(c.r, c.g, c.b, 0.3 if sel else 0.1))
 		draw_rect(chip, Color(c.r, c.g, c.b, 0.9 if sel else 0.35), false, 1.5)
-		_icon(String(d.get("icon", d.get("kind", "missile"))), chip.position + Vector2(17, 17), 10.0, c if sel else c.darkened(0.35))
 		if d.get("special", false):
-			_special_badge(chip.position + Vector2(52, 6), 6.0)
+			_special_emblem(Rect2(chip.position + Vector2(3, 3), Vector2(28, 28)), true)
+		else:
+			_icon(String(d.get("icon", d.get("kind", "missile"))), chip.position + Vector2(17, 17), 10.0, c if sel else c.darkened(0.35))
 		draw_string(font, chip.position + Vector2(30, 24), str(player.ammo.get(id, 0)), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.92, 0.9, 0.85) if sel else Color(0.6, 0.58, 0.55))
 		x += 64.0
 
 
-## Gold hexagon with an S: marks the driver's special weapon (owner, session 6).
-func _special_badge(c: Vector2, r: float) -> void:
-	var hexa := PackedVector2Array()
-	for k in 6:
-		var a := TAU * k / 6.0 + PI / 6.0
-		hexa.append(c + Vector2(cos(a), sin(a)) * r)
-	draw_colored_polygon(hexa, Color(0.12, 0.09, 0.03, 0.95))
-	hexa.append(hexa[0])
-	draw_polyline(hexa, Color(1.0, 0.78, 0.25), maxf(1.5, r * 0.14))
-	var fs := int(r * 1.5)
-	draw_string(font, c + Vector2(-r * 0.42, r * 0.52), "S", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1.0, 0.82, 0.3))
+## The universal SPECIAL emblem (owner, session 6, after a TM Head-On reference: a green S): a dark
+## green plate, a bold lime S with a dark outline, a small arrow, and SPECIAL under it. Our own drawing.
+func _special_emblem(r: Rect2, small: bool) -> void:
+	var lime := Color(0.55, 1.0, 0.4)
+	var deep := Color(0.03, 0.16, 0.06, 0.95)
+	draw_rect(r, deep)
+	draw_rect(Rect2(r.position, Vector2(r.size.x, r.size.y * 0.45)), Color(0.12, 0.38, 0.14, 0.55)) # top sheen
+	draw_rect(r, Color(0.45, 0.95, 0.45, 0.9), false, 2.0 if not small else 1.2)
+	var fs := int(r.size.y * (0.82 if small else 0.62))
+	var sw := font.get_string_size("S", HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+	var base := Vector2(r.get_center().x - sw.x * 0.5, r.position.y + r.size.y * (0.8 if small else 0.62))
+	draw_string_outline(font, base, "S", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, maxi(2, fs / 9), Color(0.0, 0.08, 0.02))
+	draw_string(font, base, "S", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, lime)
+	if small:
+		return
+	# Little down arrow at the top right, and the word under the S.
+	var a := r.position + Vector2(r.size.x * 0.8, r.size.y * 0.12)
+	draw_line(a, a + Vector2(0, r.size.y * 0.2), lime, 2.0)
+	draw_colored_polygon(PackedVector2Array([a + Vector2(-4, r.size.y * 0.17), a + Vector2(4, r.size.y * 0.17), a + Vector2(0, r.size.y * 0.27)]), lime)
+	var word := "SPECIAL"
+	var ws := 12
+	var w := font.get_string_size(word, HORIZONTAL_ALIGNMENT_LEFT, -1, ws).x
+	draw_string(font, Vector2(r.get_center().x - w * 0.5, r.end.y - 6), word, HORIZONTAL_ALIGNMENT_LEFT, -1, ws, lime)
 
 
 ## Weapon icons from simple shapes, centered on c, about 2*s wide.

@@ -53,10 +53,11 @@ const DEFS := {
 	"remote": {
 		"label": "Remote", "kind": "mine", "handler": "mine", "icon": "remote", "color": Color(0.95, 0.2, 0.15),
 		"cooldown": 0.6, "ammo": 1, "arm": 0.8, "trigger": 2.4, "life": 90.0,
-		"damage": 50.0, "edge_damage": 20.0, "radius": 8.0, "core": 3.5, "push": 16.0,
+		"damage": 50.0, "edge_damage": 20.0, "radius": 8.0, "core": 3.5, "push": 24.0, "blast_size": 4.0,
 		# Height (m) a car right on top is thrown, by weight (owner, session 6): light cars like Grimm
 		# and Twister fly highest, super-heavy Darkside the least.
-		"launch": {"light": 12.0, "medium": 8.4, "heavy": 5.4, "super": 3.0},
+		# Session 6 round 4: x1.5 again on the owner's word ("send them flying more").
+		"launch": {"light": 18.0, "medium": 12.6, "heavy": 8.1, "super": 4.5},
 	},
 	# Ten light missiles with mid tracking (owner): 6 each, 60 if all hit. Driving straight takes
 	# them all; a hard drift shakes off about half.

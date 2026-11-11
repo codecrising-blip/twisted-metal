@@ -173,3 +173,24 @@ static func scorch(parent: Node, pos: Vector3, radius: float) -> void:
 ## Launch flash at a gun or launcher: a quick bright pop, pointing the way the shot goes.
 static func muzzle(parent: Node, pos: Vector3, color: Color, size := 1.0) -> void:
 	flash(parent, pos, 0.9 * size, color.lerp(Color.WHITE, 0.5), 0.08)
+
+
+## The first time an effect is drawn its shaders are built, which stalls a frame or several (the
+## lag at the start and on the first hit). Draw one of each, tiny and far off, as the match starts.
+static func prewarm(parent: Node3D, cam: Camera3D) -> void:
+	if parent == null or cam == null or not parent.is_inside_tree():
+		return
+	var p := cam.global_position - cam.global_basis.z * 40.0 + Vector3.DOWN * 3.0
+	FxKit.explosion(parent, p, 1.0)
+	FxKit.spark(parent, p, Vector3.UP)
+	shockwave(parent, p, 1.0)
+	var holder := Node3D.new()
+	parent.add_child(holder)
+	holder.global_position = p
+	var fire := FxKit.fire(0.3, 6)
+	holder.add_child(fire)
+	fire.emitting = true
+	var smoke := FxKit.smoke(0.3, 4)
+	holder.add_child(smoke)
+	smoke.emitting = true
+	holder.get_tree().create_timer(0.6).timeout.connect(holder.queue_free)

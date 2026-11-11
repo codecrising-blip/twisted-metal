@@ -19,7 +19,9 @@ const COAST := 7.0
 ## and after a respawn; every turbo pickup fills it up again (Pickup).
 const TURBO_MULT := 1.28
 const TURBO_ACCEL := 1.35
-const TURBO_DRAIN := 22.0 # a full bar lasts about 4.5 s
+const TURBO_DRAIN := 20.0 # a full bar lasts 5 s (owner, session 6)
+const TURBO_AIR_THRUST := 18.0 # m/s^2: turbo in the air pushes the car on (jump + turbo onto a ledge)
+const TURBO_PUTS_OUT_FIRE := 0.5 # seconds of turbo blow out the flames
 const ENERGY_REGEN := 2.5
 const ENERGY_PAUSE := 1.5 # no regen for this long after spending energy
 const JUMP_COST := 25.0
@@ -81,6 +83,7 @@ var model: Node3D
 var _visual: Node3D
 var _fx: VehicleFx
 var _boosting := false
+var _turbo_run := 0.0
 var _wheels: Array = []
 var _steer_pivots: Array = []
 var _wheel_radius := 0.5
@@ -107,6 +110,8 @@ var _jolt := Vector3.ZERO # body knocked off its seat by a hit, springs back
 var _charge_fx: Node3D # glow growing on the launcher while a charged shot builds
 var _wreck_spin := Vector3.ZERO # a wreck tumbles through the air when it blows
 static var _white: StandardMaterial3D
+static var _blob_mat: StandardMaterial3D
+var _blob: MeshInstance3D # soft round shadow under the car on LOW (TM2 style; real shadows are off there)
 var _airborne := false
 var _stuck_time := 0.0
 var _wreck_time := 0.0
@@ -161,6 +166,22 @@ func setup(id: String, player: bool) -> void:
 	_wheel_radius = model.get_meta("wheel_radius", 0.5)
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		_flash_meshes.append(mi as MeshInstance3D)
+	if _blob_mat == null:
+		_blob_mat = StandardMaterial3D.new()
+		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_blob_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_blob_mat.albedo_texture = FxKit.soft_texture()
+		_blob_mat.albedo_color = Color(0, 0, 0, 0.62)
+	_blob = MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(size.x * 1.35, size.z * 1.15)
+	_blob.mesh = plane
+	_blob.material_override = _blob_mat
+	_blob.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_blob.top_level = true
+	_blob.visible = not GraphicsSettings.high
+	_blob.add_to_group(GraphicsSettings.BLOB_GROUP)
+	add_child(_blob)
 	_fx = VehicleFx.new()
 	_fx.name = "Fx"
 	add_child(_fx)
@@ -298,11 +319,21 @@ func _drive(delta: float) -> void:
 	_wall_pin -= delta
 
 	var top: float = stats.max_speed
-	var boosting := in_turbo and turbo > 0.0 and throttle > 0.1 and not frozen
+	# Turbo works forward, in reverse (owner, session 6) and in the air (thrust onto a ledge after a jump).
+	var boost_dir := signf(throttle) if absf(throttle) > 0.1 else (0.0 if on_floor else 1.0)
+	var boosting := in_turbo and turbo > 0.0 and boost_dir != 0.0 and not frozen
 	_boosting = boosting
 	if boosting:
 		top *= TURBO_MULT
 		turbo = maxf(0.0, turbo - TURBO_DRAIN * delta)
+		_turbo_run += delta
+		if _turbo_run >= TURBO_PUTS_OUT_FIRE and burn_time > 0.0: # the rush of air blows the flames out
+			burn_time = 0.0
+			_burn_fx.emitting = false
+			if is_player:
+				notice.emit(self, "FIRE OUT")
+	else:
+		_turbo_run = 0.0
 
 	# Steering first: needs speed, reverses when backing up, sharper with the handbrake.
 	var authority := clampf(absf(speed) / 7.0, 0.0, 1.0)
@@ -340,7 +371,7 @@ func _drive(delta: float) -> void:
 				v_f = move_toward(v_f, 0.0, brake * (1.0 - 0.45 * sliding) * delta)
 				braking = true
 			else:
-				v_f = move_toward(v_f, -float(stats.reverse) * -throttle, accel * 0.7 * delta)
+				v_f = move_toward(v_f, -float(stats.reverse) * -throttle * (2.0 if boosting else 1.0), accel * 0.7 * delta)
 		else:
 			v_f = move_toward(v_f, 0.0, COAST * delta)
 		if handbrake:
@@ -358,6 +389,9 @@ func _drive(delta: float) -> void:
 		v_l *= exp(-grip * delta)
 	else:
 		v_l *= exp(-0.3 * delta) # in the air: momentum carries on
+		if boosting:
+			var air_top: float = top if boost_dir > 0.0 else float(stats.reverse) * 2.0
+			v_f = move_toward(v_f, air_top * boost_dir, TURBO_AIR_THRUST * delta)
 	speed = v_f
 	_speed_out = speed
 	hv = forward * v_f + right * v_l
@@ -592,6 +626,25 @@ func _cancel_charge() -> void:
 	charge_time = 0.0
 
 
+## The round shadow sits on the ground under the car, fading as the car rises.
+func _place_blob() -> void:
+	if not _blob.visible and not GraphicsSettings.high:
+		_blob.visible = true
+	if not _blob.is_visible_in_tree():
+		return
+	var from := global_position + Vector3.UP * 1.0
+	var q := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * 30.0, 1)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty():
+		_blob.visible = false
+		return
+	var n: Vector3 = hit.normal
+	var height := from.y - 1.0 - (hit.position as Vector3).y
+	var fade := clampf(1.0 - height / 12.0, 0.15, 1.0)
+	_blob.global_transform = Transform3D(Basis(Quaternion(Vector3.UP, n)) * Basis(Vector3.UP, rotation.y) * Basis.from_scale(Vector3.ONE * (1.0 + (1.0 - fade) * 0.6)), (hit.position as Vector3) + n * 0.07)
+	_blob.transparency = 1.0 - fade
+
+
 ## The charged shot builds up where everyone can see it: a fireball swelling on the launcher,
 ## white-hot and pulsing once it is full.
 func _update_charge_fx() -> void:
@@ -630,6 +683,8 @@ func has_live_special() -> bool:
 func set_live_special(node: Node, weapon := "") -> void:
 	_active_special = node
 	_live_weapon = weapon if node else ""
+	if node == null:
+		_refresh_slots.call_deferred() # detonated / over: an empty weapon leaves the list at once
 
 
 func live_special() -> Node:
@@ -871,6 +926,7 @@ func _animate(delta: float) -> void:
 	_jolt = _jolt.lerp(Vector3.ZERO, 1.0 - exp(-12.0 * delta))
 	_visual.position = _jolt
 	_update_charge_fx()
+	_place_blob()
 	var spin := speed * delta / _wheel_radius
 	for w in _wheels:
 		(w as Node3D).rotate_x(-spin)

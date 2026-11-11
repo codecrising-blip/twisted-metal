@@ -99,7 +99,7 @@ func detonate() -> void:
 			var k := 1.0 - clampf(flat / radius, 0.0, 1.0)
 			var up := sqrt(2.0 * Vehicle.GRAVITY * h * k * k)
 			o.blast_knock(away * float(def.get("push", 16.0)) * k * (h / 8.4) + Vector3.UP * up, 1.0 if k > 0.55 else 0.15, false)
-	FxKit.explosion(world, global_position + Vector3.UP * 0.5, 2.8, Color(1.0, 0.45, 0.12))
+	FxKit.explosion(world, global_position + Vector3.UP * 0.5, float(def.get("blast_size", 2.8)), Color(1.0, 0.45, 0.12))
 	if is_instance_valid(owner_car) and owner_car.live_special() == self:
 		owner_car.set_live_special(null)
 	queue_free()

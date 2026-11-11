@@ -189,9 +189,10 @@ func _physics_process(delta: float) -> void:
 	_light.global_position = to
 	_spark -= delta
 	if _spark <= 0.0:
-		_spark = 0.08
+		_spark = 0.08 if GraphicsSettings.high else 0.2 # each spark burst is a new node: fewer on LOW
 		FxKit.spark(get_parent(), to + Vector3(randf_range(-1, 1), randf_range(0, 1), randf_range(-1, 1)), Vector3.UP)
-		FxKit.spark(get_parent(), from, Vector3.UP)
+		if GraphicsSettings.high:
+			FxKit.spark(get_parent(), from, Vector3.UP)
 	if _time >= float(def.get("duration", 3.0)):
 		_end(false)
 

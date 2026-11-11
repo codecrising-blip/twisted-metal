@@ -63,6 +63,7 @@ func _ready() -> void:
 	camera.current = true
 	camera.follow(player)
 	GameFeel.camera = camera
+	get_tree().create_timer(0.15).timeout.connect(func() -> void: GameFeel.prewarm(self, camera))
 
 	hud = Hud.new()
 	hud.name = "Hud"
@@ -96,8 +97,19 @@ func _spawn(id: String, xform: Transform3D, is_player: bool) -> Vehicle:
 
 
 func _spawn_pickups() -> void:
-	for p in arena.weapon_points:
-		Pickup.create(self, WeaponData.PICKUP_WEAPONS.pick_random(), p)
+	# Each weapon spot always gives the same weapon (owner, session 6): learn the map, come back for it.
+	var spot_rng := RandomNumberGenerator.new()
+	spot_rng.seed = 2026
+	var kinds: Array = WeaponData.PICKUP_WEAPONS.duplicate()
+	for i in arena.weapon_points.size():
+		if i % kinds.size() == 0: # a fresh shuffle of the whole mix for every round of spots
+			for k in range(kinds.size() - 1, 0, -1):
+				var j := spot_rng.randi_range(0, k)
+				var tmp = kinds[k]
+				kinds[k] = kinds[j]
+				kinds[j] = tmp
+		var pk := Pickup.create(self, kinds[i % kinds.size()], arena.weapon_points[i])
+		pk.random_weapon = false
 	for p in arena.health_points:
 		Pickup.create(self, "health", p)
 	for p in arena.mega_points:
@@ -163,7 +175,14 @@ func _start_music() -> void:
 	if tracks.is_empty():
 		return
 	tracks.sort()
-	var stream := load(MUSIC_DIR + "/" + tracks[0]) as AudioStream
+	# Each stage plays its own track (the owner's soundtrack, session 6): audio/music/<stage music>.mp3,
+	# else the first track there.
+	var pick := tracks[0]
+	var wanted: String = arena.get("music") if arena.get("music") else ""
+	for t in tracks:
+		if t.get_basename() == wanted:
+			pick = t
+	var stream := load(MUSIC_DIR + "/" + pick) as AudioStream
 	if stream == null:
 		return
 	if "loop" in stream:

@@ -54,13 +54,14 @@ const ROAD_CTRL := [
 ]
 
 var title := "LOS ANGELES"
+var music := "los_angeles" # audio/music/los_angeles.mp3
 var subtitle := "Quake Zone Rumble"
 var spawn_points: Array[Transform3D] = []
 var respawn_points: Array[Transform3D] = []
 var weapon_points: Array[Vector3] = []
 var health_points: Array[Vector3] = []
 var mega_points: Array[Vector3] = []
-var turbo_points: Array[Vector3] = [] # the most common pickup (owner, play-test 1)
+var turbo_points: Array[Vector3] = [] # five spots (owner, session 6)
 var ramps: Array[Dictionary] = [] # {foot, top}: the AI drives to the foot, then up
 var center := Vector3(0, PLAT_H, 0)
 var wander_half := 130.0
@@ -1045,7 +1046,7 @@ func _fire_pit() -> void:
 		var p := bottom + Vector3(cos(a) * 2.6, 0.4, sin(a) * 2.6)
 		var pipe := MeshKit.cylinder(self, 0.55, 3.4, p, _m.rust, Vector3(0, 0, 0), 10)
 		pipe.basis = Basis(Quaternion(Vector3.UP, Vector3(-cos(a) * 0.5, 1.0, -sin(a) * 0.5).normalized()))
-	var column := FxKit.fire(4.5, 90)
+	var column := FxKit.fire(4.5, 45) # fewer, big flames: far less overdraw on the HD 5500
 	column.position = bottom + Vector3.UP * 0.8
 	column.emission_sphere_radius = 1.6
 	column.initial_velocity_max = 7.0
@@ -1054,12 +1055,12 @@ func _fire_pit() -> void:
 	column.emitting = true
 	for k in 3:
 		var a := k * TAU / 3.0 + 0.5
-		var f := FxKit.fire(2.4, 40)
+		var f := FxKit.fire(2.4, 18)
 		f.position = ground(cos(a) * 3.5, sin(a) * 3.5, 0.3)
 		f.emission_sphere_radius = 1.0
 		add_child(f)
 		f.emitting = true
-	var smoke := FxKit.smoke(3.0, 30)
+	var smoke := FxKit.smoke(3.0, 16)
 	smoke.position = bottom + Vector3.UP * 7.0
 	add_child(smoke)
 	smoke.emitting = true
@@ -1742,20 +1743,12 @@ func _points() -> void:
 	var hill: Dictionary = hills()[1]
 	var top: Vector2 = hill.p
 	health_points.append(Vector3(top.x, HILL_H + 2.6, top.y)) # floating over a hill: jump for it
-	# Turbo: all along the road (before the jump hills too), around the battleground, one on the roof.
-	for k in 24:
-		var p: Vector3 = road_at(k / 24.0).p
-		var clear := true
-		for w in weapon_points:
-			if w.distance_to(ground(p.x, p.z)) < 12.0:
-				clear = false
-		for h: Dictionary in hills():
-			if Vector2(p.x, p.z).distance_to(h.p) < 14.0:
-				clear = false
-		if clear:
-			turbo_points.append(ground(p.x, p.z))
-	for q: Vector2 in [Vector2(-30, 40), Vector2(40, 15), Vector2(-15, -55), Vector2(75, 20), Vector2(-80, 15), Vector2(10, 80)]:
-		turbo_points.append(ground(q.x, q.y))
+	# Turbo (owner, session 6): only five spots: three around the road loop, one on the battleground,
+	# one up on the tunnel roof.
+	for f: float in [0.08, 0.42, 0.75]:
+		var p: Vector3 = road_at(f).p
+		turbo_points.append(ground(p.x, p.z))
+	turbo_points.append(ground(40, 15))
 	turbo_points.append(Vector3(-4, ROOF_Y, (TUNNEL_Z0 + TUNNEL_Z1) * 0.5))
 
 
