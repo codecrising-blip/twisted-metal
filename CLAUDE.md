@@ -283,8 +283,10 @@ scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, amm
 scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickups, walls/road from radar_lines()
 tests/                      smoke_test.gd (headless, ~65 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py
 assets/backdrops/           stage backdrops (equirectangular panoramas shown as the sky)
-audio/music/                one track per stage, named after `arena.music` (los_angeles.mp3, paris.mp3, egypt.mp3, ...)
-audio/sfx/                  sound effects by name (see its README); missing ones are silent
+audio/music/                one track per stage, named after `arena.music` (los_angeles.mp3, paris.mp3, egypt.mp3, ...);
+                            clips/ = owner's short 9-20 s TM3/TMB clips (purpose not decided, not played)
+audio/sfx/                  sound effects by name (see its README): owner's TM2/TM4 sounds as mono .ogg; unsorted/ =
+                            TM4 clips not yet identified. Owner uploads land in the repo root: sort them (see README)
 docs/GDD.md                 game design document (living); docs/design/ = design bible (Arabic)
 ```
 
@@ -365,7 +367,8 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
 1. Owner play-test of the LA stage: driving feel, wall slide, damage/health, AI, the new specials.
 2. Owner's verdict on the preview cars; then the same detail for the other cars, new Laughing Ghost look.
 3. Remaining energy moves and Sweet Bot; napalm pickup (needed for the Tokyo puzzle).
-4. Sound effects: the owner has ~74 files; names in `audio/sfx/README.md` (map them if they arrive under other names).
+4. Sound effects: 52 of the owner's ~74 files sorted and wired (engine/guns/skid loops, crashes, deaths, launches,
+   pickups, fire, teleport, menu). Owner to name the 11 `unsorted/tm4_sfx_*` clips; more files may come.
 5. Story skeleton, sub-boss arrival sequence (replays, silence, break-in), save after sub bosses.
 6. Next stage: Paris.
 
@@ -418,3 +421,6 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
   Round 4 (see above). Gotchas: an edge-tip test parked on a ramp tipped nothing (place it on flat ground); the coast
   brake ate the tipping push (move the body directly); a car resting on a slope never "landed" from a spin (landing
   also accepts resting, `|velocity.y| < 1`); `floor_max_angle` 38 broke AI ramp climbs, keep 48.
+  Sounds: the owner uploads through GitHub's web page, so files land in the repo root as `NN. SFX - Name.mp3.mpeg`
+  (Godot can't import `.mpeg` or `.flac`): convert with ffmpeg to mono .ogg, peak -1 dB, rename to the README names.
+  `GameFeel.loop()` sets `loop` on the stream; a typed lambda param on a freed node errors in `filter` (use Variant).

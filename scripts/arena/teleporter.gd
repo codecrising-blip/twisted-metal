@@ -63,10 +63,12 @@ func _on_body_entered(body: Node3D) -> void:
 		return
 	_cooldown[v.get_instance_id()] = 2.0
 	FxKit.explosion(get_parent(), v.global_position + Vector3.UP, 0.8, color)
+	GameFeel.play("teleport", v.global_position + Vector3.UP, get_parent())
 	var keep := maxf(absf(v.speed), 8.0)
 	v.global_transform = destination
 	v.speed = keep
 	var fwd := -destination.basis.z
 	v.velocity = Vector3(fwd.x, 0.0, fwd.z).normalized() * keep
 	FxKit.explosion(get_parent(), destination.origin + Vector3.UP, 0.8, color)
+	GameFeel.play("teleport", destination.origin + Vector3.UP, get_parent())
 	v.notice.emit(v, "TELEPORTED")

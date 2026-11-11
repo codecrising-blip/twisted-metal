@@ -20,6 +20,7 @@ static func drop(v: Vehicle, d: Dictionary) -> Mine:
 	var size: Vector3 = v.stats.get("size", Vector3(2.2, 1.8, 5.0))
 	var back := v.global_position - v.flat_forward() * (size.z * 0.5 + 1.6) + Vector3.UP
 	m.global_position = Specials.ground_below(v.get_parent(), back)
+	GameFeel.play("mine_drop", m.global_position, v.get_parent())
 	v.set_live_special(m, "remote")
 	if v.is_player:
 		v.notice.emit(v, "REMOTE DROPPED - FIRE TO BLOW")

@@ -58,31 +58,86 @@ static func shake(pos: Vector3, amount: float, reach := 45.0) -> void:
 		camera.add_shake(amount * (1.0 - d / reach))
 
 
-## A sound by name from res://audio/sfx/<name>.ogg or .wav, if the owner has dropped it in. The pitch
+## Sounds that borrow another file: name -> [file, pitch, volume dB]. One TM2 recording can serve
+## two weapons (the Zoomy salvo is the fire missile, higher and quieter).
+const SOUND_ALIAS := {
+	"wall_slam": ["crash", 1.0, 0.0],
+	"ram": ["crash", 0.9, 0.0],
+	"launch_zoomy": ["launch_fire", 1.35, -7.0],
+	"launch_napalm_cone": ["launch_napalm", 0.85, 0.0],
+	"pickup_turbo": ["pickup_health", 1.25, 0.0],
+}
+
+
+## All the files for one sound: <name>.ogg, or variants <name>_1, <name>_2 ... picked at random
+## (the four TM2 crashes). Empty when the owner hasn't dropped it in.
+static func streams(name: String) -> Array:
+	if _sounds.has(name):
+		return _sounds[name]
+	var found: Array = []
+	for n in [name] + range(1, 9).map(func(i: int) -> String: return "%s_%d" % [name, i]):
+		for ext: String in ["ogg", "wav", "mp3"]:
+			var path := "res://audio/sfx/%s.%s" % [n, ext]
+			if ResourceLoader.exists(path):
+				found.append(load(path))
+				break
+	_sounds[name] = found
+	return found
+
+
+## A sound by name from res://audio/sfx/<name>.ogg, if the owner has dropped it in. The pitch
 ## is nudged every time so repeats don't sound fake. Names: see audio/sfx/README.md.
-static func play(name: String, pos: Vector3, parent: Node, volume_db := 0.0) -> void:
+static func play(name: String, pos: Vector3, parent: Node, volume_db := 0.0, pitch := 1.0) -> void:
 	if parent == null or not parent.is_inside_tree():
 		return
-	if not _sounds.has(name):
-		var stream: AudioStream = null
-		for ext in ["ogg", "wav", "mp3"]:
-			var path := "res://audio/sfx/%s.%s" % [name, ext]
-			if ResourceLoader.exists(path):
-				stream = load(path)
-				break
-		_sounds[name] = stream
-	var s: AudioStream = _sounds[name]
-	if s == null:
+	if SOUND_ALIAS.has(name) and streams(name).is_empty():
+		var a: Array = SOUND_ALIAS[name]
+		play(a[0], pos, parent, volume_db + float(a[2]), pitch * float(a[1]))
+		return
+	var list := streams(name)
+	if list.is_empty():
 		return
 	var p := AudioStreamPlayer3D.new()
-	p.stream = s
+	p.stream = list.pick_random()
 	p.volume_db = volume_db
-	p.pitch_scale = randf_range(0.92, 1.08)
+	p.pitch_scale = pitch * randf_range(0.92, 1.08)
 	p.unit_size = 18.0
 	parent.add_child(p)
 	p.global_position = pos
 	p.finished.connect(p.queue_free)
 	p.play()
+
+
+## Screen sounds (menus): not placed in the world, keep playing while the game is paused.
+static func ui(name: String, tree: SceneTree, volume_db := -4.0) -> void:
+	var list := streams(name)
+	if list.is_empty() or tree == null:
+		return
+	var p := AudioStreamPlayer.new()
+	p.stream = list[0]
+	p.volume_db = volume_db
+	p.process_mode = Node.PROCESS_MODE_ALWAYS
+	tree.root.add_child(p)
+	p.finished.connect(p.queue_free)
+	p.play()
+
+
+## A looping sound fixed to `parent` (engine, guns, skid, fire), stopped until someone plays it.
+## Null when the file is missing, so callers check before using it.
+static func loop(name: String, parent: Node3D, volume_db := 0.0, unit_size := 12.0) -> AudioStreamPlayer3D:
+	var list := streams(name)
+	if list.is_empty():
+		return null
+	var s: AudioStream = list[0]
+	if "loop" in s:
+		s.set("loop", true)
+	var p := AudioStreamPlayer3D.new()
+	p.stream = s
+	p.volume_db = volume_db
+	p.unit_size = unit_size
+	p.max_distance = unit_size * 8.0
+	parent.add_child(p)
+	return p
 
 
 ## White-hot ball that pops and fades: the first frame of every explosion or launch.
@@ -165,7 +220,7 @@ static func scorch(parent: Node, pos: Vector3, radius: float) -> void:
 	parent.add_child(mi)
 	mi.global_position = ground + Vector3.UP * 0.12
 	mi.rotation.y = randf() * TAU
-	_scorches.assign(_scorches.filter(func(n: Node3D) -> bool: return is_instance_valid(n)))
+	_scorches.assign(_scorches.filter(func(n: Variant) -> bool: return is_instance_valid(n)))
 	_scorches.append(mi)
 	while _scorches.size() > MAX_SCORCH:
 		_scorches.pop_front().queue_free()

@@ -284,6 +284,7 @@ func _handle_input() -> void:
 		_fps.text = "FPS %d" % Engine.get_frames_per_second()
 	if Input.is_action_just_pressed("pause") and not game_over:
 		get_tree().paused = not get_tree().paused
+		GameFeel.ui("menu_select", get_tree())
 		if get_tree().paused:
 			_show_pause()
 		else:
@@ -298,6 +299,7 @@ func _handle_input() -> void:
 		for i in mini(drivers.size(), 5):
 			if Input.is_action_just_pressed("pick_%d" % (i + 1)):
 				get_tree().paused = false
+				GameFeel.ui("menu_select", get_tree())
 				driver_requested.emit(i)
 				return
 

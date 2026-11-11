@@ -39,8 +39,11 @@ static func start(v: Vehicle, d: Dictionary) -> TaserLink:
 	if link.target == null:
 		link._fizzle = 0.35
 		v.notice.emit(v, "NO TARGET IN RANGE")
+		if v.is_player:
+			GameFeel.ui("not_available", v.get_tree())
 	else:
 		v.set_live_special(link)
+		GameFeel.play("special_outlaw", v.global_position + Vector3.UP, v.get_parent())
 	return link
 
 

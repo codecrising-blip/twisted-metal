@@ -32,7 +32,7 @@ const CARS := {
 		"tagline": "He laughs louder than the engine.",
 	},
 	"outlaw": {
-		"name": "Outlaw", "driver": "Jamie Roberts",
+		"name": "Outlaw", "driver": "Jamie Roberts", "female": true,
 		"spd": 7, "arm": 6, "hnd": 6, "spc": 5, "class": "medium",
 		"special": "omni_taser", "brake_mult": 1.3, # perk: Interceptor
 		"size": Vector3(2.2, 1.6, 5.0),

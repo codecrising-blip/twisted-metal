@@ -143,6 +143,12 @@ var _smoke: CPUParticles3D
 var _fire: CPUParticles3D
 var _burn_fx: CPUParticles3D
 var _ice: MeshInstance3D
+# Sound loops (the owner's TM2 recordings, session 6): engine by weight class, guns and tire skid
+# while they happen. Null when a file is missing.
+var _engine_snd: AudioStreamPlayer3D
+var _gun_snd: AudioStreamPlayer3D
+var _skid_snd: AudioStreamPlayer3D
+var _gun_snd_t := 0.0
 
 
 ## Call before adding to the tree.
@@ -203,6 +209,11 @@ func setup(id: String, player: bool) -> void:
 	_fx = VehicleFx.new()
 	_fx.name = "Fx"
 	add_child(_fx)
+	_engine_snd = GameFeel.loop("engine_" + str(stats.get("class", "medium")), self, -15.0 if player else -11.0, 9.0)
+	if _engine_snd:
+		_engine_snd.autoplay = true
+	_gun_snd = GameFeel.loop("guns_loop", self, -9.0, 14.0)
+	_skid_snd = GameFeel.loop("skid_loop", self, -14.0, 10.0)
 	_fx.setup(model)
 
 	var top: Vector3 = model.get_meta("top", Vector3(0, 2, 0))
@@ -524,6 +535,7 @@ func _ram(other: Vehicle, before: Vector3, n: Vector3) -> void:
 	if closing < RAM_MIN_CLOSING:
 		return
 	_ram_times[key] = _clock
+	GameFeel.play("ram", (global_position + other.global_position) * 0.5 + Vector3.UP, get_parent(), clampf(-14.0 + closing * 0.8, -14.0, 0.0))
 	var ratio := sqrt(mass / other.mass)
 	var dmg := minf(RAM_MAX, (closing - RAM_MIN_CLOSING) * 0.5 * ratio)
 	other.take_damage(dmg, self)
@@ -789,6 +801,30 @@ func _place_blob() -> void:
 	_blob.transparency = 1.0 - fade
 
 
+## Engine pitch follows the speed (turbo pushes it higher), guns loop while firing, tires squeal
+## while the car slides sideways or drifts on the handbrake.
+func _update_sounds(delta: float) -> void:
+	if _engine_snd:
+		var r := clampf(absf(speed) / float(stats.max_speed), 0.0, 1.4)
+		var want := 0.75 + r * 0.55 + (0.15 if _boosting else 0.0)
+		_engine_snd.pitch_scale = lerpf(_engine_snd.pitch_scale, want, 1.0 - exp(-5.0 * delta))
+	if _gun_snd:
+		_gun_snd_t -= delta
+		if _gun_snd_t > 0.0 and not _gun_snd.playing:
+			_gun_snd.play()
+		elif _gun_snd_t <= 0.0 and _gun_snd.playing:
+			_gun_snd.stop()
+	if _skid_snd:
+		var side := absf(velocity.dot(global_basis.x))
+		var skid := is_on_floor() and not flipped and (side > 5.0 or (in_handbrake and absf(speed) > 8.0))
+		if skid:
+			_skid_snd.volume_db = -18.0 + clampf(side / 14.0, 0.0, 1.0) * 9.0
+			if not _skid_snd.playing:
+				_skid_snd.play()
+		elif _skid_snd.playing:
+			_skid_snd.stop()
+
+
 ## The charged shot builds up where everyone can see it: a fireball swelling on the launcher,
 ## white-hot and pulsing once it is full.
 func _update_charge_fx() -> void:
@@ -850,12 +886,15 @@ func _fire_guns() -> void:
 	dir = (dir + Vector3(randf_range(-1, 1), randf_range(-0.5, 0.5), randf_range(-1, 1)) * 0.012).normalized()
 	Projectile.spawn(get_parent(), "guns", from, dir, self, null)
 	_fx.gun_fired(_gun_index)
-	if _gun_index == 0:
+	_gun_snd_t = 0.14 # the loop runs while the guns keep firing
+	if _gun_snd == null and _gun_index == 0:
 		GameFeel.play("guns", from, get_parent(), -6.0)
 
 
 func _fire_selected(charged := false) -> void:
 	if weapon_order.is_empty():
+		if is_player:
+			GameFeel.ui("not_available", get_tree())
 		return
 	selected = clampi(selected, 0, weapon_order.size() - 1)
 	var id := weapon_order[selected]
@@ -999,6 +1038,8 @@ func _unfreeze() -> void:
 func ignite(seconds: float, by: Vehicle) -> void:
 	if is_dead or invulnerable_time > 0.0:
 		return
+	if burn_time <= 0.0:
+		GameFeel.play("ignite", global_position + Vector3.UP, get_parent(), -3.0)
 	burn_time = maxf(burn_time, seconds)
 	_burn_source = by
 	_burn_fx.emitting = true
@@ -1019,6 +1060,10 @@ func _die() -> void:
 	_ice.visible = false
 	_visual.visible = true
 	FxKit.explosion(get_parent(), global_position + Vector3.UP * 1.5, 2.6)
+	GameFeel.play("death_female" if stats.get("female", false) else "death_male", global_position + Vector3.UP, get_parent())
+	for snd: AudioStreamPlayer3D in [_engine_snd, _gun_snd, _skid_snd]:
+		if snd:
+			snd.stop()
 	velocity += Vector3(randf_range(-3, 3), 11.0, randf_range(-3, 3))
 	_wreck_spin = Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized() * randf_range(2.5, 4.5)
 	_charge_fx = null
@@ -1061,6 +1106,7 @@ func _wreck_physics(delta: float) -> void:
 
 func _animate(delta: float) -> void:
 	_fx.update(delta, self, velocity, _boosting, in_handbrake and is_on_floor() and absf(speed) > 8.0)
+	_update_sounds(delta)
 	if _flash_time > 0.0:
 		_flash_time -= delta
 		if _flash_time <= 0.0:

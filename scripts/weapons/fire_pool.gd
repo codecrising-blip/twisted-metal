@@ -53,6 +53,9 @@ func _ready() -> void:
 	_light.omni_range = radius * 3.0 + 4.0
 	_light.position = Vector3.UP * 1.5
 	add_child(_light)
+	var crackle := GameFeel.loop("fire_loop", self, -14.0 + radius * 1.5, 3.0 + radius * 1.5)
+	if crackle:
+		crackle.play()
 
 
 func _physics_process(delta: float) -> void:

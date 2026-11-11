@@ -59,6 +59,11 @@ func _run() -> void:
 	_check(is_equal_approx(player.max_health, 328.0), "Sweet Tooth health from the stats (328)")
 	var grimm: Vehicle = main.enemies.filter(func(e: Vehicle): return e.car_id == "mr_grimm")[0]
 	_check(is_equal_approx(grimm.max_health, 216.0), "Mr. Grimm health from the stats (216)")
+	# Sounds (owner's TM2 recordings): crash variants, aliases, engine loop by class.
+	_check(GameFeel.streams("crash").size() == 4, "four crash variants load (%d)" % GameFeel.streams("crash").size())
+	_check(not GameFeel.streams("launch_power").is_empty(), "power missile launch sound loads")
+	_check(player._engine_snd != null and player._engine_snd.stream.get("loop"), "Sweet Tooth has a looping heavy engine")
+	_check(player._gun_snd != null and player._skid_snd != null, "gun and skid loops are ready")
 	var brains: Array = main.enemies.map(func(e: Vehicle): return e.controller)
 	_park(main)
 	var enemy_starts: Array = main.enemies.map(func(e: Vehicle): return e.global_position)
