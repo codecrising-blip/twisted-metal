@@ -492,6 +492,21 @@ func _run() -> void:
 	_check(o_brain.drifts >= 1, "...drifts round for the next run (%d drifts)" % o_brain.drifts)
 	_check(glued < 180, "...without gluing itself to you (%d of 720 frames within 6 m)" % glued)
 	_check(path > 60.0, "...and keeps moving, never stuck (%.0f m driven)" % path)
+	# Stuck in the pocket beside a ramp, nose to the battleground wall, with you up top: it backs
+	# out, lines up with a ramp (or jumps the wall) and gets up to you.
+	var rp: Dictionary = LosAngelesArena.ramp_list()[1]
+	var rtop: Vector3 = rp.top
+	var pocket := Vector3(rtop.x, 0, rtop.z) + (rp.dir as Vector3) * 4.0 + (rp.side as Vector3) * (LosAngelesArena.RAMP_W * 0.5 + 3.5)
+	_place(player, rtop.x - rp.dir.x * 30.0, rtop.z - rp.dir.z * 30.0, 0)
+	outlaw.global_transform = Transform3D(Basis.looking_at(-(rp.dir as Vector3), Vector3.UP), LosAngelesArena.ground(pocket.x, pocket.z, 0.1))
+	outlaw.velocity = Vector3.ZERO
+	var climbed_at := -1
+	for k in 1080:
+		await _frames(1)
+		if outlaw.global_position.y > 4.0 and outlaw.is_on_floor():
+			climbed_at = k
+			break
+	_check(climbed_at > 0, "AI stuck beside a ramp finds its way up (%.1f s)" % (climbed_at / 60.0))
 	outlaw.health = outlaw.max_health * 0.2
 	await _frames(40)
 	_check(o_brain.mode == "retreat", "badly hurt AI breaks away to look for health")

@@ -33,10 +33,16 @@ var _reverse := 0.0
 var _reverse_steer := 1.0
 var _wander := Vector3.ZERO
 var _ramp_goal: Dictionary = {}
+var _escape := 0.0 # after backing out of a wall: drive to a point along the wall for a moment
+var _escape_goal := Vector3.ZERO
+var _bad_ramps := {} # ramp foot (rounded) -> seconds to avoid it after failing to climb it twice
+var _ramp_fails := 0
+var _no_jump := 0.0 # a jump-up attempt failed: use ramps for a while
 var _side := 1.0 # attack run: pass on the target's right (1) or left (-1)
 var _feinted := false
 var _phase_t := 0.0
 var _drift := false
+var _plan_jump := false
 var drifts := 0 # handbrake turns started (tests)
 
 
@@ -49,9 +55,18 @@ func drive(v: Vehicle, delta: float) -> void:
 		v.target = _choose_target(v)
 
 	_drift = false
+	_no_jump -= delta
+	for key in _bad_ramps.keys():
+		_bad_ramps[key] -= delta
+		if _bad_ramps[key] <= 0.0:
+			_bad_ramps.erase(key)
 	var plan := _plan(v, delta)
 	var goal: Vector3 = plan.goal
 	var throttle: float = plan.throttle
+	if _escape > 0.0: # just backed out of a wall or a corner: go round it, not straight back in
+		_escape -= delta
+		goal = _escape_goal
+		throttle = 1.0
 	var to := goal - v.global_position
 	to.y = 0.0
 	var dist := to.length()
@@ -79,14 +94,20 @@ func drive(v: Vehicle, delta: float) -> void:
 		_stuck += delta # pushing against a wall, a corner or a car without moving
 		if _stuck > 0.7:
 			_stuck = 0.0
-			_reverse = 1.1
+			_reverse = 1.3
 			_reverse_steer = -signf(steer) if absf(steer) > 0.1 else (1.0 if randf() < 0.5 else -1.0)
+			_set_escape(v, goal)
+			if not _ramp_goal.is_empty() and _ramp_goal.get("climbing", false):
+				_ramp_failed()
+			if _plan_jump:
+				_no_jump = 12.0 # couldn't jump up there from here: take a ramp for a while
 	else:
 		_stuck = 0.0
 
 	v.in_throttle = throttle
 	v.in_steer = steer
 	v.in_handbrake = handbrake
+	_try_jump_up(v)
 	# Turbo never refills by itself: spend it on chasing a runner, closing a long gap or escaping.
 	var want_turbo: bool = plan.get("turbo", false) or not _ramp_goal.is_empty()
 	v.in_turbo = want_turbo and absf(angle) < 0.3 and v.turbo > 10.0
@@ -119,9 +140,18 @@ func _plan(v: Vehicle, delta: float) -> Dictionary:
 	var flat_to := Vector3(to.x, 0, to.z).normalized()
 	var t_vel := Vector3(t.velocity.x, 0, t.velocity.z)
 	var running := t_vel.length() > 9.0 and t_vel.normalized().dot(flat_to) > 0.4 # driving away from us
-	if absf(to.y) > 3.0: # up on a deck or down on the road: go round by a ramp
+	_plan_jump = false
+	if to.y > 2.5 and to.y < 5.6 and d < 70.0 and _no_jump <= 0.0 and v.energy >= Vehicle.JUMP_COST and _runway(v, t):
+		# It is up on the battleground and close: drive straight at it and jump the wall (the
+		# owner's "unorthodox entrance"). If that fails we fall back to the ramps for a while.
 		mode = "chase"
-		return {"goal": _via_ramp(v, t.global_position), "throttle": 1.0, "turbo": d > 40.0}
+		_plan_jump = true
+		_ramp_goal = {}
+		return {"goal": t.global_position, "throttle": 1.0, "turbo": d > 30.0}
+	var mid_climb: bool = not _ramp_goal.is_empty() and _ramp_goal.get("climbing", false) and v.global_position.y < (_ramp_goal.top as Vector3).y - 0.6
+	if absf(to.y) > 2.5 or mid_climb: # up on a deck or down on the road: go round by a ramp (and finish the climb)
+		mode = "chase"
+		return {"goal": _via_ramp(v, t.global_position + Vector3.UP * (5.0 if mid_climb else 0.0)), "throttle": 1.0, "turbo": d > 40.0}
 	_ramp_goal = {}
 	# Low on weapons or turbo and not in the thick of it: pick some up on the way.
 	if d > 35.0:
@@ -239,7 +269,7 @@ func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
 	if _ramp_goal.is_empty():
 		var best_d := INF
 		for r: Dictionary in arena.ramps:
-			if absf(r.top.y - goal.y) > 2.0:
+			if absf(r.top.y - goal.y) > 2.0 or _bad_ramps.has(_ramp_key(r)):
 				continue
 			var d: float = v.global_position.distance_to(r.foot) + (r.top as Vector3).distance_to(goal)
 			if d < best_d:
@@ -249,11 +279,96 @@ func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
 		if _ramp_goal.is_empty():
 			return goal
 	var foot: Vector3 = _ramp_goal.foot
-	if not _ramp_goal.climbing and Vector2(v.global_position.x - foot.x, v.global_position.z - foot.z).length() < 8.0:
-		_ramp_goal.climbing = true
-	if not _ramp_goal.climbing and foot.y > v.global_position.y + 3.5:
-		return _lower_ramp(v, foot) # that ramp starts up on a plateau: get up there first
-	return _ramp_goal.top if _ramp_goal.climbing else foot
+	var top: Vector3 = _ramp_goal.top
+	var axis := Vector3(foot.x - top.x, 0, foot.z - top.z).normalized() # from the top out to the foot
+	var rel := v.global_position - top
+	var lateral := absf(rel.dot(Vector3(-axis.z, 0, axis.x)))
+	if not _ramp_goal.climbing:
+		if foot.y > v.global_position.y + 3.5:
+			return _lower_ramp(v, foot) # that ramp starts up on a plateau: get up there first
+		var out := rel.dot(axis) # how far out along the ramp's line (the foot is ~RAMP_L + 10 out)
+		var lined_up := v.flat_forward().dot(-axis) > 0.7 and lateral < 6.0
+		if lined_up and out > 8.0:
+			_ramp_goal.climbing = true
+		elif Vector2(v.global_position.x - foot.x, v.global_position.z - foot.z).length() < 10.0:
+			_ramp_goal["lineup"] = true
+		if _ramp_goal.get("lineup", false) and not _ramp_goal.climbing:
+			# Missed the line: swing out a bit further along it, then come back in straight.
+			if Vector2(v.global_position.x - foot.x - axis.x * 12.0, v.global_position.z - foot.z - axis.z * 12.0).length() < 7.0:
+				_ramp_goal["lineup"] = false
+			return foot + axis * 12.0
+		if not _ramp_goal.climbing:
+			return foot
+	# Climbing: drifted off the side before reaching the top? Abort, back out, line up again.
+	if lateral > 9.0 and v.global_position.y < top.y - 1.0 and rel.dot(axis) > 2.0:
+		_ramp_failed()
+		return foot
+	return top
+
+
+func _ramp_key(r: Dictionary) -> String:
+	var f: Vector3 = r.foot
+	return "%d_%d" % [roundi(f.x), roundi(f.z)]
+
+
+## A climb that went wrong: try the same ramp once more, then avoid it for a while.
+func _ramp_failed() -> void:
+	if _ramp_goal.is_empty():
+		return
+	_ramp_fails += 1
+	if _ramp_fails >= 2:
+		_bad_ramps[_ramp_key(_ramp_goal)] = 25.0
+		_ramp_fails = 0
+	_ramp_goal = {}
+
+
+## After backing out of a wall: a point along the wall (the side that heads toward the goal).
+func _set_escape(v: Vehicle, goal: Vector3) -> void:
+	var n: Vector3 = v._last_wall_normal if v._last_wall_normal.length() > 0.1 else -v.flat_forward()
+	var along := n.cross(Vector3.UP).normalized()
+	var to_goal := goal - v.global_position
+	to_goal.y = 0.0
+	if along.dot(to_goal) < 0.0:
+		along = -along
+	if randf() < 0.2:
+		along = -along # now and then the other way, in case that side is blocked too
+	_escape_goal = v.global_position + n * 8.0 + along * 22.0
+	_escape = 1.0 + 1.3 # starts after the 1.3 s reverse
+
+
+## Room to speed up before the wall between us and the target (a jump-up needs a run-up).
+func _runway(v: Vehicle, t: Vehicle) -> bool:
+	var origin := v.global_position + Vector3.UP * 1.0
+	var to := t.global_position - v.global_position
+	to.y = 0.0
+	var q := PhysicsRayQueryParameters3D.create(origin, origin + to.normalized() * 14.0, WORLD_MASK)
+	if v.get_world_3d().direct_space_state.intersect_ray(q).is_empty():
+		return true
+	_no_jump = 4.0 # nose to the wall: take a ramp this time
+	return false
+
+
+## The 6 m energy jump onto a higher level when its edge is just the right distance ahead.
+func _try_jump_up(v: Vehicle) -> void:
+	if not _plan_jump or not v.is_on_floor() or v.speed < 14.0 or v.energy < Vehicle.JUMP_COST:
+		return
+	var origin := v.global_position + Vector3.UP * 1.0
+	var fwd := v.flat_forward()
+	var q := PhysicsRayQueryParameters3D.create(origin, origin + fwd * 22.0, WORLD_MASK)
+	var hit := v.get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty() or absf((hit.normal as Vector3).y) > 0.5:
+		return
+	var dist := origin.distance_to(hit.position)
+	# Clear 5 m between about 0.35 s and 0.9 s after takeoff; the car's nose leads by half its length.
+	var half: float = float(v.stats.get("size", Vector3(2, 2, 5)).z) * 0.5
+	if dist < v.speed * 0.4 + half or dist > v.speed * 0.62 + half:
+		return
+	if arena and arena.has_method("ground"):
+		var beyond: Vector3 = arena.ground(hit.position.x + fwd.x * 3.0, hit.position.z + fwd.z * 3.0)
+		var rise := beyond.y - v.global_position.y
+		if rise < 2.0 or rise > 5.6:
+			return
+	v.want_jump = true
 
 
 ## Route to a ramp that climbs to `level` (its top at that height): foot first, then up.
