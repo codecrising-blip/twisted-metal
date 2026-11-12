@@ -299,6 +299,13 @@ func _handle_input() -> void:
 				Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
 				Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 				Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000]
+			# Where you are (owner, round 6), to point at odd spots: metres from the middle of the
+			# stage (LA: the pit of fire), x east (+) / west (-), z south (+) / north (-), y height.
+			if is_instance_valid(player):
+				var p := player.global_position
+				var dirs := ("N" if p.z < 0.0 else "S") + ("E" if p.x > 0.0 else "W")
+				_fps.text += "\nPOS  x %.0f   y %.1f   z %.0f   (%s of the pit of fire, %.0f m)   heading %s" % [
+					p.x, p.y, p.z, dirs, Vector2(p.x, p.z).length(), _heading_name(player.flat_forward())]
 	if Input.is_action_just_pressed("pause") and not game_over:
 		get_tree().paused = not get_tree().paused
 		GameFeel.ui("menu_select", get_tree())
@@ -329,6 +336,12 @@ func _handle_input() -> void:
 				GameFeel.ui("menu_select", get_tree())
 				driver_requested.emit(i)
 				return
+
+
+func _heading_name(f: Vector3) -> String:
+	var names := ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
+	var a := fposmod(atan2(f.x, -f.z), TAU) # 0 = north (-z), clockwise
+	return names[int(round(a / (TAU / 8.0))) % 8]
 
 
 func _show_pause() -> void:

@@ -10,6 +10,8 @@ var player: Vehicle
 var font: Font
 
 
+const SPECIAL_GREEN := Color(0.55, 1.0, 0.4)
+
 func _ready() -> void:
 	custom_minimum_size = Vector2(W, H)
 	size = Vector2(W, H)
@@ -28,6 +30,8 @@ func _draw() -> void:
 	var current := player.selected_weapon()
 	var def := WeaponData.get_def(current)
 	var color: Color = def.get("color", Color.WHITE)
+	if def.get("special", false):
+		color = SPECIAL_GREEN # the special is green all over: emblem, frame, tag and count (owner, round 6)
 	draw_colored_polygon(PackedVector2Array([Vector2(34, 0), Vector2(W, 0), Vector2(W, 4), Vector2(33, 4)]), color)
 	# Big icon box.
 	var box := Rect2(46, 16, 84, 84)
@@ -40,7 +44,7 @@ func _draw() -> void:
 	var label := String(def.get("label", current)).to_upper()
 	draw_string(font, Vector2(144, 46), label, HORIZONTAL_ALIGNMENT_LEFT, 200, 26, Color(0.94, 0.91, 0.85))
 	if def.get("special", false):
-		draw_string(font, Vector2(144, 71), "SPECIAL", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.98, 0.8, 0.3))
+		draw_string(font, Vector2(144, 71), "SPECIAL", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, SPECIAL_GREEN)
 	var count: int = player.ammo.get(current, 0)
 	draw_string(font, Vector2(W - 140, 98), "x%d" % count, HORIZONTAL_ALIGNMENT_RIGHT, 120, 46, color.lightened(0.15))
 	if player.selected_is_live():
@@ -71,7 +75,7 @@ func _draw() -> void:
 		if x > W - 60:
 			break
 		var d := WeaponData.get_def(id)
-		var c: Color = d.get("color", Color.WHITE)
+		var c: Color = SPECIAL_GREEN if d.get("special", false) else d.get("color", Color.WHITE)
 		var sel: bool = id == current
 		var chip := Rect2(x, 112, 58, 34)
 		draw_rect(chip, Color(c.r, c.g, c.b, 0.3 if sel else 0.1))
@@ -80,7 +84,10 @@ func _draw() -> void:
 			_special_emblem(Rect2(chip.position + Vector2(3, 3), Vector2(28, 28)), true)
 		else:
 			_icon(String(d.get("icon", d.get("kind", "missile"))), chip.position + Vector2(17, 17), 10.0, c if sel else c.darkened(0.35))
-		draw_string(font, chip.position + Vector2(30, 24), str(player.ammo.get(id, 0)), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.92, 0.9, 0.85) if sel else Color(0.6, 0.58, 0.55))
+		var count_color := Color(0.92, 0.9, 0.85) if sel else Color(0.6, 0.58, 0.55)
+		if d.get("special", false):
+			count_color = SPECIAL_GREEN if sel else SPECIAL_GREEN.darkened(0.3)
+		draw_string(font, chip.position + Vector2(30, 24), str(player.ammo.get(id, 0)), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, count_color)
 		x += 64.0
 
 

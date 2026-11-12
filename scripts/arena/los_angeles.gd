@@ -41,6 +41,8 @@ const DECK_Y := 6.0 # caged deck, above the battleground
 const DECK_CENTER := Vector3(55, PLAT_H, -42)
 const TOWER_AT := Vector3(52, PLAT_H, 48)
 const BURNT_AT := Vector3(-52, PLAT_H, -38)
+const VEHICLE_BARRIER_LAYER := 16 # physics layer 5: only cars collide with it
+const BARRIER_H := 120.0
 const SIGN_Z := -200.0 # the HOLLYWOOD letters, on the hill north of the arena
 const BACKDROP := "res://assets/backdrops/los_angeles_city.jpg"
 
@@ -102,7 +104,6 @@ func build() -> void:
 	add_child(props)
 	props.build(self)
 	_points()
-	_ambience()
 	_flush_batch()
 
 
@@ -877,6 +878,19 @@ func _outer_wall() -> void:
 		bs.size = Vector3(length, h, 2.0)
 		shape.shape = bs
 		body.add_child(shape)
+		# No way out of the stage (owner, round 6): an invisible wall far above the fence that only
+		# cars hit (layer 5), so missiles still fly over the fence.
+		var barrier := StaticBody3D.new()
+		barrier.collision_layer = VEHICLE_BARRIER_LAYER
+		barrier.collision_mask = 0
+		barrier.position = mid + Vector3.UP * (h + BARRIER_H * 0.5)
+		barrier.rotation_degrees.y = yaw
+		add_child(barrier)
+		var bshape := CollisionShape3D.new()
+		var bbox := BoxShape3D.new()
+		bbox.size = Vector3(length, BARRIER_H, 2.0)
+		bshape.shape = bbox
+		barrier.add_child(bshape)
 		var basis := Basis(Vector3.UP, deg_to_rad(yaw))
 		mb.box(_m.wall_steel, Vector3(length, barrier_h, 1.6), Transform3D(basis, mid + Vector3.UP * barrier_h * 0.5), 0.02)
 		mb.box(_m.rib, Vector3(length + 0.1, 0.22, 1.9), Transform3D(basis, mid + Vector3.UP * (barrier_h + 0.05)), 0.02)
@@ -1551,29 +1565,6 @@ static func hill_height(x: float, z: float) -> float:
 	var spur := (0.45 - absf(sin(x * 0.052 + sin(z * 0.035) * 0.9))) * 14.0
 	spur *= lerpf(0.3, 1.0, smoothstep(35.0, 80.0, absf(x + 10.0)))
 	return -25.0 + (rise + (peaks + spur) * smoothstep(0.15, 0.7, t)) * lateral
-
-
-## The city around the arena (round 5, TM 2012 sounds): far traffic all the time, and now and then a
-## horn or a scream from somewhere past the walls. Not placed in 3D (it is the whole city).
-func _ambience() -> void:
-	var list := GameFeel.streams("amb_city_traffic")
-	if not list.is_empty():
-		var s: AudioStream = list[0]
-		if "loop" in s:
-			s.set("loop", true)
-		var p := AudioStreamPlayer.new()
-		p.stream = s
-		p.bus = AudioSettings.SFX_BUS
-		p.volume_db = -21.0
-		p.autoplay = true
-		add_child(p)
-	var t := Timer.new()
-	t.wait_time = 12.0
-	t.autostart = true
-	add_child(t)
-	t.timeout.connect(func() -> void:
-		t.wait_time = randf_range(10.0, 26.0)
-		GameFeel.ui("amb_scream" if randf() < 0.2 else "amb_horn", get_tree(), -20.0))
 
 
 ## For the HUD radar: the outer wall, the road, the battleground edge and the tunnels.

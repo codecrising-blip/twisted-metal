@@ -93,14 +93,16 @@ func detonate() -> void:
 		away = away.normalized() if away.length() > 0.3 else o.flat_forward()
 		var heights: Dictionary = def.get("launch", {})
 		var h := float(heights.get(o.stats.get("class", "medium"), 8.4))
-		if flat < 2.8: # right on top: thrown straight up by its weight class, one full flip
+		if flat < 2.8: # right on top: thrown up a bit higher than its class height (owner, round 6), rolling
 			# Sometimes once round and back on its wheels, sometimes onto its roof.
-			o.blast_knock(Vector3.UP * sqrt(2.0 * Vehicle.GRAVITY * h) + away * 3.0, 0.5 if randf() < 0.45 else 1.0, false)
+			o.blast_knock(Vector3.UP * sqrt(2.0 * Vehicle.GRAVITY * h * 1.25) + away * 3.0, 0.5 if randf() < 0.45 else 1.0, false)
 		else:
-			# Close side hits throw the car up and away and roll it over; farther ones shove and tilt.
-			var k := 1.0 - clampf(flat / radius, 0.0, 1.0)
-			var up := sqrt(2.0 * Vehicle.GRAVITY * h * k * k)
-			o.blast_knock(away * float(def.get("push", 16.0)) * k * (h / 8.4) + Vector3.UP * up, 0.5 if k > 0.75 else (1.0 if k > 0.5 else 0.15), false)
+			# Side hits (owner, round 6): thrown sideways away from the blast, the near side lifted, so
+			# it rolls away from it; the closer, the higher and the further. Light cars fly furthest.
+			var k := 1.0 - clampf((flat - 2.8) / (radius - 2.8), 0.0, 1.0)
+			var up := sqrt(2.0 * Vehicle.GRAVITY * h * (0.25 + 0.5 * k) * k)
+			var side := away * float(def.get("push", 24.0)) * (0.35 + 0.65 * k) * (h / 8.4)
+			o.blast_knock(side + Vector3.UP * up, 0.15 + 0.35 * k, false)
 	FxKit.explosion(world, global_position + Vector3.UP * 0.5, float(def.get("blast_size", 2.8)), Color(1.0, 0.45, 0.12))
 	if is_instance_valid(owner_car) and owner_car.live_special() == self:
 		owner_car.set_live_special(null)

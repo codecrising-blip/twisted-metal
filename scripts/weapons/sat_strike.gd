@@ -28,6 +28,7 @@ static func start(v: Vehicle, _id: String, d: Dictionary) -> SatStrike:
 	s._delay = d.get("delay", 4.0)
 	v.get_parent().add_child(s)
 	s.global_position = zone_point(v, d)
+	GameFeel.play("sat_launch", v.global_position + Vector3.UP * 2.0, v.get_parent(), 0.0, 0.85) # off it goes, up to the satellite
 	if v.is_player:
 		v.notice.emit(v, "SAT LOCKED - KEEP THEM IN FRONT")
 	return s
@@ -87,7 +88,10 @@ func _strike() -> void:
 	_struck = true
 	if _scan:
 		_scan.stop()
-	GameFeel.play("sat_strike", global_position + Vector3.UP * 2.0, get_parent(), 4.0)
+	# The strike (owner, round 6: "needs a bigger sound"): the beam, a big blast and a deep boom under it.
+	GameFeel.play("sat_strike", global_position + Vector3.UP * 2.0, get_parent(), 6.0)
+	GameFeel.play("explosion_big", global_position + Vector3.UP, get_parent(), 6.0, 0.8)
+	GameFeel.play("explosion_big", global_position + Vector3.UP, get_parent(), 4.0, 0.55)
 	_ring.visible = false
 	_disc.visible = false
 	_guide.visible = false

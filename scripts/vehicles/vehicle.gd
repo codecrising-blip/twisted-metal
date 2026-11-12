@@ -36,6 +36,9 @@ const SUSP_DAMP := 0.9 # 2 x damping ratio
 const BODY_CLEARANCE := 0.3 # the collision box starts this high: wheels hold it, the box takes the hard knocks
 const YAW_RESPONSE := 40.0 # rad/s^2: steering reaches its turn rate in a blink, a hit can still swing it
 const RECOVER_ROLL := 7.0 # rad/s roll when gas + left/right rights a flipped car
+const WALL_DAMAGE := 0.3 # per m/s of impact over 10: a 25 m/s square slam costs about 4.5
+const CHARGE_SILENT := 0.25 # a tap shorter than this makes no charging sound
+const KNOCK_TIME := 0.6 # after a blast the tyres let the car fly instead of gripping it back in line
 const RECOVER_HOP := 5.5 # m/s lift as the roll starts (again every half second until it is back up)
 const FREEZE_COST := 50.0
 const FREEZE_BREAK := 15.0 # a single hit this big shatters the ice
@@ -139,6 +142,10 @@ var _wheel_comp: Array[float] = [0.0, 0.0, 0.0, 0.0] # spring compression per co
 var _prev_velocity := Vector3.ZERO # before this step's contacts (rams, walls, breakables)
 var _lying_time := 0.0
 var _recover_kick := 0.0
+var _charge_beeps := 0
+var _charge_hum: AudioStreamPlayer3D
+var _charge_hum_t := 0.0
+var _knock := 0.0 # seconds left of "thrown": tyres barely grip, so blasts carry the car sideways
 var _wheel_rest: Dictionary = {} # wheel node -> its resting position
 var _lean := 0.0
 var _squish := Vector3.ZERO # elastic dip from a hit (rotation vector, car space)
@@ -179,7 +186,7 @@ func setup(id: String, player: bool) -> void:
 	weapon_order = [special_id]
 
 	collision_layer = 2
-	collision_mask = 1 | 2
+	collision_mask = 1 | 2 | 16 # world, cars, the invisible wall over the stage's fence
 	# A real body (round 5): mass by class, centre of mass low in the chassis, gravity as strong as
 	# before, metal-on-asphalt friction for roof slides and scrapes, no sleeping.
 	var size: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
@@ -418,6 +425,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 				state.apply_force(up * f, (hit.position as Vector3) - xf.origin)
 		_wheel_comp[i] = comp
 		i += 1
+	_knock -= dt
 	var upright := up.y > 0.45
 	_grounded = touching >= 2 and upright
 	_ground_n = (normal_sum / maxf(1.0, touching)).normalized() if touching > 0 else Vector3.UP
@@ -495,6 +503,8 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 	var grip: float = stats.grip * (float(stats.drift_grip) if handbrake else 1.0)
 	if braking and absf(v_l) > 3.0:
 		grip *= 0.55
+	if _knock > 0.0:
+		grip *= 0.08 # thrown by a blast: the tyres skate, the car goes where it was pushed
 	v_l *= exp(-grip * dt)
 	# Steering turns the car about the ground's normal; a hit can still knock it round for a moment.
 	var authority := clampf(absf(v_f) / 7.0, 0.0, 1.0)
@@ -634,6 +644,8 @@ func _wall_hit(state: PhysicsDirectBodyState3D, n: Vector3) -> void:
 	var tangent := travel - hn * travel.dot(hn)
 	tangent = tangent.normalized() if tangent.length() > 0.05 else hn.cross(Vector3.UP)
 	var lv := state.linear_velocity
+	if impact > 10.0: # walls hurt a little (owner, round 6)
+		take_damage((impact - 10.0) * WALL_DAMAGE * (1.0 if into >= 0.82 else 0.5), null)
 	if into >= 0.82: # 55 degrees or more: slam
 		var keep := tangent * moving.dot(tangent) * 0.15
 		var bounce := hn * minf(2.0 + impact * 0.06, 4.0)
@@ -696,6 +708,8 @@ func _ram(other: Vehicle, before: Vector3, n: Vector3) -> void:
 ## Knock the car (weapons, rams, recoil): a change of velocity.
 func push(dv: Vector3) -> void:
 	linear_velocity += dv
+	if dv.length() > 4.0:
+		_knock = maxf(_knock, KNOCK_TIME * 0.5)
 
 
 ## A hit lands (game feel): the body jolts away from it and big hits flash the car white.
@@ -723,6 +737,7 @@ func hit_react(dir: Vector3, amount: float) -> void:
 func blast_knock(push_v: Vector3, flip := 0.0, by_weight := true) -> void:
 	var dv := push_v * knockback if by_weight else push_v
 	linear_velocity += dv
+	_knock = KNOCK_TIME
 	if flip <= 0.0 or dv.y < 2.0:
 		return
 	var air := maxf(0.5, 2.0 * dv.y / GRAVITY)
@@ -791,9 +806,8 @@ func _combat(delta: float) -> void:
 			_active_special.fire_again() # taser mash, bomb detonation, napalm drop
 		elif _can_charge():
 			charging_id = selected_weapon() # fires when the button is let go
-			if is_player:
-				GameFeel.play("charge_up", launch_point(), self, -4.0)
 			charge_time = 0.0
+			_charge_beeps = 0
 		else:
 			_fire_selected()
 	if charging_id != "":
@@ -801,6 +815,7 @@ func _combat(delta: float) -> void:
 			_cancel_charge()
 		elif in_fire_weapon:
 			charge_time = minf(charge_time + delta, charge_full(charging_id))
+			_charge_sound(delta)
 		else:
 			var full := charge_time >= charge_full(charging_id)
 			_cancel_charge()
@@ -829,6 +844,35 @@ func charge_ratio() -> float:
 func _cancel_charge() -> void:
 	charging_id = ""
 	charge_time = 0.0
+	_charge_beeps = 0
+	if is_instance_valid(_charge_hum):
+		_charge_hum.queue_free()
+	_charge_hum = null
+
+
+## Charging sound (owner, round 6): a tap makes no sound. Held, five beeps climb in pitch
+## ("pew, Pew, PEw, PEW, PEW") until the shot is full; held past full, a humming buzz that settles
+## down until you let go.
+func _charge_sound(delta: float) -> void:
+	if not is_player:
+		return
+	var full := charge_full(charging_id)
+	var start := CHARGE_SILENT
+	var step := (full - start) / 5.0
+	while _charge_beeps < 5 and charge_time >= start + step * _charge_beeps:
+		GameFeel.play("charge_up", launch_point(), self, -6.0 + _charge_beeps * 1.0, 1.0 + 0.16 * _charge_beeps)
+		_charge_beeps += 1
+	if charge_time >= full:
+		if _charge_hum == null:
+			_charge_hum = GameFeel.loop("taser_loop", self, -4.0, 10.0)
+			if _charge_hum:
+				_charge_hum.pitch_scale = 1.6
+				_charge_hum.play()
+				_charge_hum_t = 0.0
+		elif is_instance_valid(_charge_hum):
+			_charge_hum_t += delta
+			_charge_hum.volume_db = lerpf(-4.0, -20.0, clampf(_charge_hum_t / 2.0, 0.0, 1.0))
+			_charge_hum.pitch_scale = lerpf(1.6, 1.1, clampf(_charge_hum_t / 2.0, 0.0, 1.0))
 
 
 ## The round shadow sits on the ground under the car, fading as the car rises.

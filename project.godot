@@ -24,6 +24,7 @@ window/stretch/aspect="expand"
 3d_physics/layer_2="vehicles"
 3d_physics/layer_3="projectiles"
 3d_physics/layer_4="pickups"
+3d_physics/layer_5="vehicle_barrier"
 
 [physics]
 

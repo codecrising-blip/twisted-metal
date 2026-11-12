@@ -530,7 +530,37 @@ func _run() -> void:
 	await _frames(90)
 	_place(outlaw, 0, 70, 90)
 	var st_car := Roster.get_car("sweet_tooth")
-	_check(float(st_car.max_speed) < float(Roster.get_car("outlaw").max_speed) and float(st_car.max_speed) < 27.0 and float(st_car.max_speed) > 24.0, "Sweet Tooth is a heavy truck, 15%% under the old speed (%.1f m/s)" % st_car.max_speed)
+	_check(float(st_car.max_speed) < float(Roster.get_car("outlaw").max_speed) and float(st_car.max_speed) < 32.0 and float(st_car.max_speed) > 29.0, "Sweet Tooth is a heavy truck, 1.2x the round 5 speed (%.1f m/s)" % st_car.max_speed)
+	# Remote side hit (owner, round 6): thrown sideways away from the blast, the near side lifted.
+	_place(outlaw, 0, 70, 90)
+	await _frames(10)
+	var side_mine := Mine.new()
+	side_mine.owner_car = player
+	side_mine.def = WeaponData.get_def("remote")
+	main.add_child(side_mine)
+	side_mine.global_position = outlaw.global_position + Vector3(-4.5, 0.0, 0.0) # on its left
+	var before_x := outlaw.global_position.x
+	side_mine.detonate()
+	await _frames(30)
+	_check(outlaw.global_position.x > before_x + 3.0, "a remote going off beside a car throws it sideways away (%.1f m)" % (outlaw.global_position.x - before_x))
+	await _frames(120)
+	_place(outlaw, 0, 70, 90)
+	# Walls hurt a little; nothing gets out of the stage.
+	var wall_hp := player.health
+	player.global_transform = main.arena.spot("south_wall_90") # the slam test's spot
+	player.velocity = Vector3.ZERO
+	player.angular_velocity = Vector3.ZERO
+	player.speed = 30.0
+	Input.action_press("accelerate")
+	await _frames(90)
+	Input.action_release("accelerate")
+	_check(player.health < wall_hp and player.health > wall_hp - 15.0, "a square wall slam costs a little health (%.1f)" % (wall_hp - player.health))
+	player.global_transform = Transform3D(Basis.IDENTITY, Vector3(0, 20, 145))
+	player.velocity = Vector3(0, 8, 30)
+	player.angular_velocity = Vector3.ZERO
+	await _frames(90)
+	_check(player.global_position.z < 155.0, "no flying out over the fence (z %.1f)" % player.global_position.z)
+	_place(player, 40, 70, 90)
 	_check(float(st_car.drift_grip) > float(Roster.get_car("spectre").drift_grip), "heavy cars slide less with the handbrake")
 
 	# A car that falls out of the world is put back.

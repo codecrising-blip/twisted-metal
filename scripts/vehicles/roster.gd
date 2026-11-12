@@ -14,6 +14,10 @@ extends RefCounted
 
 ## One knob for all health (the owner says "longer fights": raise it a little).
 const HEALTH_SCALE := 1.0
+## Round 6 (owner, after the physical car): every car 1.2x faster (top speed, pick-up, reverse) and
+## handbrake drifts 1.15x stronger (sharper drift turn, looser drift grip), same step for every class.
+const SPEED_SCALE := 1.2
+const DRIFT_SCALE := 1.15
 
 const MASS := {"light": 1.0, "medium": 1.4, "heavy": 2.0, "super": 2.8}
 ## How hard a car is pushed by hits, per mass class.
@@ -75,14 +79,14 @@ static func get_car(id: String) -> Dictionary:
 	var arm: int = c.get("arm", 5)
 	var hnd: int = c.get("hnd", 5)
 	var cls: String = c.get("class", "medium")
-	c["max_speed"] = 21.3 + 1.1 * spd
-	c["accel"] = (10.2 + 0.85 * spd) * float(CLASS_ACCEL.get(cls, 1.0))
-	c["reverse"] = 10.0
+	c["max_speed"] = (21.3 + 1.1 * spd) * SPEED_SCALE
+	c["accel"] = (10.2 + 0.85 * spd) * float(CLASS_ACCEL.get(cls, 1.0)) * SPEED_SCALE
+	c["reverse"] = 10.0 * SPEED_SCALE
 	c["max_health"] = (200.0 + 16.0 * arm) * HEALTH_SCALE
 	c["handling"] = 1.5 + 0.12 * hnd
 	c["grip"] = 5.0 + 0.325 * hnd
-	c["drift_grip"] = DRIFT_GRIP.get(cls, 0.38)
-	c["drift_turn"] = DRIFT_TURN.get(cls, 1.4)
+	c["drift_grip"] = float(DRIFT_GRIP.get(cls, 0.38)) / DRIFT_SCALE
+	c["drift_turn"] = float(DRIFT_TURN.get(cls, 1.4)) * DRIFT_SCALE
 	c["mass"] = MASS.get(c.get("class", "medium"), 1.4)
 	c["knockback"] = KNOCKBACK.get(c.get("class", "medium"), 1.0)
 	_cache[id] = c
