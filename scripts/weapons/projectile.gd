@@ -45,7 +45,7 @@ static func spawn(parent: Node, id: String, from: Vector3, dir: Vector3, by: Veh
 		GameFeel.muzzle(parent, from, col, 1.6 if big else (0.5 if p.def.get("small", false) else 1.0))
 		GameFeel.play("launch_" + id, from, parent)
 		if big and is_instance_valid(by): # a heavy shot kicks the car back a little
-			by.apply_impulse(-p.direction * 1.5)
+			by.push(-p.direction * 1.5)
 			if by.is_player:
 				GameFeel.shake(from, 0.18)
 	spawned_total += 1
@@ -257,13 +257,13 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 		var push := float(def.get("push", 0.0))
 		if push > 0.0:
 			var along := Vector3(direction.x, 0.0, direction.z).normalized()
-			v.apply_impulse(along * push * v.knockback + Vector3.UP * push * 0.3 * v.knockback)
+			v.push(along * push * v.knockback + Vector3.UP * push * 0.3 * v.knockback)
 		v.hit_react(direction, dmg)
 		Projectile.hit_feel(v, def, direction)
 		if dmg >= 30.0 and (v.is_player or (is_instance_valid(shooter) and shooter.is_player)):
 			GameFeel.hitstop(get_tree(), 0.05 + minf(dmg, 90.0) / 1500.0)
 		if def.has("freeze"):
-			v.freeze(float(def["freeze"]))
+			v.freeze_for(float(def["freeze"]))
 		if def.has("burn"):
 			v.ignite(float(def["burn"]), shooter)
 	elif collider != null and collider.has_method("projectile_hit"):

@@ -1,5 +1,5 @@
 class_name Vehicle
-extends CharacterBody3D
+extends RigidBody3D
 ## Arcade combat vehicle shared by the player and the AI.
 ## A controller (PlayerController or AIDriver) fills the in_* fields each physics frame;
 ## this script turns them into driving, shooting and energy moves.
@@ -26,6 +26,17 @@ const ENERGY_REGEN := 2.5
 const ENERGY_PAUSE := 1.5 # no regen for this long after spending energy
 const JUMP_COST := 25.0
 const JUMP_VELOCITY := 19.0 # 6 m high (owner, session 6): over the 5 m battleground walls for surprise entries
+# Springs under the body (round 5, real physics). SUSP_K is stiffness per unit mass (rad/s squared):
+# the body sinks GRAVITY / SUSP_K at rest, so the rest length puts the wheels' bottoms at y = 0.
+const SUSP_TOP := 0.8 # ray start above the wheels' bottoms, inside the body
+const SUSP_K := 190.0 # about 2.2 Hz
+const SUSP_REST := SUSP_TOP + GRAVITY / SUSP_K
+const SUSP_DROOP := 0.25 # wheels still count as touching this far below rest
+const SUSP_DAMP := 0.9 # 2 x damping ratio
+const BODY_CLEARANCE := 0.3 # the collision box starts this high: wheels hold it, the box takes the hard knocks
+const YAW_RESPONSE := 40.0 # rad/s^2: steering reaches its turn rate in a blink, a hit can still swing it
+const RECOVER_ROLL := 7.0 # rad/s roll when gas + left/right rights a flipped car
+const RECOVER_HOP := 5.5 # m/s lift as the roll starts (again every half second until it is back up)
 const FREEZE_COST := 50.0
 const FREEZE_BREAK := 15.0 # a single hit this big shatters the ice
 const GRIT_TIME := 3.0 # immune to full disables after one ends
@@ -59,8 +70,14 @@ var max_health := 100.0
 var health := 100.0
 var energy := 100.0
 var turbo := 100.0
-var speed := 0.0 # signed forward speed the engine is aiming for
-var mass := 1.4
+var speed := 0.0 # signed forward speed (set it to launch the car that fast)
+var weight := 1.4 # design class: light 1.0, medium 1.4, heavy 2.0, super 2.8 (rams, knockback, physics mass)
+## Same name as before the rigid body (AI, weapons, tests use it).
+var velocity: Vector3:
+	get:
+		return linear_velocity
+	set(value):
+		linear_velocity = value
 var knockback := 1.0
 var is_dead := false
 var frozen_time := 0.0
@@ -103,38 +120,27 @@ var _last_wall_normal := Vector3.ZERO
 var _yaw_fix := 0.0 # pending heading correction from wall deflection (radians)
 var _speed_out := 0.0 # forward speed at the end of the last frame (detects outside changes to `speed`)
 var _wall_pin := 0.0 # after slamming into a wall: scraping against it is slow until you steer away or back off
-var _air_basis := Basis.IDENTITY # body attitude at takeoff: kept through the air (no fake tilting)
-var _visual_base := Basis.IDENTITY # attitude without the hit dip (the slerps run on this)
 var _flash_meshes: Array[MeshInstance3D] = [] # flash white when hit
 var _flash_time := 0.0
 var _jolt := Vector3.ZERO # body knocked off its seat by a hit, springs back
 var _charge_fx: Node3D # glow growing on the launcher while a charged shot builds
-var _wreck_spin := Vector3.ZERO # a wreck tumbles through the air when it blows
 static var _white: StandardMaterial3D
 static var _blob_mat: StandardMaterial3D
 var _blob: MeshInstance3D # soft round shadow under the car on LOW (TM2 style; real shadows are off there)
-var _airborne := false
 var _stuck_time := 0.0
 var _wreck_time := 0.0
 var _active_special: Node # live taser link, chain bomb, napalm can or mine: repeat fire presses go to it
 var _live_weapon := "" # the weapon that left it out ("" = any fire press goes to it)
-# Attitude (owner, session 6): cars tip off ledges under gravity, spin through the air when thrown,
-# can land on their roof, and roll back with handbrake + left/right. Visual only: the collision box
-# stays upright, the body turns about its middle.
-var flipped := false # on its roof: no driving until rolled back
-var _spinning := false # turning through the air (blast, ledge, power missile)
-var _spin_axis := Vector3.RIGHT # in the car's own space
-var _spin_rate := 0.0
-var _spin_angle := 0.0
-var _spin_grace := 0.0 # just launched: don't count the ground we are leaving as a landing
-var _tip_axis := Vector3.RIGHT
-var _tip_angle := 0.0 # hanging over an edge: gravity tips it
-var _tip_rate := 0.0
-var _hanging := false # some wheels still on an edge while the middle hangs over it
-var _edge_y := 0.0 # height of the ground it last stood on (the edge it pivots on)
-var _tip_slow := 0.0 # how slowly it went over (1 = from standing): slow cars keep turning as they fall
-var _recover := 0.0 # 0..1 rolling back onto the wheels
-var _recover_dir := 1.0
+# Physics state (round 5).
+var flipped := false # lying on its roof or side: gas + left/right rolls it back
+var _grounded := false
+var _ground_n := Vector3.UP
+var _wheel_comp: Array[float] = [0.0, 0.0, 0.0, 0.0] # spring compression per corner (visual wheel travel)
+var _prev_velocity := Vector3.ZERO # before this step's contacts (rams, walls, breakables)
+var _lying_time := 0.0
+var _recover_kick := 0.0
+var _wheel_rest: Dictionary = {} # wheel node -> its resting position
+var _lean := 0.0
 var _squish := Vector3.ZERO # elastic dip from a hit (rotation vector, car space)
 var _squish_vel := Vector3.ZERO
 var _wobble_t := 0.0 # homing hit: the steering twitches
@@ -161,7 +167,7 @@ func setup(id: String, player: bool) -> void:
 	is_player = player
 	max_health = stats.get("max_health", 280.0)
 	health = max_health
-	mass = stats.get("mass", 1.4)
+	weight = stats.get("mass", 1.4)
 	knockback = stats.get("knockback", 1.0)
 	special_id = stats.get("special", "")
 	special_charges = int(WeaponData.get_def(special_id).get("charges", 2))
@@ -170,16 +176,30 @@ func setup(id: String, player: bool) -> void:
 
 	collision_layer = 2
 	collision_mask = 1 | 2
-	floor_max_angle = deg_to_rad(48.0)
-	floor_snap_length = 0.6
-	wall_min_slide_angle = deg_to_rad(5.0)
-
+	# A real body (round 5): mass by class, centre of mass low in the chassis, gravity as strong as
+	# before, metal-on-asphalt friction for roof slides and scrapes, no sleeping.
 	var size: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
+	mass = rigid_mass()
+	gravity_scale = GRAVITY / float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
+	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
+	center_of_mass = Vector3(0, size.y * 0.38, 0)
+	linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	linear_damp = 0.0
+	angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	angular_damp = 0.6
+	can_sleep = false
+	contact_monitor = true
+	max_contacts_reported = 8
+	var pm := PhysicsMaterial.new()
+	pm.friction = 0.35
+	pm.bounce = 0.05
+	physics_material_override = pm
+
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = size
+	box.size = Vector3(size.x, size.y - BODY_CLEARANCE, size.z)
 	shape.shape = box
-	shape.position = Vector3(0, size.y * 0.5, 0)
+	shape.position = Vector3(0, BODY_CLEARANCE + (size.y - BODY_CLEARANCE) * 0.5, 0)
 	add_child(shape)
 
 	_visual = Node3D.new()
@@ -190,6 +210,8 @@ func setup(id: String, player: bool) -> void:
 	_wheels = model.get_meta("wheels", [])
 	_steer_pivots = model.get_meta("steer", [])
 	_wheel_radius = model.get_meta("wheel_radius", 0.5)
+	for w: Node3D in _wheels:
+		_wheel_rest[w] = w.position
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		_flash_meshes.append(mi as MeshInstance3D)
 	if _blob_mat == null:
@@ -261,15 +283,17 @@ func protect(seconds := SPAWN_SHIELD) -> void:
 
 func _physics_process(delta: float) -> void:
 	if is_dead:
-		_wreck_physics(delta)
+		_wreck_time += delta
+		if _wreck_time > WRECK_SOLID_TIME and collision_layer != 0:
+			collision_layer = 0 # other cars drive through the burnt shell
+			collision_mask = 1
+			_fire.emitting = false
 		return
 	if controller:
 		controller.drive(self, delta)
 	else:
 		_clear_inputs()
 	_tick(delta)
-	_drive(delta)
-	_edge_tip(delta)
 	_combat(delta)
 	_animate(delta)
 
@@ -294,8 +318,6 @@ func _tick(delta: float) -> void:
 		_weapon_cooldowns[id] -= delta
 		if _weapon_cooldowns[id] <= 0.0:
 			_weapon_cooldowns.erase(id)
-	_wall_cooldown -= delta
-	_wall_contact -= delta
 	if _energy_pause > 0.0:
 		_energy_pause -= delta
 	else:
@@ -337,30 +359,177 @@ func _tick(delta: float) -> void:
 			target = find_target()
 
 
-## Driving model: the car's velocity is split into forward and sideways parts. Gas, brake and
-## handbrake act on the forward part; tyre grip pulls the sideways part toward zero. So a car that
-## brakes while sliding keeps skidding sideways and slows over a short distance instead of stopping
-## dead (owner, session 6), and the handbrake (less grip, sharper turn) makes the drifts.
-func _drive(delta: float) -> void:
-	var frozen := frozen_time > 0.0
-	var throttle := 0.0 if (frozen or flipped) else in_throttle
-	var steer := 0.0 if (frozen or flipped) else in_steer
-	if flipped:
-		_recover_input(delta)
-	var handbrake := in_handbrake and not frozen
-	var on_floor := is_on_floor() and not _spinning # tumbling: the tyres don't hold it
-	var brake: float = BRAKE * float(stats.get("brake_mult", 1.0))
-	_wall_pin -= delta
+# ---------------------------------------------------------------- physics (owner, round 5: option A)
+# The car is a real rigid body: a box with mass, a centre of mass and inertia, held up by four
+# spring-damper "wheels" (rays from the corners). Gravity, ledges, hills, landings, rolls and flips
+# all come out of the physics: a car with its back over a ledge drops its back first and pivots on
+# the edge; a hill crest throws a fast car into the air; a car on its roof slides on its roof.
+# The tyres are arcade-tuned (the drift, brakes and grip numbers from Roster, owner-rated): they act
+# along the ground under the wheels, so they only work while the wheels touch it.
 
+## Body-space corners where the four spring "wheels" sit (x, z) and their ray tops.
+func _wheel_corners() -> Array[Vector3]:
+	var size: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
+	var hx := size.x * 0.42
+	var hz := size.z * 0.38
+	return [Vector3(-hx, SUSP_TOP, -hz), Vector3(hx, SUSP_TOP, -hz), Vector3(-hx, SUSP_TOP, hz), Vector3(hx, SUSP_TOP, hz)]
+
+
+func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	var dt := state.step
+	var xf := state.transform
+	var up := xf.basis.y
+	var v := state.linear_velocity
+	if is_dead:
+		_prev_velocity = v
+		return
+	# Springs: each corner's ray finds the ground below it (along the body's own down).
+	var space := state.get_space_state()
+	var touching := 0
+	var normal_sum := Vector3.ZERO
+	var k: float = SUSP_K * rigid_mass() / 4.0
+	var c: float = SUSP_DAMP * sqrt(SUSP_K) * rigid_mass() / 4.0
+	var i := 0
+	for corner: Vector3 in _wheel_corners():
+		var from := xf * corner
+		var q := PhysicsRayQueryParameters3D.create(from, from - up * (SUSP_REST + SUSP_DROOP), 1, [get_rid()])
+		var hit := space.intersect_ray(q)
+		var comp := 0.0
+		if not hit.is_empty():
+			var dist := from.distance_to(hit.position)
+			comp = SUSP_REST - dist
+			if comp > -SUSP_DROOP * 0.5:
+				touching += 1
+				normal_sum += hit.normal
+			if comp > 0.0:
+				var arm := from - xf.origin
+				var point_vel := v + state.angular_velocity.cross(arm)
+				var f := maxf(0.0, k * comp - c * point_vel.dot(up))
+				state.apply_force(up * f, (hit.position as Vector3) - xf.origin)
+		_wheel_comp[i] = comp
+		i += 1
+	var upright := up.y > 0.45
+	_grounded = touching >= 2 and upright
+	_ground_n = (normal_sum / maxf(1.0, touching)).normalized() if touching > 0 else Vector3.UP
+	v = _upside_watch(dt, up, state, v)
+	if _grounded:
+		v = _tyres(state, v, dt)
+	else:
+		v = _in_air(state, v, dt)
+	if want_jump:
+		want_jump = false
+		if _grounded and frozen_time <= 0.0 and not flipped and spend_energy(JUMP_COST):
+			v.y = maxf(v.y, JUMP_VELOCITY)
+	state.linear_velocity = v
+	_contacts(state)
+	_unstick(dt)
+	_prev_velocity = state.linear_velocity
+	speed = state.linear_velocity.dot(_drive_forward())
+	_speed_out = speed
+
+
+## Forward along the ground: the body's nose, flattened onto the surface the wheels stand on.
+func _drive_forward() -> Vector3:
+	var f := -global_basis.z
+	var n := _ground_n if _grounded else Vector3.UP
+	f -= n * f.dot(n)
+	return f.normalized() if f.length() > 0.01 else flat_forward()
+
+
+## On the wheels: gas, brakes, handbrake drift, grip and steering (the tuned arcade model, applied
+## in the plane of the ground so slopes, ramps and hill crests are real).
+func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
+	var frozen := frozen_time > 0.0
+	var throttle := 0.0 if frozen else in_throttle
+	var steer := 0.0 if frozen else in_steer
+	var handbrake := in_handbrake and not frozen
+	var brake: float = BRAKE * float(stats.get("brake_mult", 1.0))
+	_wall_pin -= dt
+	var n := _ground_n
+	var forward := _drive_forward()
+	var right := forward.cross(n).normalized()
+	var v_f := v.dot(forward)
+	var v_l := v.dot(right)
+	var v_n := v.dot(n)
+	if absf(speed - _speed_out) > 0.01:
+		v_f = speed # someone set the speed directly (spawn, tests, teleport): take it
 	var top: float = stats.max_speed
-	# Turbo works forward, in reverse (owner, session 6) and in the air (thrust onto a ledge after a jump).
-	var boost_dir := signf(throttle) if absf(throttle) > 0.1 else (0.0 if on_floor else 1.0)
-	var boosting := in_turbo and turbo > 0.0 and boost_dir != 0.0 and not frozen
-	_boosting = boosting
+	var boosting := _turbo_step(signf(throttle) if absf(throttle) > 0.1 else 0.0, dt)
 	if boosting:
 		top *= TURBO_MULT
-		turbo = maxf(0.0, turbo - TURBO_DRAIN * delta)
-		_turbo_run += delta
+	var sliding := clampf(absf(v_l) / 10.0, 0.0, 1.0) # tyres busy holding a slide brake less
+	var accel: float = stats.accel * (TURBO_ACCEL if boosting else 1.0)
+	var braking := false
+	if throttle > 0.05:
+		if v_f < -0.5:
+			v_f = move_toward(v_f, 0.0, brake * dt)
+			braking = true
+		else:
+			v_f = move_toward(v_f, top * throttle, accel * dt)
+	elif throttle < -0.05:
+		if v_f > 0.5:
+			v_f = move_toward(v_f, 0.0, brake * (1.0 - 0.45 * sliding) * dt)
+			braking = true
+		else:
+			v_f = move_toward(v_f, -float(stats.reverse) * -throttle * (2.0 if boosting else 1.0), accel * 0.7 * dt)
+	else:
+		v_f = move_toward(v_f, 0.0, COAST * dt)
+	if handbrake:
+		v_f = move_toward(v_f, 0.0, HANDBRAKE_DECEL * dt)
+	if frozen:
+		v_f = move_toward(v_f, 0.0, 60.0 * dt)
+	if v_f > top:
+		v_f = move_toward(v_f, top, 12.0 * dt)
+	if _wall_pin > 0.0 and forward.dot(-_last_wall_normal) > 0.3:
+		v_f = minf(v_f, 4.0) # nose against the wall: scraping out is slow
+	var grip: float = stats.grip * (float(stats.drift_grip) if handbrake else 1.0)
+	if braking and absf(v_l) > 3.0:
+		grip *= 0.55
+	v_l *= exp(-grip * dt)
+	# Steering turns the car about the ground's normal; a hit can still knock it round for a moment.
+	var authority := clampf(absf(v_f) / 7.0, 0.0, 1.0)
+	var turn: float = stats.handling * (float(stats.drift_turn) if handbrake else 1.0)
+	turn *= lerpf(1.0, 0.78, clampf(absf(v_f) / float(stats.max_speed), 0.0, 1.0)) # wider turns when fast
+	var yaw := -steer * turn * authority * (1.0 if v_f >= 0.0 else -1.0)
+	if _wobble_t > 0.0: # a homing hit knocks the steering a little
+		_wobble_t -= dt
+		yaw += _wobble_dir * 1.3
+	if absf(_yaw_fix) > 0.001: # a glancing wall hit turns the car along the wall over a few frames
+		var step := _yaw_fix * minf(1.0, 14.0 * dt)
+		yaw += step / dt
+		_yaw_fix -= step
+	var w := state.angular_velocity
+	var w_n := w.dot(n)
+	state.angular_velocity = w + n * (move_toward(w_n, yaw, YAW_RESPONSE * dt) - w_n)
+	return forward * v_f + right * v_l + n * v_n
+
+
+## Wheels off the ground: momentum carries on; turbo still pushes the nose's way (jump + turbo onto
+## a ledge), and backwards too.
+func _in_air(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
+	var hv := Vector3(v.x, 0.0, v.z)
+	var forward := flat_forward()
+	var throttle := in_throttle if frozen_time <= 0.0 and not flipped else 0.0
+	var dir := signf(throttle) if absf(throttle) > 0.1 else 1.0
+	if flipped:
+		_turbo_step(0.0, dt)
+		return v
+	if _turbo_step(dir, dt):
+		var air_top: float = float(stats.max_speed) * TURBO_MULT if dir > 0.0 else float(stats.reverse) * 2.0
+		var along := hv.dot(forward)
+		var target := move_toward(along, air_top * dir, TURBO_AIR_THRUST * dt)
+		hv += forward * (target - along)
+	hv -= Vector3(v.x, 0.0, v.z) - Vector3(v.x, 0.0, v.z) * exp(-0.05 * dt)
+	return Vector3(hv.x, v.y, hv.z)
+
+
+## Turbo bookkeeping for this step: burns the tank, blows out fire. True while boosting.
+func _turbo_step(dir: float, dt: float) -> bool:
+	var boosting := in_turbo and turbo > 0.0 and dir != 0.0 and frozen_time <= 0.0 and not flipped
+	_boosting = boosting
+	if boosting:
+		turbo = maxf(0.0, turbo - TURBO_DRAIN * dt)
+		_turbo_run += dt
 		if _turbo_run >= TURBO_PUTS_OUT_FIRE and burn_time > 0.0: # the rush of air blows the flames out
 			burn_time = 0.0
 			_burn_fx.emitting = false
@@ -368,117 +537,81 @@ func _drive(delta: float) -> void:
 				notice.emit(self, "FIRE OUT")
 	else:
 		_turbo_run = 0.0
+	return boosting
 
-	# Steering first: needs speed, reverses when backing up, sharper with the handbrake.
-	var authority := clampf(absf(speed) / 7.0, 0.0, 1.0)
-	if not on_floor:
-		authority *= 0.25
-	var turn: float = stats.handling * (float(stats.drift_turn) if handbrake else 1.0)
-	turn *= lerpf(1.0, 0.78, clampf(absf(speed) / float(stats.max_speed), 0.0, 1.0)) # wider turns when fast
-	var dir := 1.0 if speed >= 0.0 else -1.0
-	rotate_y(-steer * turn * authority * dir * delta)
-	if _wobble_t > 0.0: # a homing hit knocks the steering a little
-		_wobble_t -= delta
-		rotate_y(_wobble_dir * 1.3 * delta)
-	if absf(_yaw_fix) > 0.001: # a glancing wall hit turns the car along the wall over a few frames
-		var step := _yaw_fix * minf(1.0, 14.0 * delta)
-		rotate_y(step)
-		_yaw_fix -= step
 
-	var forward := flat_forward()
-	var right := Vector3(-forward.z, 0.0, forward.x)
-	var hv := Vector3(velocity.x, 0.0, velocity.z)
-	var v_f := hv.dot(forward)
-	var v_l := hv.dot(right)
-	if absf(speed - _speed_out) > 0.01:
-		v_f = speed # someone set the speed directly (spawn, tests, a ram): take it as the new forward speed
-
-	if on_floor:
-		var sliding := clampf(absf(v_l) / 10.0, 0.0, 1.0) # tyres busy holding a slide brake less
-		var accel: float = stats.accel * (TURBO_ACCEL if boosting else 1.0)
-		var braking := false
-		if throttle > 0.05:
-			if v_f < -0.5:
-				v_f = move_toward(v_f, 0.0, brake * delta)
-				braking = true
-			else:
-				v_f = move_toward(v_f, top * throttle, accel * delta)
-		elif throttle < -0.05:
-			if v_f > 0.5:
-				v_f = move_toward(v_f, 0.0, brake * (1.0 - 0.45 * sliding) * delta)
-				braking = true
-			else:
-				v_f = move_toward(v_f, -float(stats.reverse) * -throttle * (2.0 if boosting else 1.0), accel * 0.7 * delta)
-		else:
-			v_f = move_toward(v_f, 0.0, COAST * delta)
-		if handbrake:
-			v_f = move_toward(v_f, 0.0, HANDBRAKE_DECEL * delta)
-		if frozen:
-			v_f = move_toward(v_f, 0.0, 60.0 * delta)
-		if flipped: # sliding on the roof
-			v_f = move_toward(v_f, 0.0, 16.0 * delta)
-			v_l = move_toward(v_l, 0.0, 16.0 * delta)
-		if v_f > top:
-			v_f = move_toward(v_f, top, 12.0 * delta)
-		if _wall_pin > 0.0 and forward.dot(-_last_wall_normal) > 0.3:
-			v_f = minf(v_f, 4.0) # nose against the wall: scraping out is slow
-		# Sideways: grip pulls the slide back in. Handbrake or locked brakes in a slide grip less.
-		var grip: float = stats.grip * (float(stats.drift_grip) if handbrake else 1.0)
-		if braking and absf(v_l) > 3.0:
-			grip *= 0.55
-		v_l *= exp(-grip * delta)
+## On the roof or the side and resting there: "flipped". Gas (or reverse) + left/right rolls the
+## car back over (owner, round 5); it slides on its roof with real friction meanwhile.
+func _upside_watch(dt: float, up: Vector3, state: PhysicsDirectBodyState3D, v: Vector3) -> Vector3:
+	var lying := up.y < 0.4 and state.get_contact_count() > 0
+	if lying:
+		_lying_time += dt
 	else:
-		v_l *= exp(-0.3 * delta) # in the air: momentum carries on
-		if boosting:
-			var air_top: float = top if boost_dir > 0.0 else float(stats.reverse) * 2.0
-			v_f = move_toward(v_f, air_top * boost_dir, TURBO_AIR_THRUST * delta)
-	speed = v_f
-	_speed_out = speed
-	hv = forward * v_f + right * v_l
-	velocity.x = hv.x
-	velocity.z = hv.z
-	velocity.y -= GRAVITY * delta
+		_lying_time = 0.0
+	if not flipped and _lying_time > 0.3:
+		flipped = true
+		if is_player:
+			notice.emit(self, "FLIPPED!  GAS + LEFT / RIGHT")
+		GameFeel.shake(global_position, 0.3)
+	elif flipped and up.y > 0.75 and _grounded:
+		flipped = false
+	_recover_kick -= dt
+	if not flipped:
+		return v
+	if absf(in_throttle) > 0.3 and absf(in_steer) > 0.4 and frozen_time <= 0.0:
+		# Turn the roof back toward the sky: about the axis that brings "up" to up (on its side or
+		# nose-up against a wall), or a roll the way you steer when it lies flat on its roof.
+		var axis := up.cross(Vector3.UP)
+		if axis.length() < 0.3:
+			axis = -state.transform.basis.z * -signf(in_steer)
+		axis = axis.normalized()
+		var w := state.angular_velocity
+		state.angular_velocity = w + axis * (RECOVER_ROLL - w.dot(axis))
+		if _recover_kick <= 0.0 and state.get_contact_count() > 0:
+			_recover_kick = 0.5
+			v += Vector3.UP * RECOVER_HOP
+	return v
 
-	if want_jump:
-		want_jump = false
-		if on_floor and not frozen and not flipped and spend_energy(JUMP_COST):
-			velocity.y = JUMP_VELOCITY
 
-	var before := velocity
-	move_and_slide()
-	_resolve_collisions(before)
-	_unstick(delta, throttle)
-	_speed_out = speed
+func is_on_floor() -> bool:
+	return _grounded
 
 
-func _resolve_collisions(before: Vector3) -> void:
-	for i in get_slide_collision_count():
-		var c := get_slide_collision(i)
-		var n := c.get_normal()
-		var other := c.get_collider()
+func get_floor_normal() -> Vector3:
+	return _ground_n
+
+
+## Mass in physics units (kg-like). `weight` is the design class (1.0 light .. 2.8 super heavy).
+func rigid_mass() -> float:
+	return weight * 1000.0
+
+
+## Collisions this step: walls (the owner's slam rule), other cars (rams), breakables.
+func _contacts(state: PhysicsDirectBodyState3D) -> void:
+	_wall_cooldown -= state.step
+	for k in state.get_contact_count():
+		var other := state.get_contact_collider_object(k)
+		var n := state.get_contact_local_normal(k)
 		if other is Vehicle:
-			_ram(other as Vehicle, before, n)
+			_ram(other as Vehicle, _prev_velocity, n)
 		elif other != null and other.has_method("vehicle_contact"):
 			# Breakables (stands, glass, palms) shatter and barely slow the car.
-			if other.vehicle_contact(self, before):
-				velocity = Vector3(before.x, velocity.y, before.z)
-				speed *= 0.9
+			if other.vehicle_contact(self, _prev_velocity):
+				state.linear_velocity = Vector3(_prev_velocity.x, state.linear_velocity.y, _prev_velocity.z) * 0.95
 			elif absf(n.y) < 0.55:
-				_wall_hit(n, before)
+				_wall_hit(state, n)
 		elif absf(n.y) < 0.55:
-			_wall_hit(n, before)
+			_wall_hit(state, n)
 
 
-## Wall hits (owner, session 6, replacing the old "never stop" rule):
-##   55-90 degrees into the wall: a slam. The car stops against it with a small bounce; steering out
-##     along the wall is slow (heavy friction) for a moment, or back away from it.
-##   30-55 degrees: it scrapes along the wall, losing about a third of its speed.
-##   under 30 degrees: it slides along, losing a little.
-func _wall_hit(n: Vector3, before: Vector3) -> void:
+## Wall hits (owner, session 6): 55-90 degrees into a wall is a slam (the body stops, a small
+## bounce, scraping out along it is slow for a moment, or back away); 30-55 scrapes and loses about a
+## third of the speed; flatter slides along losing a little.
+func _wall_hit(state: PhysicsDirectBodyState3D, n: Vector3) -> void:
 	var hn := Vector3(n.x, 0.0, n.z).normalized()
 	_last_wall_normal = hn
 	_wall_contact = 0.3
-	var moving := Vector3(before.x, 0.0, before.z)
+	var moving := Vector3(_prev_velocity.x, 0.0, _prev_velocity.z)
 	if _wall_cooldown > 0.0 or moving.length() < 1.5:
 		return
 	var travel := moving.normalized()
@@ -487,72 +620,72 @@ func _wall_hit(n: Vector3, before: Vector3) -> void:
 		return
 	_wall_cooldown = 0.25
 	var impact := moving.length() * into
-	var mass_factor := 0.75 if mass >= 2.0 else (1.25 if mass < 1.2 else 1.0)
+	var mass_factor := 0.75 if weight >= 2.0 else (1.25 if weight < 1.2 else 1.0)
 	var tangent := travel - hn * travel.dot(hn)
 	tangent = tangent.normalized() if tangent.length() > 0.05 else hn.cross(Vector3.UP)
+	var lv := state.linear_velocity
 	if into >= 0.82: # 55 degrees or more: slam
 		var keep := tangent * moving.dot(tangent) * 0.15
-		velocity.x = keep.x + hn.x * minf(2.0 + impact * 0.06, 4.0)
-		velocity.z = keep.z + hn.z * minf(2.0 + impact * 0.06, 4.0)
-		speed = velocity.dot(flat_forward())
+		var bounce := hn * minf(2.0 + impact * 0.06, 4.0)
+		state.linear_velocity = Vector3(keep.x + bounce.x, lv.y, keep.z + bounce.z)
 		_wall_pin = 0.7
 		_yaw_fix = 0.0
 		wall_slammed.emit(self, impact)
 		return
 	var loss := 0.3 if into >= 0.5 else 0.08
-	var kept := moving.length() * (1.0 - loss * mass_factor)
-	var slide := tangent * kept
-	velocity.x = slide.x + hn.x * 0.5
-	velocity.z = slide.z + hn.z * 0.5
-	speed *= 1.0 - loss * mass_factor
-	if speed < 0.0:
+	var slide := tangent * moving.length() * (1.0 - loss * mass_factor)
+	state.linear_velocity = Vector3(slide.x + hn.x * 0.5, lv.y, slide.z + hn.z * 0.5)
+	if moving.dot(flat_forward()) < 0.0:
 		return # backing into a wall: lose speed, keep the heading
-	var fwd := flat_forward()
-	_yaw_fix = fwd.signed_angle_to(tangent, Vector3.UP) * (0.6 if into >= 0.5 else 1.0)
+	_yaw_fix = flat_forward().signed_angle_to(tangent, Vector3.UP) * (0.6 if into >= 0.5 else 1.0)
 
 
-## Stuck helper (design 2.0.1 rule 9): pressing the gas for 2 s against the world without moving
-## gives a small push away from the wall. Never against another car.
-func _unstick(delta: float, throttle: float) -> void:
-	var hspeed := Vector2(velocity.x, velocity.z).length()
-	if absf(throttle) > 0.5 and _wall_contact > 0.0 and hspeed < 1.0 and frozen_time <= 0.0:
-		_stuck_time += delta
+## Stuck helper (design 2.0.1 rule 9): gas held against the world for 4 s without moving gives a
+## small push away from the wall. Never against another car.
+func _unstick(dt: float) -> void:
+	_wall_contact -= dt
+	var hspeed := Vector2(linear_velocity.x, linear_velocity.z).length()
+	if absf(in_throttle) > 0.5 and _wall_contact > 0.0 and hspeed < 1.0 and frozen_time <= 0.0 and not flipped:
+		_stuck_time += dt
 		if _stuck_time > 4.0: # only a real trap: normally you steer out or back off
 			_stuck_time = 0.0
-			velocity += _last_wall_normal * 9.0 + Vector3.UP * 2.0
+			linear_velocity += _last_wall_normal * 9.0 + Vector3.UP * 2.0
 			_yaw_fix += deg_to_rad(90.0) * (1.0 if randf() < 0.5 else -1.0)
 	else:
 		_stuck_time = 0.0
 
 
-## Ram damage (design 1.3): (closing speed - 10) * 0.5 * sqrt(my mass / its mass), max 25,
-## once per second per pair. The rammer takes some back unless it is heavier.
+## Ram damage (design 1.3): (closing speed - 10) * 0.5 * sqrt(my weight / its weight), max 25,
+## once per second per pair. The rammer takes some back unless it is heavier. The bodies bounce off
+## each other by themselves now; this adds the damage, the sound and the class knockback.
 func _ram(other: Vehicle, before: Vector3, n: Vector3) -> void:
 	if other.is_dead:
 		return
 	var key := other.get_instance_id()
 	if _clock - float(_ram_times.get(key, -10.0)) < 1.0:
 		return
-	var closing := (before - other.velocity).dot(-n)
+	var closing := (before - other._prev_velocity).dot(-n)
 	if closing < RAM_MIN_CLOSING:
 		return
 	_ram_times[key] = _clock
 	GameFeel.play("ram", (global_position + other.global_position) * 0.5 + Vector3.UP, get_parent(), clampf(-14.0 + closing * 0.8, -14.0, 0.0))
-	var ratio := sqrt(mass / other.mass)
+	var ratio := sqrt(weight / other.weight)
 	var dmg := minf(RAM_MAX, (closing - RAM_MIN_CLOSING) * 0.5 * ratio)
 	other.take_damage(dmg, self)
 	var recoil := 0.2
-	if mass < other.mass - 0.01:
+	if weight < other.weight - 0.01:
 		recoil = 0.3
-	elif mass > other.mass + 0.01:
+	elif weight > other.weight + 0.01:
 		recoil = 0.1
 	take_damage(dmg * recoil, other)
-	other.apply_impulse(-n * closing * 0.35 * other.knockback * ratio + Vector3.UP * 2.5)
-	speed *= 0.6 if mass <= other.mass else 0.8
+	# Bodies alone stick together after a hit (little bounce): the ram knocks them apart like before.
+	other.push(-n * closing * 0.35 * other.knockback * ratio + Vector3.UP * 2.0)
+	push(n * closing * 0.15 * knockback / ratio)
 
 
-func apply_impulse(v: Vector3) -> void:
-	velocity += v
+## Knock the car (weapons, rams, recoil): a change of velocity.
+func push(dv: Vector3) -> void:
+	linear_velocity += dv
 
 
 ## A hit lands (game feel): the body jolts away from it and big hits flash the car white.
@@ -575,28 +708,18 @@ func hit_react(dir: Vector3, amount: float) -> void:
 		_flash_time = maxf(_flash_time, 0.05 + minf(amount, 60.0) / 1200.0)
 
 
-## A blast throws the car (heavy cars less). flip 1 = one full roll through the air away from the
-## blast, small values only tilt it; the body lands back on its wheels.
-func blast_knock(push: Vector3, flip := 0.0, by_weight := true) -> void:
-	var v := push * knockback if by_weight else push
-	velocity += v
-	if flip <= 0.0 or v.y < 2.0:
+## A blast throws the car (heavy cars less). flip 1 = about one full roll through the air away from
+## the blast, smaller values tip it. Where it lands (wheels, side or roof) is up to the physics.
+func blast_knock(push_v: Vector3, flip := 0.0, by_weight := true) -> void:
+	var dv := push_v * knockback if by_weight else push_v
+	linear_velocity += dv
+	if flip <= 0.0 or dv.y < 2.0:
 		return
-	var air := maxf(0.5, 2.0 * v.y / GRAVITY)
-	var axis := Vector3.UP.cross(Vector3(v.x, 0.0, v.z))
+	var air := maxf(0.5, 2.0 * dv.y / GRAVITY)
+	var axis := Vector3.UP.cross(Vector3(dv.x, 0.0, dv.z))
 	if axis.length() < 0.1:
 		axis = global_basis.x
-	_start_spin((global_basis.inverse() * axis.normalized()).normalized(), 0.0, flip * TAU / air)
-
-
-func _start_spin(axis: Vector3, angle: float, rate: float) -> void:
-	_spinning = true
-	_spin_axis = axis
-	_spin_angle = angle
-	_spin_rate = rate
-	_spin_grace = 0.15
-	_tip_angle = 0.0
-	_tip_rate = 0.0
+	angular_velocity += axis.normalized() * flip * TAU / air
 
 
 ## Elastic dip from a hit (owner: "squishy reflex", a few degrees, never goofy): the side the hit
@@ -618,105 +741,17 @@ func wobble(seconds := 0.35) -> void:
 	_wobble_dir = 1.0 if randf() < 0.5 else -1.0
 
 
-## Hanging over a ledge: when the middle of the car has no ground under it but some wheels do,
-## gravity tips it over the edge and pulls it off, nose or side first.
-func _edge_tip(delta: float) -> void:
-	_hanging = false
-	if _spinning:
-		return
-	var grounded := is_on_floor()
-	if grounded and get_floor_normal().y < 0.7:
-		return
-	if _ground_under(Vector3.ZERO):
-		_edge_y = global_position.y
-		_tip_rate = 0.0
-		_tip_angle = move_toward(_tip_angle, 0.0, 3.0 * delta) # back on solid ground
-		return
-	var size: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
-	var hx := size.x * 0.42
-	var hz := size.z * 0.42
-	var away := Vector3.ZERO
-	var hanging := 0
-	for c: Vector3 in [Vector3(-hx, 0, -hz), Vector3(hx, 0, -hz), Vector3(-hx, 0, hz), Vector3(hx, 0, hz)]:
-		if not _ground_under(c):
-			away += c
-			hanging += 1
-	if hanging == 0:
-		return # a hole under the middle
-	if hanging == 4:
-		if not grounded or _tip_angle <= 0.0:
-			return # clear of the edge
-		away = Vector3.UP.cross(_tip_axis) * -1.0 # still resting on the edge by its back: keep tipping
-	away.y = 0.0
-	away = away.normalized()
-	_hanging = true
-	var out := global_basis * away
-	out.y = 0.0
-	out = out.normalized()
-	if flipped: # on its roof but balanced on the edge: it slides off
-		global_position += out * 8.0 * delta
-		return
-	# The middle hangs over the drop, some wheels still on the edge: the car pivots on the edge and
-	# tips (a slow car tips right over; a fast one is gone before gravity has much time).
-	var slow := clampf(1.0 - absf(speed) / 15.0, 0.1, 1.0)
-	_tip_slow = slow
-	_tip_axis = Vector3.UP.cross(away).normalized()
-	_tip_rate += 7.0 * slow * delta
-	_tip_angle += _tip_rate * delta
-	if slow > 0.45 and velocity.y < 0.0:
-		velocity.y = 0.0 # held up by the wheels still on the edge while it pivots
-		global_position.y = maxf(global_position.y, _edge_y - 0.05)
-	global_position += out * (0.4 + _tip_rate * 1.5) * delta
-	if _tip_angle > 0.9: # past the tipping point: it goes over and keeps turning as it falls
-		velocity += out * 5.0 + Vector3.DOWN * 2.0
-		_start_spin(_tip_axis, _tip_angle, maxf(_tip_rate, 2.5))
-		_spin_grace = 0.6
-
-
-## Ground within `depth` below this point of the car? Tipping only counts real drops (a ledge of
-## a metre or more), not kerbs, ramp sides or bumps.
-func _ground_under(local: Vector3, depth := 1.0) -> bool:
-	var from := global_transform * (local + Vector3.UP * 0.8)
-	var q := PhysicsRayQueryParameters3D.create(from, from + Vector3.DOWN * (1.0 + depth), 1)
-	var hit := get_world_3d().direct_space_state.intersect_ray(q)
-	return not hit.is_empty() and (hit.position as Vector3).y > global_position.y - depth
-
-
-## On its roof: hold the handbrake and steer left or right to roll back onto the wheels.
-func _recover_input(delta: float) -> void:
-	if in_handbrake and absf(in_steer) > 0.4:
-		if _recover <= 0.0:
-			_recover_dir = signf(in_steer)
-		_recover += delta / 0.6
-		if _recover >= 1.0:
-			flipped = false
-			_recover = 0.0
-			if is_on_floor():
-				velocity.y = 4.0
-	else:
-		_recover = maxf(0.0, _recover - delta * 2.0)
-
-
-func _land_from_spin() -> void:
-	_spinning = false
-	var a := fposmod(_spin_angle, TAU)
-	if a > PI * 0.55 and a < PI * 1.45:
-		flipped = true # came down on its roof
-		_recover = 0.0
-		speed *= 0.4
-		if is_player:
-			notice.emit(self, "FLIPPED!  HANDBRAKE + LEFT / RIGHT")
-		GameFeel.shake(global_position, 0.35)
-
-
 func flat_forward() -> Vector3:
 	var f := -global_transform.basis.z
 	f.y = 0.0
-	return f.normalized()
+	if f.length() < 0.05: # nose straight up or down: use the roof's direction
+		f = global_transform.basis.y * (-1.0 if global_transform.basis.z.y > 0.0 else 1.0)
+		f.y = 0.0
+	return f.normalized() if f.length() > 0.001 else Vector3.FORWARD
 
 
 func aim_point() -> Vector3:
-	return global_position + Vector3.UP * 1.0
+	return global_position + global_basis.y * 1.0
 
 
 # ---------------------------------------------------------------- energy
@@ -1028,7 +1063,7 @@ func heal(amount: float) -> void:
 
 
 ## Full disable. Fails while Grit (after a disable) or spawn protection is on.
-func freeze(seconds: float) -> bool:
+func freeze_for(seconds: float) -> bool:
 	if is_dead or grit_time > 0.0 or invulnerable_time > 0.0:
 		return false
 	frozen_time = maxf(frozen_time, seconds)
@@ -1072,8 +1107,8 @@ func _die() -> void:
 	for snd: AudioStreamPlayer3D in [_engine_snd, _gun_snd, _skid_snd]:
 		if snd:
 			snd.stop()
-	velocity += Vector3(randf_range(-3, 3), 11.0, randf_range(-3, 3))
-	_wreck_spin = Vector3(randf_range(-1, 1), 0, randf_range(-1, 1)).normalized() * randf_range(2.5, 4.5)
+	linear_velocity += Vector3(randf_range(-3, 3), 11.0, randf_range(-3, 3))
+	angular_velocity += Vector3(randf_range(-1, 1), randf_range(-0.3, 0.3), randf_range(-1, 1)).normalized() * randf_range(2.5, 4.5)
 	_charge_fx = null
 	_char(model)
 	_smoke.emitting = true
@@ -1092,22 +1127,6 @@ func _char(node: Node) -> void:
 		elif child is Blinker:
 			child.process_mode = Node.PROCESS_MODE_DISABLED
 		_char(child)
-
-
-func _wreck_physics(delta: float) -> void:
-	_wreck_time += delta
-	if not is_on_floor() and _wreck_spin.length() > 0.1: # the shell tumbles until it hits the ground
-		_visual.rotate_object_local(_wreck_spin.normalized(), _wreck_spin.length() * delta)
-	elif is_on_floor():
-		_wreck_spin = Vector3.ZERO
-	if _wreck_time > WRECK_SOLID_TIME and collision_layer != 0:
-		collision_layer = 0 # other cars drive through the burnt shell
-		_fire.emitting = false
-	velocity.y -= GRAVITY * delta
-	var hv := Vector3(velocity.x, 0, velocity.z).move_toward(Vector3.ZERO, 12.0 * delta)
-	velocity.x = hv.x
-	velocity.z = hv.z
-	move_and_slide()
 
 
 # ---------------------------------------------------------------- visuals
@@ -1130,45 +1149,22 @@ func _animate(delta: float) -> void:
 	for s in _steer_pivots:
 		(s as Node3D).rotation.y = lerpf((s as Node3D).rotation.y, -in_steer * 0.45, 12.0 * delta)
 
-	# Attitude. On the ground: lean into the slope, roll a little in turns. In the air: keep the
-	# takeoff attitude (no fake tilting). Thrown or tipped off an edge: spin until landing, maybe
-	# onto the roof. On the roof: upside down until rolled back. A hit adds an elastic dip.
-	var grounded := is_on_floor()
-	var b := _visual_base
-	if flipped:
-		var roll := PI * (1.0 - _recover) * _recover_dir
-		b = Basis(Vector3.FORWARD, roll if _recover > 0.0 else PI)
-	elif _spinning:
-		_spin_grace -= delta
-		_spin_angle += _spin_rate * delta
-		b = Basis(_spin_axis, _spin_angle)
-		_airborne = true
-		_air_basis = Basis.IDENTITY
-		if grounded and _spin_grace <= 0.0 and (get_floor_normal().y > 0.75 or absf(velocity.y) < 1.0): # landed (not sliding down a cliff face)
-			_land_from_spin()
-	elif _tip_angle > 0.02:
-		if not grounded and not _hanging: # tipped clean off the edge: keep turning through the fall
-			_start_spin(_tip_axis, _tip_angle, maxf(_tip_rate, 3.2 * _tip_slow))
-		b = Basis(_tip_axis, _tip_angle)
-	elif not grounded:
-		if not _airborne:
-			_airborne = true
-			_air_basis = _visual_base
-		b = _visual_base.slerp(_air_basis, clampf(10.0 * delta, 0.0, 1.0))
-	else:
-		_airborne = false
-		var up := global_transform.basis.inverse() * get_floor_normal()
-		var lean := -in_steer * clampf(absf(speed) / stats.max_speed, 0.0, 1.0) * float(model.get_meta("lean", 0.06))
-		var target_basis := Basis(Quaternion(Vector3.UP, up.normalized())) * Basis.from_euler(Vector3(0.0, 0, lean))
-		b = _visual_base.slerp(target_basis.orthonormalized(), clampf(10.0 * delta, 0.0, 1.0))
-	# Elastic dip: a damped spring, springs back with a little overshoot.
+	# The body's attitude is the physics now. The visual adds a small lean into turns, the
+	# elastic dip from hits (a damped spring) and the jolt; the wheels follow their springs.
+	var lean := 0.0
+	if _grounded:
+		lean = -in_steer * clampf(absf(speed) / stats.max_speed, 0.0, 1.0) * float(model.get_meta("lean", 0.06))
+	_lean = lerpf(_lean, lean, clampf(10.0 * delta, 0.0, 1.0))
 	_squish_vel += (-220.0 * _squish - 12.0 * _squish_vel) * delta
 	_squish += _squish_vel * delta
-	b = b.orthonormalized()
-	_visual_base = b
-	var shown := b
+	var shown := Basis.from_euler(Vector3(0.0, 0.0, _lean))
 	if _squish.length() > 0.0005:
-		shown = b * Basis(_squish.normalized(), _squish.length())
-	# Turn about the middle of the body, not the wheels, so a car on its roof lies on its roof.
+		shown = shown * Basis(_squish.normalized(), _squish.length())
 	var mid := Vector3(0, float(stats.get("size", Vector3(2, 1.8, 5)).y) * 0.5, 0)
 	_visual.transform = Transform3D(shown, mid - shown * mid + _jolt)
+	# Wheels drop into their arches as the springs stretch, tuck up as they squash.
+	for w: Node3D in _wheels:
+		var rest: Vector3 = _wheel_rest.get(w, w.position)
+		var corner := (1 if rest.x > 0.01 else 0) + (2 if rest.z > 0.0 else 0) # same order as _wheel_corners()
+		var travel := clampf(_wheel_comp[corner] - GRAVITY / SUSP_K, -SUSP_DROOP, 0.25)
+		w.position.y = rest.y + travel

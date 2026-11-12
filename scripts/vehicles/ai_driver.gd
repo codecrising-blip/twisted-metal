@@ -57,9 +57,9 @@ func drive(v: Vehicle, delta: float) -> void:
 		_retarget = 0.6
 		v.target = _choose_target(v)
 
-	if v.flipped: # on its roof: handbrake and roll back over, always the same way
-		v.in_throttle = 0.0
-		v.in_handbrake = true
+	if v.flipped: # on its roof or side: gas + steer rolls it back over (round 5)
+		v.in_throttle = 1.0
+		v.in_handbrake = false
 		v.in_steer = 1.0
 		v.in_turbo = false
 		v.in_fire_guns = false

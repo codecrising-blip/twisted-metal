@@ -148,7 +148,7 @@ func detonate() -> void:
 		o.take_damage(dmg * WeaponData.DAMAGE_SCALE, owner_car)
 		var push := o.global_position - center
 		push.y = 0.0
-		o.apply_impulse(push.normalized() * 14.0 * o.knockback + Vector3.UP * 5.0)
+		o.push(push.normalized() * 14.0 * o.knockback + Vector3.UP * 5.0)
 	FxKit.explosion(world, center, 2.4, Color(1.0, 0.45, 0.1))
 	if is_instance_valid(owner_car):
 		owner_car.set_live_special(null)

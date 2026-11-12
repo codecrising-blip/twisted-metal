@@ -240,6 +240,18 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   damped spring on the body, never goofy). Napalm Cone now has its own projectile (spinning cone, molten scoop,
   fireball halo; white-hot when charged). **AI:** dodges incoming missiles with a drift, keeps attack runs on its own
   level (no more up-and-down on the ramp), no turbo onto ramps. Music plays per stage.
+- **Round 5 physics (owner chose option A, "full physical car"):** `Vehicle` is a `RigidBody3D` now (mass = class
+  weight x 1000, low centre of mass, gravity 30 via `gravity_scale`, friction 0.35 so roofs and scrapes slide). Four
+  spring-damper rays at the corners hold it up (`SUSP_*`; wheels drop/tuck with them). The tuned tyre model (gas,
+  brakes, handbrake drift, grip, turn rates from `Roster`) acts in the plane of the ground in `_integrate_forces`,
+  only while 2+ springs touch; steering sets the yaw rate about the ground normal (hits can still swing it).
+  Everything else is physics: ledges (back drops first, pivots on the edge), hill crests throw fast cars into the air
+  (the old floor snap glued them: Outlaw could not reach the hill-top health), flips land where they land, a car on
+  its roof slides and stops (no more instant zero). `flipped` = lying on roof/side; **gas + left/right** rolls it back
+  (`_upside_watch`, owner round 5; AI does the same). Same API as before: `velocity` is a property over
+  `linear_velocity`, `speed`, `is_on_floor()`, `get_floor_normal()`; renamed `push()` (was apply_impulse),
+  `freeze_for()` (was freeze), `weight` (was mass) because RigidBody3D owns those names. Rams still deal design damage
+  and knock the cars apart (bodies alone stick together). Physics per tick in a fight: 6.6 -> 1.55 ms.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -437,7 +449,11 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
   `Vehicle.speed` is now the real forward speed, and setting it from outside (spawn, tests) is still honoured.
   Round 4 (see above). Gotchas: an edge-tip test parked on a ramp tipped nothing (place it on flat ground); the coast
   brake ate the tipping push (move the body directly); a car resting on a slope never "landed" from a spin (landing
-  also accepts resting, `|velocity.y| < 1`); `floor_max_angle` 38 broke AI ramp climbs, keep 48.
+  also accepts resting, `|velocity.y| < 1`); `floor_max_angle` 38 broke AI ramp climbs, keep 48. (Round 5 replaced all
+  that fake tipping with a real rigid body.) Gotchas: in `_integrate_forces` write velocity changes into the value
+  you finally assign to `state.linear_velocity`, or a later assignment eats them (the roll-back hop did nothing);
+  setting angular velocity with `move_toward` per step loses to ground contacts, set it outright; tests that set
+  inputs need a controller object (no controller = inputs cleared every frame).
   Sounds: the owner uploads through GitHub's web page, so files land in the repo root as `NN. SFX - Name.mp3.mpeg`
   (Godot can't import `.mpeg` or `.flac`): convert with ffmpeg to mono .ogg, peak -1 dB, rename to the README names.
   `GameFeel.loop()` sets `loop` on the stream; a typed lambda param on a freed node errors in `filter` (use Variant).
