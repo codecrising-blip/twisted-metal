@@ -459,3 +459,6 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
   Sounds: the owner uploads through GitHub's web page, so files land in the repo root as `NN. SFX - Name.mp3.mpeg`
   (Godot can't import `.mpeg` or `.flac`): convert with ffmpeg to mono .ogg, peak -1 dB, rename to the README names.
   `GameFeel.loop()` sets `loop` on the stream; a typed lambda param on a freed node errors in `filter` (use Variant).
+  Round 5 (owner's choices): measured perf pass, real rigid-body car, music/SFX buses + volumes, TM 2012 sound batch.
+  Gotchas: Ubuntu's 7zip can't read RAR5 (use `unar`); 21 files in the owner's RAR were damaged; physics tests that
+  follow a mine blast must re-place the car (it may still be tumbling).
