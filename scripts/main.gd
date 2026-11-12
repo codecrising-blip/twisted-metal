@@ -41,6 +41,7 @@ var _respawn_timer := -1.0
 func _ready() -> void:
 	InputSetup.setup()
 	GraphicsSettings.load_saved()
+	AudioSettings.setup()
 	if full_roster or "full" in OS.get_cmdline_user_args():
 		drivers = FULL_DRIVERS
 	arena = JunkyardArena.new() if "junkyard" in OS.get_cmdline_user_args() else LosAngelesArena.new()
@@ -177,6 +178,7 @@ func _start_music() -> void:
 	var path := music_pick if music_pick in tracks else _stage_theme(tracks)
 	if music == null:
 		music = AudioStreamPlayer.new()
+		music.bus = AudioSettings.MUSIC_BUS
 		music.volume_db = -6.0
 		music.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(music)

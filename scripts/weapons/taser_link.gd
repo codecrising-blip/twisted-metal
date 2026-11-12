@@ -15,6 +15,7 @@ var mashes := 0
 var _time := 0.0
 var _pending := 0.0
 var _fizzle := 0.0
+var _hum: AudioStreamPlayer3D
 var _spark := 0.0
 var _core: ZigLine # white-hot centre of the bolt
 var _glow: ZigLine # wide blue glow around it, same zigzag
@@ -44,6 +45,9 @@ static func start(v: Vehicle, d: Dictionary) -> TaserLink:
 	else:
 		v.set_live_special(link)
 		GameFeel.play("special_outlaw", v.global_position + Vector3.UP, v.get_parent())
+		link._hum = GameFeel.loop("taser_loop", v, -8.0, 14.0) # the link crackles while it holds
+		if link._hum:
+			link._hum.play()
 	return link
 
 
@@ -204,7 +208,10 @@ func _end(lost: bool) -> void:
 	if _pending > 0.0 and is_instance_valid(target) and not target.is_dead:
 		target.take_damage(_pending * WeaponData.DAMAGE_SCALE, owner_car)
 	_pending = 0.0
+	if is_instance_valid(_hum):
+		_hum.queue_free()
 	if is_instance_valid(owner_car):
+		GameFeel.play("taser_fizzle", owner_car.launch_point(), owner_car.get_parent(), -6.0)
 		owner_car.set_live_special(null)
 		if lost:
 			owner_car.notice.emit(owner_car, "CONNECTION LOST")

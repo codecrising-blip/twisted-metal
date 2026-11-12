@@ -95,6 +95,7 @@ static func play(name: String, pos: Vector3, parent: Node, volume_db := 0.0, pit
 	if list.is_empty():
 		return
 	var p := AudioStreamPlayer3D.new()
+	p.bus = AudioSettings.SFX_BUS
 	p.stream = list.pick_random()
 	p.volume_db = volume_db
 	p.pitch_scale = pitch * randf_range(0.92, 1.08)
@@ -111,7 +112,8 @@ static func ui(name: String, tree: SceneTree, volume_db := -4.0) -> void:
 	if list.is_empty() or tree == null:
 		return
 	var p := AudioStreamPlayer.new()
-	p.stream = list[0]
+	p.bus = AudioSettings.SFX_BUS
+	p.stream = list.pick_random()
 	p.volume_db = volume_db
 	p.process_mode = Node.PROCESS_MODE_ALWAYS
 	tree.root.add_child(p)
@@ -129,6 +131,7 @@ static func loop(name: String, parent: Node3D, volume_db := 0.0, unit_size := 12
 	if "loop" in s:
 		s.set("loop", true)
 	var p := AudioStreamPlayer3D.new()
+	p.bus = AudioSettings.SFX_BUS
 	p.stream = s
 	p.volume_db = volume_db
 	p.unit_size = unit_size

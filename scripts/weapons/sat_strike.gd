@@ -16,6 +16,8 @@ var _disc: MeshInstance3D
 var _guide: MeshInstance3D
 var _beam: MeshInstance3D
 var _struck := false
+var _scan: AudioStreamPlayer3D
+var _warned := false
 
 
 static func start(v: Vehicle, _id: String, d: Dictionary) -> SatStrike:
@@ -52,6 +54,10 @@ func _ready() -> void:
 	_guide = MeshKit.cylinder(self, 0.25, 160.0, Vector3.UP * 80.0, guide, Vector3.ZERO, 6)
 	for mi: MeshInstance3D in [_ring, _disc, _guide]:
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# TM 2012 satellite sounds: the scan hums while the zone is locked, a warning before the beam.
+	_scan = GameFeel.loop("sat_scan_loop", self, -6.0, 16.0)
+	if _scan:
+		_scan.play()
 
 
 func _physics_process(delta: float) -> void:
@@ -64,6 +70,9 @@ func _physics_process(delta: float) -> void:
 		var rate := 2.0 if left > 2.0 else (5.0 if left > 0.8 else 10.0)
 		_ring.visible = fmod(_t * rate, 1.0) < 0.6
 		_disc.scale = Vector3.ONE * (1.0 - clampf(left / _delay, 0.0, 1.0) * 0.6)
+		if not _warned and left < 1.4:
+			_warned = true
+			GameFeel.play("sat_incoming", global_position + Vector3.UP * 4.0, get_parent(), 2.0)
 		if _t >= _delay:
 			_strike()
 		return
@@ -76,6 +85,9 @@ func _physics_process(delta: float) -> void:
 
 func _strike() -> void:
 	_struck = true
+	if _scan:
+		_scan.stop()
+	GameFeel.play("sat_strike", global_position + Vector3.UP * 2.0, get_parent(), 4.0)
 	_ring.visible = false
 	_disc.visible = false
 	_guide.visible = false

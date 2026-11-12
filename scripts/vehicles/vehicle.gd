@@ -151,10 +151,14 @@ var _burn_fx: CPUParticles3D
 var _ice: MeshInstance3D
 # Sound loops (the owner's TM2 recordings, session 6): engine by weight class, guns and tire skid
 # while they happen. Null when a file is missing.
-var _engine_snd: AudioStreamPlayer3D
 var _gun_snd: AudioStreamPlayer3D
 var _skid_snd: AudioStreamPlayer3D
 var _gun_snd_t := 0.0
+var _shells := 0
+var _eng := {} # engine layer ("idle", "slow", "fast") -> looping player, crossfaded by speed (TM 2012 sets)
+var _eng_set := ""
+var _rev_cool := 0.0
+var _prev_throttle := 0.0
 var _was_skidding := false
 var _screech_t := 0.0
 
@@ -233,9 +237,15 @@ func setup(id: String, player: bool) -> void:
 	_fx = VehicleFx.new()
 	_fx.name = "Fx"
 	add_child(_fx)
-	_engine_snd = GameFeel.loop("engine_" + str(stats.get("class", "medium")), self, -15.0 if player else -11.0, 9.0)
-	if _engine_snd:
-		_engine_snd.autoplay = true
+	# Engine: idle, slow and fast loops of this car's own engine, crossfaded by speed (round 5).
+	_eng_set = str(stats.get("engine", "suv"))
+	for layer: String in ["idle", "slow", "fast"]:
+		var file := "engine_%s_%s" % [_eng_set, layer]
+		if GameFeel.streams(file).is_empty():
+			file = "engine_%s_slow" % _eng_set # no fast recording: the slow one, pitched up
+		var p := GameFeel.loop(file, self, -60.0, 10.0)
+		if p:
+			_eng[layer] = p
 	_gun_snd = GameFeel.loop("guns_loop", self, -9.0, 14.0)
 	_skid_snd = GameFeel.loop("skid_loop", self, -14.0, 10.0)
 	_fx.setup(model)
@@ -781,6 +791,8 @@ func _combat(delta: float) -> void:
 			_active_special.fire_again() # taser mash, bomb detonation, napalm drop
 		elif _can_charge():
 			charging_id = selected_weapon() # fires when the button is let go
+			if is_player:
+				GameFeel.play("charge_up", launch_point(), self, -4.0)
 			charge_time = 0.0
 		else:
 			_fire_selected()
@@ -838,19 +850,52 @@ func _place_blob() -> void:
 	_blob.transparency = 1.0 - fade
 
 
+## Engine layers: idle at a standstill, slow through the middle, fast near top speed, each pitched
+## with the speed (turbo pushes it up). A rev when the gas goes down from low speed. Cars far from
+## the camera go quiet (no streams decoding for nothing).
+func _update_engine(delta: float) -> void:
+	if _eng.is_empty():
+		return
+	var r := clampf(absf(speed) / float(stats.max_speed), 0.0, 1.3)
+	var near := GameFeel.camera == null or not is_instance_valid(GameFeel.camera) \
+		or global_position.distance_squared_to(GameFeel.camera.global_position) < 8100.0
+	var weights := {
+		"idle": 1.0 - smoothstep(0.04, 0.22, r),
+		"slow": smoothstep(0.04, 0.22, r) * (1.0 - smoothstep(0.5, 0.75, r)),
+		"fast": smoothstep(0.5, 0.75, r),
+	}
+	var boost := 0.12 if _boosting else 0.0
+	var pitches := {"idle": 1.0, "slow": 0.85 + r * 0.45 + boost, "fast": 0.9 + (r - 0.5) * 0.5 + boost}
+	var base := -13.0 if is_player else -9.0
+	for layer: String in _eng:
+		var p := _eng[layer] as AudioStreamPlayer3D
+		var w: float = weights[layer] if near else 0.0
+		if w < 0.02:
+			if p.playing:
+				p.stop()
+			continue
+		if not p.playing:
+			p.play()
+		p.volume_db = base + linear_to_db(w)
+		p.pitch_scale = lerpf(p.pitch_scale, pitches[layer], 1.0 - exp(-6.0 * delta))
+	_rev_cool -= delta
+	if near and in_throttle > 0.6 and _prev_throttle < 0.2 and r < 0.35 and _rev_cool <= 0.0:
+		_rev_cool = 1.5
+		GameFeel.play("engine_%s_rev" % _eng_set, global_position + Vector3.UP, self, base + 2.0)
+	_prev_throttle = in_throttle
+
+
 ## Engine pitch follows the speed (turbo pushes it higher), guns loop while firing, tires squeal
 ## while the car slides sideways or drifts on the handbrake.
 func _update_sounds(delta: float) -> void:
-	if _engine_snd:
-		var r := clampf(absf(speed) / float(stats.max_speed), 0.0, 1.4)
-		var want := 0.75 + r * 0.55 + (0.15 if _boosting else 0.0)
-		_engine_snd.pitch_scale = lerpf(_engine_snd.pitch_scale, want, 1.0 - exp(-5.0 * delta))
+	_update_engine(delta)
 	if _gun_snd:
 		_gun_snd_t -= delta
 		if _gun_snd_t > 0.0 and not _gun_snd.playing:
 			_gun_snd.play()
 		elif _gun_snd_t <= 0.0 and _gun_snd.playing:
 			_gun_snd.stop()
+			GameFeel.play("guns_stop", global_position + Vector3.UP, self, -9.0) # the barrels spin down
 	if _skid_snd:
 		var side := absf(velocity.dot(global_basis.x))
 		var skid := is_on_floor() and not flipped and (side > 5.0 or (in_handbrake and absf(speed) > 8.0))
@@ -930,6 +975,9 @@ func _fire_guns() -> void:
 	Projectile.spawn(get_parent(), "guns", from, dir, self, null)
 	_fx.gun_fired(_gun_index)
 	_gun_snd_t = 0.14 # the loop runs while the guns keep firing
+	_shells += 1
+	if _shells % 6 == 0:
+		GameFeel.play("shell", global_position + Vector3.UP * 0.5, self, -20.0) # casings on the tarmac
 	if _gun_snd == null and _gun_index == 0:
 		GameFeel.play("guns", from, get_parent(), -6.0)
 
@@ -997,6 +1045,8 @@ func cycle_weapon(step: int) -> void:
 		return
 	selected = wrapi(selected + step, 0, weapon_order.size())
 	weapons_changed.emit(self)
+	if is_player:
+		GameFeel.ui("weapon_switch", get_tree(), -10.0)
 
 
 func selected_weapon() -> String:
@@ -1104,9 +1154,11 @@ func _die() -> void:
 	_visual.visible = true
 	FxKit.explosion(get_parent(), global_position + Vector3.UP * 1.5, 2.6)
 	GameFeel.play("death_female" if stats.get("female", false) else "death_male", global_position + Vector3.UP, get_parent())
-	for snd: AudioStreamPlayer3D in [_engine_snd, _gun_snd, _skid_snd]:
+	for snd: AudioStreamPlayer3D in [_gun_snd, _skid_snd]:
 		if snd:
 			snd.stop()
+	for layer: String in _eng:
+		(_eng[layer] as AudioStreamPlayer3D).stop()
 	linear_velocity += Vector3(randf_range(-3, 3), 11.0, randf_range(-3, 3))
 	angular_velocity += Vector3(randf_range(-1, 1), randf_range(-0.3, 0.3), randf_range(-1, 1)).normalized() * randf_range(2.5, 4.5)
 	_charge_fx = null

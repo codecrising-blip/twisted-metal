@@ -310,8 +310,10 @@ audio/music/                FINAL themes (owner's list, see its README): `<arena
                             Pause menu M = music test (try any track on this stage, story order, `main.gd`)
 audio/reference/            owner's study material, NOT game files (.gdignore): Calypso's voice, Warhawk intro speech,
                             menu / Antarctica theme references, other tracks. Never assign these to stages yourself
-audio/sfx/                  sound effects by name (see its README): owner's TM1/TM2/TM4 sounds as mono .ogg. Owner
-                            uploads land in the repo root or audio/sfx: sort them, delete exact duplicates
+audio/sfx/                  sound effects by name (see its README): owner's TM1/TM2/TM4/TM 2012 sounds as mono .ogg.
+                            Owner uploads land in the repo root or audio/sfx: sort them, delete exact duplicates
+audio/later/                TM 2012 sounds for features not built yet (.gdignore); move them in when building those
+scripts/core/audio_settings.gd  Music / SFX buses and volumes (pause menu - + [ ], saved); effects never duck music
 docs/GDD.md                 game design document (living); docs/design/ = design bible (Arabic)
 ```
 

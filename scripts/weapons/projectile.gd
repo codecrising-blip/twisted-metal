@@ -15,6 +15,7 @@ var def := {}
 var shooter: Vehicle
 var target: Vehicle
 var direction := Vector3.FORWARD
+var _flyby := false
 var velocity := Vector3.ZERO # thrown shots only
 var _life := 1.0
 var _trail: CPUParticles3D
@@ -170,6 +171,11 @@ func _physics_process(delta: float) -> void:
 	if _life <= 0.0:
 		_explode(global_position, Vector3.UP, null)
 		return
+	# A missile passing close to the camera whooshes by (once).
+	if not _flyby and GameFeel.camera and def.get("kind", "bullet") in ["missile", "cone", "skull", "ghost"]:
+		if global_position.distance_squared_to(GameFeel.camera.global_position) < 81.0:
+			_flyby = true
+			GameFeel.play("missile_flyby", global_position, get_parent(), -4.0)
 
 	if _body:
 		_body.rotate_object_local(Vector3.FORWARD, 14.0 * delta)
@@ -270,6 +276,8 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 		collider.projectile_hit(dmg, shooter)
 	if kind == "bullet":
 		FxKit.spark(world, pos, normal)
+		if collider != null and not (collider is Vehicle) and randf() < 0.25:
+			GameFeel.play("ricochet", pos, world, -12.0) # TM 2012 ricochets off walls and ground
 	elif kind == "freeze":
 		FxKit.explosion(world, pos, 0.6, Color(0.5, 0.85, 1.0))
 	elif kind == "cone":

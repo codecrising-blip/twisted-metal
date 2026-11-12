@@ -25,35 +25,35 @@ const DRIFT_TURN := {"light": 1.62, "medium": 1.55, "heavy": 1.46, "super": 1.41
 
 const CARS := {
 	"sweet_tooth": {
-		"name": "Sweet Tooth", "driver": "Needles Kane",
+		"name": "Sweet Tooth", "engine": "ic_truck", "driver": "Needles Kane",
 		"spd": 4, "arm": 8, "hnd": 4, "spc": 8, "class": "heavy",
 		"special": "napalm_cone", "freeze_cost": 35.0, # perk: Brain Freeze
 		"size": Vector3(2.5, 2.8, 6.6), "camera": [6.4, 13.0],
 		"tagline": "He laughs louder than the engine.",
 	},
 	"outlaw": {
-		"name": "Outlaw", "driver": "Jamie Roberts", "female": true,
+		"name": "Outlaw", "engine": "taxi", "driver": "Jamie Roberts", "female": true,
 		"spd": 7, "arm": 6, "hnd": 6, "spc": 5, "class": "medium",
 		"special": "omni_taser", "brake_mult": 1.3, # perk: Interceptor
 		"size": Vector3(2.2, 1.6, 5.0),
 		"tagline": "She stopped telling them it was about justice.",
 	},
 	"junkyard_dog": {
-		"name": "Junkyard Dog", "driver": "Billy Ray Stillwell",
+		"name": "Junkyard Dog", "engine": "tow", "driver": "Billy Ray Stillwell",
 		"spd": 5, "arm": 8, "hnd": 4, "spc": 7, "class": "heavy",
 		"special": "chain_bomb",
 		"size": Vector3(2.4, 2.0, 5.8),
 		"tagline": "Everything ends up in his yard.",
 	},
 	"mr_grimm": {
-		"name": "Mr. Grimm", "driver": "Mr. Grimm",
+		"name": "Mr. Grimm", "engine": "moto", "driver": "Mr. Grimm",
 		"spd": 8, "arm": 1, "hnd": 6, "spc": 9, "class": "light",
 		"special": "reaper_skull",
 		"size": Vector3(2.0, 1.9, 3.2), "camera": [3.8, 9.0],
 		"tagline": "Death rides a motorcycle.",
 	},
 	"spectre": {
-		"name": "Spectre", "driver": "Ken",
+		"name": "Spectre", "engine": "suv", "driver": "Ken",
 		"spd": 8, "arm": 2, "hnd": 8, "spc": 6, "class": "light",
 		"special": "ghost_missile",
 		"size": Vector3(2.1, 1.4, 4.6), "camera": [3.8, 9.5],

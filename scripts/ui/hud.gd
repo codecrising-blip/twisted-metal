@@ -315,6 +315,13 @@ func _handle_input() -> void:
 	if get_tree().paused and not game_over and Input.is_action_just_pressed("cycle_music"):
 		music_requested.emit()
 		_show_pause()
+	if get_tree().paused and not game_over:
+		for pair: Array in [["music_down", "music", -1], ["music_up", "music", 1], ["sfx_down", "sfx", -1], ["sfx_up", "sfx", 1]]:
+			if Input.is_action_just_pressed(pair[0]):
+				AudioSettings.change(pair[1], pair[2])
+				if pair[1] == "sfx":
+					GameFeel.ui("menu_select", get_tree())
+				_show_pause()
 	if game_over or get_tree().paused:
 		for i in mini(drivers.size(), 5):
 			if Input.is_action_just_pressed("pick_%d" % (i + 1)):
@@ -325,7 +332,7 @@ func _handle_input() -> void:
 
 
 func _show_pause() -> void:
-	show_message("PAUSED", "ESC to resume   ENTER to restart   G graphics: %s\nM music: %s\n\n%s" % [GraphicsSettings.label(), music_label, _driver_menu()])
+	show_message("PAUSED", "ESC to resume   ENTER to restart   G graphics: %s\nM music: %s\n%s\n\n%s" % [GraphicsSettings.label(), music_label, AudioSettings.label(), _driver_menu()])
 
 
 func _driver_menu() -> String:

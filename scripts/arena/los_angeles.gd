@@ -102,6 +102,7 @@ func build() -> void:
 	add_child(props)
 	props.build(self)
 	_points()
+	_ambience()
 	_flush_batch()
 
 
@@ -1550,6 +1551,29 @@ static func hill_height(x: float, z: float) -> float:
 	var spur := (0.45 - absf(sin(x * 0.052 + sin(z * 0.035) * 0.9))) * 14.0
 	spur *= lerpf(0.3, 1.0, smoothstep(35.0, 80.0, absf(x + 10.0)))
 	return -25.0 + (rise + (peaks + spur) * smoothstep(0.15, 0.7, t)) * lateral
+
+
+## The city around the arena (round 5, TM 2012 sounds): far traffic all the time, and now and then a
+## horn or a scream from somewhere past the walls. Not placed in 3D (it is the whole city).
+func _ambience() -> void:
+	var list := GameFeel.streams("amb_city_traffic")
+	if not list.is_empty():
+		var s: AudioStream = list[0]
+		if "loop" in s:
+			s.set("loop", true)
+		var p := AudioStreamPlayer.new()
+		p.stream = s
+		p.bus = AudioSettings.SFX_BUS
+		p.volume_db = -21.0
+		p.autoplay = true
+		add_child(p)
+	var t := Timer.new()
+	t.wait_time = 12.0
+	t.autostart = true
+	add_child(t)
+	t.timeout.connect(func() -> void:
+		t.wait_time = randf_range(10.0, 26.0)
+		GameFeel.ui("amb_scream" if randf() < 0.2 else "amb_horn", get_tree(), -20.0))
 
 
 ## For the HUD radar: the outer wall, the road, the battleground edge and the tunnels.

@@ -64,8 +64,12 @@ func _run() -> void:
 	# Sounds (owner's TM2 recordings): crash variants, aliases, engine loop by class.
 	_check(GameFeel.streams("crash").size() == 4, "four crash variants load (%d)" % GameFeel.streams("crash").size())
 	_check(not GameFeel.streams("launch_power").is_empty(), "power missile launch sound loads")
-	_check(player._engine_snd != null and player._engine_snd.stream.get("loop"), "Sweet Tooth has a looping heavy engine")
+	_check(player._eng.size() == 3 and (player._eng["idle"] as AudioStreamPlayer3D).stream.get("loop"), "Sweet Tooth has its own looping engine layers (ice-cream truck)")
 	_check(player._gun_snd != null and player._skid_snd != null, "gun and skid loops are ready")
+	_check(AudioServer.get_bus_index("Music") >= 0 and main.music.bus == "Music", "music plays on its own bus (own volume, never ducked)")
+	AudioSettings.change("sfx", -1)
+	AudioSettings.change("sfx", 1)
+	_check(is_equal_approx(AudioSettings.sfx, 0.8) and AudioServer.get_bus_index("SFX") >= 0, "effects volume steps and comes back (%.1f)" % AudioSettings.sfx)
 	# Music: LA plays its own theme; M in the pause menu tries the next track (owner's music test).
 	var la_theme: String = main.music.stream.resource_path if main.music and main.music.stream else ""
 	_check(la_theme.ends_with("los_angeles.ogg"), "Los Angeles plays its own theme (%s)" % la_theme)
@@ -397,6 +401,8 @@ func _run() -> void:
 	_check(player.velocity.y > 8.0, "...and a heavy truck on top still flies (%.1f m/s up)" % player.velocity.y)
 	await _frames(100) # land
 	player.health = player.max_health
+	_place(player, 40, 70, 90) # the mine may have left it tumbling: back on its wheels on flat ground
+	await _frames(5)
 	FirePool.spawn(main, player.global_position, 3.0, 2.0, 3.0, player)
 	await _frames(40)
 	_check(player.burn_time > 0.0, "friendly fire: your own napalm fire burns you")
