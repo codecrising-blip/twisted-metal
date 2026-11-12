@@ -42,6 +42,25 @@ func _ready() -> void:
 
 
 ## The owner's next fire press.
+## Energy move "mines" (design 5.2): a small mine behind the car, no remote; up to 3 per car (a 4th sets
+## the oldest off).
+static func drop_energy(v: Vehicle) -> Mine:
+	var m := Mine.new()
+	m.owner_car = v
+	m.def = WeaponData.get_def("energy_mine")
+	v.get_parent().add_child(m)
+	var size: Vector3 = v.stats.get("size", Vector3(2.2, 1.8, 5.0))
+	var back := v.global_position - v.flat_forward() * (size.z * 0.5 + 1.6) + Vector3.UP
+	m.global_position = Specials.ground_below(v.get_parent(), back)
+	m.scale = Vector3.ONE * 0.75
+	GameFeel.play("mine_drop", m.global_position, v.get_parent())
+	v._energy_mines = v._energy_mines.filter(func(o: Variant) -> bool: return is_instance_valid(o) and not (o as Mine)._done)
+	v._energy_mines.append(m)
+	if v._energy_mines.size() > 3:
+		(v._energy_mines.pop_front() as Mine).detonate()
+	return m
+
+
 func fire_again() -> void:
 	detonate()
 

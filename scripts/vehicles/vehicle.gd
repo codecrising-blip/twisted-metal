@@ -41,6 +41,16 @@ const CHARGE_SILENT := 0.25 # a tap shorter than this makes no charging sound
 const KNOCK_TIME := 0.6 # after a blast the tyres let the car fly instead of gripping it back in line
 const RECOVER_HOP := 5.5 # m/s lift as the roll starts (again every half second until it is back up)
 const FREEZE_COST := 50.0
+# Energy moves (design 5.2, owner's combos play-test 1).
+const REAR_FREEZE_COST := 40.0
+const SHIELD_COST := 70.0
+const SHIELD_TIME := 2.5
+const INVIS_COST := 50.0
+const INVIS_TIME := 6.0
+const MINE_COST := 25.0
+const REAR_ATTACK_COST := 30.0
+const HEADLIGHT_RANGE := 45.0
+const HEADLIGHT_CONE := deg_to_rad(26.0)
 const FREEZE_BREAK := 15.0 # a single hit this big shatters the ice
 const GRIT_TIME := 3.0 # immune to full disables after one ends
 const SPAWN_SHIELD := 2.0
@@ -71,6 +81,7 @@ var in_fire_weapon := false # fire button held (charged specials)
 var want_fire_weapon := false # one-shot requests, consumed here
 var want_jump := false
 var want_freeze := false
+var want_move := "" # an energy move by name (combos, number keys, AI): see energy_move()
 
 var max_health := 100.0
 var health := 100.0
@@ -146,6 +157,15 @@ var _wheel_comp: Array[float] = [0.0, 0.0, 0.0, 0.0] # spring compression per co
 var _prev_velocity := Vector3.ZERO # before this step's contacts (rams, walls, breakables)
 var _lying_time := 0.0
 var _recover_kick := 0.0
+var shield_time := 0.0 # energy shield up: no damage, no states; guns only
+var invisible_time := 0.0 # energy invisibility: no locks on you, AI loses you past 12 m
+var revealed_time := 0.0 # seen anyway for a moment: hit, or caught in headlights
+var headlights_on := false
+var _energy_mines: Array = []
+var _shield_fx: MeshInstance3D
+var _shield_hum: AudioStreamPlayer3D
+var _headlight_t := 0.0
+var _invis_shown := -1.0 # last transparency written to the meshes
 var _charge_beeps := 0
 var _charge_hum: AudioStreamPlayer3D
 var _charge_hum_t := 0.0
@@ -348,6 +368,7 @@ func _tick(delta: float) -> void:
 		_visual.visible = invulnerable_time <= 0.0 or fmod(invulnerable_time, 0.2) > 0.08
 	if grit_time > 0.0:
 		grit_time -= delta
+	_energy_tick(delta)
 	if frozen_time > 0.0:
 		frozen_time -= delta
 		if frozen_time <= 0.0:
@@ -805,6 +826,17 @@ func flat_forward() -> Vector3:
 	return f.normalized() if f.length() > 0.001 else Vector3.FORWARD
 
 
+## Where the guns and launcher point: the body's real nose, pitch included (round 6: nose up on a
+## ramp or in a jump and the missile climbs; HOLLYWOOD secret), kept within 35 degrees of level.
+func aim_forward() -> Vector3:
+	var f := -global_basis.z
+	var flat := Vector3(f.x, 0.0, f.z)
+	if flat.length() < 0.2 or global_basis.y.y < 0.3:
+		return flat_forward() # on its side or roof: level
+	var pitch := clampf(atan2(f.y, flat.length()), deg_to_rad(-35.0), deg_to_rad(35.0))
+	return (flat.normalized() * cos(pitch) + Vector3.UP * sin(pitch)).normalized()
+
+
 func aim_point() -> Vector3:
 	return global_position + global_basis.y * 1.0
 
@@ -822,11 +854,20 @@ func spend_energy(amount: float) -> bool:
 # ---------------------------------------------------------------- combat
 
 func _combat(delta: float) -> void:
+	if want_freeze:
+		want_freeze = false
+		want_move = "freeze"
+	if want_move != "":
+		energy_move(want_move)
+		want_move = ""
 	if frozen_time > 0.0 or flipped:
 		want_fire_weapon = false
-		want_freeze = false
 		_cancel_charge()
 		return
+	if shield_time > 0.0 and want_fire_weapon: # shield up: guns only (design 5.2)
+		want_fire_weapon = false
+		if is_player:
+			GameFeel.ui("not_available", get_tree())
 	if in_fire_guns and _gun_cooldown <= 0.0:
 		_gun_cooldown = WeaponData.get_def("guns").cooldown
 		_fire_guns()
@@ -850,10 +891,167 @@ func _combat(delta: float) -> void:
 			var full := charge_time >= charge_full(charging_id)
 			_cancel_charge()
 			_fire_selected(full)
-	if want_freeze:
-		want_freeze = false
-		if spend_energy(float(stats.get("freeze_cost", FREEZE_COST))):
+
+
+## Energy moves (owner's combos, play-test 1; costs and times from design 5.2). Not while frozen or
+## flipped. Each says so on the HUD when there isn't enough energy.
+func energy_move(move: String) -> void:
+	if is_dead or frozen_time > 0.0 or flipped:
+		return
+	var costs := {
+		"jump": JUMP_COST, "freeze": float(stats.get("freeze_cost", FREEZE_COST)), "rear_freeze": REAR_FREEZE_COST,
+		"shield": float(stats.get("shield_cost", SHIELD_COST)), "invisible": INVIS_COST, "mines": MINE_COST,
+		"rear_attack": REAR_ATTACK_COST,
+	}
+	if move == "jump":
+		want_jump = true # done by the physics step (needs the wheels on the ground)
+		return
+	if move == "secondary":
+		if is_player:
+			notice.emit(self, "SECONDARY WEAPON: NOT BUILT YET")
+		return
+	if not costs.has(move):
+		return
+	if energy < float(costs[move]):
+		if is_player:
+			notice.emit(self, "NOT ENOUGH ENERGY")
+			GameFeel.ui("not_available", get_tree())
+		return
+	if (move == "freeze" or move == "rear_freeze" or move == "rear_attack") and shield_time > 0.0:
+		return # shield up: no attacks but the guns
+	spend_energy(float(costs[move]))
+	match move:
+		"freeze":
 			launch("freeze", target)
+		"rear_freeze":
+			_launch_rear("rear_freeze", 1)
+		"rear_attack":
+			_launch_rear("rear_missile", 2)
+		"shield":
+			shield_time = SHIELD_TIME
+			_show_shield(true)
+			GameFeel.play("shield_activate", global_position + Vector3.UP, self, -2.0)
+		"invisible":
+			invisible_time = INVIS_TIME
+			revealed_time = 0.0
+			GameFeel.play("teleport", global_position + Vector3.UP, self, -6.0, 1.4)
+			if is_player:
+				notice.emit(self, "INVISIBLE")
+		"mines":
+			Mine.drop_energy(self)
+
+
+## Out of the back: aimed at the nearest car behind (within 60 degrees and 80 m), else straight back.
+func _launch_rear(id: String, count: int) -> void:
+	_break_invisibility()
+	var size: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
+	var back := -aim_forward()
+	var lock: Vehicle = null
+	var best := INF
+	for node in get_tree().get_nodes_in_group("vehicles"):
+		var o := node as Vehicle
+		if o == self or o.is_dead or o.is_hidden():
+			continue
+		var to := o.global_position - global_position
+		if to.length() < 80.0 and back.angle_to(to.normalized()) < deg_to_rad(60.0) and to.length() < best:
+			best = to.length()
+			lock = o
+	for k in count:
+		var side := global_basis.x * (0.6 * (k - (count - 1) * 0.5))
+		var from := global_position + global_basis.z * (size.z * 0.5 + 0.8) + Vector3.UP * size.y * 0.6 + side
+		Projectile.spawn(get_parent(), id, from, back, self, lock)
+	GameFeel.play("launch_fire" if id == "rear_missile" else "launch_freeze", global_position, self, -2.0)
+
+
+## Shield, invisibility and headlights, every tick.
+func _energy_tick(delta: float) -> void:
+	if shield_time > 0.0:
+		shield_time -= delta
+		if _shield_fx:
+			var pulse := 0.5 + 0.5 * sin(_clock * 18.0)
+			(_shield_fx.material_override as StandardMaterial3D).albedo_color.a = (0.18 + 0.12 * pulse) * (0.4 if shield_time < 0.5 and fmod(shield_time, 0.15) < 0.07 else 1.0)
+		if shield_time <= 0.0:
+			_show_shield(false)
+			GameFeel.play("shield_off", global_position + Vector3.UP, self, -4.0)
+	if invisible_time > 0.0:
+		invisible_time -= delta
+	revealed_time = maxf(0.0, revealed_time - delta)
+	var want := 0.0
+	if invisible_time > 0.0:
+		# Others see a heat shimmer (almost nothing) unless it is revealed; you see yourself faintly.
+		want = 0.55 if is_player else (0.45 if revealed_time > 0.0 else 0.93)
+	if absf(want - _invis_shown) > 0.01:
+		_invis_shown = want
+		for mi in _flash_meshes:
+			if is_instance_valid(mi):
+				mi.transparency = want
+	# Headlights reveal invisible cars in the beam (owner: from the start; Calypso's clones later).
+	if headlights_on:
+		_headlight_t -= delta
+		if _headlight_t <= 0.0:
+			_headlight_t = 0.1
+			var fwd := aim_forward()
+			for node in get_tree().get_nodes_in_group("vehicles"):
+				var o := node as Vehicle
+				if o == self or o.is_dead or o.invisible_time <= 0.0:
+					continue
+				var to := o.aim_point() - (global_position + Vector3.UP)
+				if to.length() < HEADLIGHT_RANGE and fwd.angle_to(to.normalized()) < HEADLIGHT_CONE:
+					o.revealed_time = maxf(o.revealed_time, 0.25)
+
+
+## Invisible and not revealed: no locks, no homing, the AI loses you past 12 m.
+func is_hidden() -> bool:
+	return invisible_time > 0.0 and revealed_time <= 0.0
+
+
+func _break_invisibility() -> void:
+	if invisible_time > 0.0:
+		invisible_time = 0.0
+		if is_player:
+			notice.emit(self, "VISIBLE AGAIN")
+
+
+func _show_shield(on: bool) -> void:
+	if on and _shield_fx == null:
+		var size: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
+		_shield_fx = MeshInstance3D.new()
+		var sphere := SphereMesh.new()
+		sphere.radius = 1.0
+		sphere.height = 2.0
+		sphere.radial_segments = 20
+		sphere.rings = 10
+		_shield_fx.mesh = sphere
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mat.albedo_color = Color(0.35, 0.75, 1.0, 0.25)
+		_shield_fx.material_override = mat
+		_shield_fx.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_shield_fx.scale = Vector3(size.x * 0.75, size.y * 0.75, size.z * 0.62)
+		_shield_fx.position = Vector3(0, size.y * 0.5, 0)
+		_visual.add_child(_shield_fx)
+	if _shield_fx:
+		_shield_fx.visible = on
+	if on:
+		if _shield_hum == null:
+			_shield_hum = GameFeel.loop("shield_loop", self, -10.0, 12.0)
+		if _shield_hum:
+			_shield_hum.play()
+	elif _shield_hum:
+		_shield_hum.stop()
+
+
+## Headlights on/off (owner: Circle / H). They light the way and show invisible cars in the beam.
+func toggle_headlights() -> void:
+	headlights_on = not headlights_on
+	for l in model.find_children("*", "SpotLight3D", true, false):
+		if (l as Node).is_in_group(GraphicsSettings.HEADLIGHT_GROUP):
+			(l as Light3D).set_meta("on", headlights_on)
+			(l as Light3D).visible = headlights_on
+	GameFeel.play("menu_select", global_position + Vector3.UP, self, -12.0, 1.6)
 
 
 ## Weapons with a charged shot (Napalm Cone): tap = normal shot, hold to the end = charged shot.
@@ -1046,6 +1244,7 @@ func _fire_guns() -> void:
 		if to_t.length() < 90.0 and dir.angle_to(to_t.normalized()) < AIM_ASSIST_CONE:
 			dir = to_t.normalized()
 	dir = (dir + Vector3(randf_range(-1, 1), randf_range(-0.5, 0.5), randf_range(-1, 1)) * 0.012).normalized()
+	_break_invisibility()
 	Projectile.spawn(get_parent(), "guns", from, dir, self, null)
 	_fx.gun_fired(_gun_index)
 	_gun_snd_t = 0.14 # the loop runs while the guns keep firing
@@ -1067,6 +1266,7 @@ func _fire_selected(charged := false) -> void:
 		return
 	if ammo.get(id, 0) <= 0:
 		return
+	_break_invisibility()
 	ammo[id] -= 1
 	_weapon_cooldowns[id] = float(WeaponData.get_def(id).get("cooldown", 0.5))
 	Specials.fire(self, id, charged)
@@ -1102,8 +1302,9 @@ func launch_point() -> Vector3:
 
 
 func launch(id: String, lock: Vehicle) -> void:
+	_break_invisibility()
 	var from := launch_point()
-	var dir := flat_forward()
+	var dir := aim_forward()
 	if is_instance_valid(lock) and not lock.is_dead:
 		var to_t := lock.aim_point() - from
 		# Start roughly toward the target so homing doesn't have to U-turn.
@@ -1146,7 +1347,7 @@ func find_target() -> Vehicle:
 	var fwd := flat_forward()
 	for node in get_tree().get_nodes_in_group("vehicles"):
 		var v := node as Vehicle
-		if v == self or v.is_dead:
+		if v == self or v.is_dead or v.is_hidden():
 			continue
 		var to := v.global_position - global_position
 		var dist := to.length()
@@ -1165,6 +1366,11 @@ func find_target() -> Vehicle:
 func take_damage(amount: float, attacker: Vehicle = null) -> void:
 	if is_dead or amount <= 0.0 or invulnerable_time > 0.0:
 		return
+	if shield_time > 0.0:
+		GameFeel.play("shield_impact", global_position + Vector3.UP, self, -4.0)
+		return
+	if invisible_time > 0.0:
+		revealed_time = maxf(revealed_time, 0.5) # a hit shows where you are for a moment
 	health -= amount
 	if attacker and attacker != self:
 		last_attacker = attacker
@@ -1188,7 +1394,7 @@ func heal(amount: float) -> void:
 
 ## Full disable. Fails while Grit (after a disable) or spawn protection is on.
 func freeze_for(seconds: float) -> bool:
-	if is_dead or grit_time > 0.0 or invulnerable_time > 0.0:
+	if is_dead or grit_time > 0.0 or invulnerable_time > 0.0 or shield_time > 0.0:
 		return false
 	frozen_time = maxf(frozen_time, seconds)
 	_ice.visible = true
@@ -1203,7 +1409,7 @@ func _unfreeze() -> void:
 
 ## Burning: 3 damage a second. A new flame renews the timer, it doesn't stack.
 func ignite(seconds: float, by: Vehicle) -> void:
-	if is_dead or invulnerable_time > 0.0:
+	if is_dead or invulnerable_time > 0.0 or shield_time > 0.0:
 		return
 	if burn_time <= 0.0:
 		GameFeel.play("ignite", global_position + Vector3.UP, get_parent(), -3.0)

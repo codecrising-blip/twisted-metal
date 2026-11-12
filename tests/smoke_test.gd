@@ -142,13 +142,77 @@ func _run() -> void:
 	await _frames(30)
 	var y0 := player.global_position.y
 	var e0 := player.energy
-	await _tap("energy_jump")
+	await _tap("move_jump")
 	await _frames(8)
 	_check(player.global_position.y > y0 + 0.8, "energy jump lifts the car (%.2f m)" % (player.global_position.y - y0))
 	_check(player.energy < e0, "jump costs energy")
 	var e1 := player.energy
 	await _frames(30)
 	_check(is_equal_approx(player.energy, e1), "no energy regen for a moment after spending")
+
+	# Energy combos (owner, play-test 1): quick taps on the D-pad / arrows set moves off.
+	await _frames(60)
+	player.energy = 100.0
+	for d: String in ["dir_left", "dir_right", "dir_down"]:
+		await _tap(d)
+	await _frames(2)
+	var rear_shots := get_nodes_in_group("projectiles").filter(func(p: Node) -> bool: return (p as Projectile).weapon_id == "rear_freeze")
+	_check(rear_shots.size() == 1, "LEFT RIGHT DOWN throws a freeze out of the back")
+	if rear_shots.size() == 1:
+		_check((rear_shots[0] as Projectile).direction.dot(player.flat_forward()) < -0.5, "...backwards")
+	player.energy = 100.0
+	for d: String in ["dir_up", "dir_up", "dir_right"]:
+		await _tap(d)
+	await _frames(2)
+	_check(player.shield_time > 0.0, "UP UP RIGHT raises the shield")
+	var shield_hp := player.health
+	player.take_damage(30.0, main.enemies[0])
+	_check(is_equal_approx(player.health, shield_hp) and not player.freeze_for(2.0), "the shield stops damage and freezes")
+	await _frames(170)
+	_check(player.shield_time <= 0.0, "the shield drops after 2.5 s")
+	player.energy = 100.0
+	await _tap("move_mines")
+	await _frames(2)
+	_check(player._energy_mines.size() == 1, "mines: one mine dropped behind")
+	for k in 3:
+		player.energy = 100.0
+		await _tap("move_mines")
+		await _frames(2)
+	_check(player._energy_mines.filter(func(m: Variant) -> bool: return is_instance_valid(m) and not (m as Mine)._done).size() == 3, "never more than 3 mines (the oldest goes off)")
+	for m: Variant in player._energy_mines: # clear them: later tests drive here
+		if is_instance_valid(m):
+			(m as Node).queue_free()
+	player._energy_mines.clear()
+	player.energy = 100.0
+	await _tap("move_rear_attack")
+	await _frames(2)
+	_check(get_nodes_in_group("projectiles").filter(func(p: Node) -> bool: return (p as Projectile).weapon_id == "rear_missile").size() == 2, "rear attack: two missiles out of the back")
+	# Invisibility: no lock on you; headlights in the beam show you again.
+	var watcher: Vehicle = main.enemies[1]
+	_place(player, -60, 20, 0)
+	_place(watcher, -60, 50, 0) # 30 m behind the player, facing it (north), both well inside the battleground
+	await _frames(5)
+	player.energy = 100.0
+	await _tap("move_invisible")
+	await _frames(3)
+	_check(player.is_hidden() and watcher.find_target() != player, "invisible: no lock on you")
+	watcher.toggle_headlights()
+	await _frames(12)
+	var to_p := player.aim_point() - (watcher.global_position + Vector3.UP)
+	_check(not player.is_hidden(), "headlights in the beam reveal an invisible car (%.0f m, %.0f deg, lights %s, watcher %s)" % [to_p.length(), rad_to_deg(watcher.aim_forward().angle_to(to_p.normalized())), watcher.headlights_on, watcher.car_id])
+	watcher.toggle_headlights()
+	player.invisible_time = 0.0
+	_place(watcher, 60, -40, 0) # out of the way of the driving tests
+	# Camera modes: near, far, in the car.
+	var cam: ChaseCamera = main.camera
+	await _tap("camera_mode")
+	_check(ChaseCamera.mode == "far", "camera button: far chase")
+	await _tap("camera_mode")
+	await _frames(2)
+	_check(ChaseCamera.mode == "car" and cam.global_position.distance_to(player.global_position) < 4.0, "...then in the car")
+	await _tap("camera_mode")
+	_check(ChaseCamera.mode == "near", "...then back to near")
+	await _frames(60)
 
 	# Freeze, ice breaking, Grit.
 	var victim: Vehicle = main.enemies[0]
@@ -503,6 +567,21 @@ func _run() -> void:
 		if hill_speed > 20.0:
 			_check(over > 0.8, "...and a fast car leaves the ground over the crest (%.1f m)" % over)
 	Input.action_release("accelerate")
+	# HOLLYWOOD secret (owner, round 6): nose up on a tunnel-roof ramp, a missile clears the fence
+	# and knocks a letter down; flat shots fly under the sign.
+	var roof_ramp: Dictionary = main.arena.ramps.filter(func(rr): return absf((rr.top as Vector3).y - LosAngelesArena.ROOF_Y) < 0.1)[0]
+	var ramp_mid: Vector3 = ((roof_ramp.foot as Vector3) + (roof_ramp.top as Vector3)) * 0.5
+	var up_ramp := (roof_ramp.top as Vector3) - (roof_ramp.foot as Vector3)
+	up_ramp.y = 0.0
+	player.global_transform = Transform3D(Basis.looking_at(up_ramp.normalized(), Vector3.UP), ramp_mid + Vector3.UP)
+	player.velocity = Vector3.ZERO
+	player.angular_velocity = Vector3.ZERO
+	await _frames(40)
+	var letters_before: int = main.arena._letters_left
+	player.launch("power", null)
+	await _frames(150)
+	_check(main.arena._letters_left == letters_before - 1, "a missile fired nose-up on the roof ramp knocks down a HOLLYWOOD letter")
+	_place(player, 40, 70, 90)
 	# Flips (round 5, real physics): dropped onto its roof the car lies there "flipped" and slides;
 	# gas + left/right rolls it back onto its wheels.
 	_place(player, 40, 70, 90)
@@ -652,13 +731,21 @@ func _run() -> void:
 	_place(player, rtop.x - rp.dir.x * 30.0, rtop.z - rp.dir.z * 30.0, 0)
 	outlaw.global_transform = Transform3D(Basis.looking_at(-(rp.dir as Vector3), Vector3.UP), LosAngelesArena.ground(pocket.x, pocket.z, 0.1))
 	outlaw.velocity = Vector3.ZERO
+	outlaw.angular_velocity = Vector3.ZERO
+	outlaw.add_ammo("homing", 6) # armed: no detour for pickups
+	outlaw.health = outlaw.max_health # healthy: no retreat for health
+	outlaw.flipped = false
+	o_brain._bad_ramps.clear() # a fresh start: earlier tests may have soured it on this ramp
+	o_brain._ramp_goal = {}
+	o_brain._ramp_fails = 0
+	o_brain._no_jump = 0.0
 	var climbed_at := -1
-	for k in 1080:
+	for k in 1800: # round 6: 1.2x faster cars line up slower; can tip at a ramp's side (real physics)
 		await _frames(1)
 		if outlaw.global_position.y > 4.0 and outlaw.is_on_floor():
 			climbed_at = k
 			break
-	_check(climbed_at > 0, "AI stuck beside a ramp finds its way up (%.1f s)" % (climbed_at / 60.0))
+	_check(climbed_at > 0, "AI stuck beside a ramp finds its way up (%.1f s; mode %s, at %s, ramp %s, target %s)" % [climbed_at / 60.0, o_brain.mode, Vector2(outlaw.global_position.x, outlaw.global_position.z).round(), o_brain._ramp_goal.get("foot", "-"), outlaw.target.car_id if is_instance_valid(outlaw.target) else "none"])
 	outlaw.health = outlaw.max_health * 0.2
 	await _frames(40)
 	_check(o_brain.mode == "retreat", "badly hurt AI breaks away to look for health")
@@ -724,7 +811,10 @@ func _run() -> void:
 	GraphicsSettings.high = true
 	GraphicsSettings.apply(self)
 	var beams := get_nodes_in_group(GraphicsSettings.HEADLIGHT_GROUP)
-	_check(not beams.is_empty() and beams.all(func(n: Light3D): return n.visible), "graphics HIGH turns the headlight beams on")
+	_check(not beams.is_empty() and beams.all(func(n: Light3D): return not n.visible or n.get_meta("on", false)), "headlights stay a choice: graphics level doesn't switch them on")
+	main.player.toggle_headlights()
+	_check(main.player.model.find_children("*", "SpotLight3D", true, false).any(func(n: Light3D): return n.visible), "the headlights button lights them")
+	main.player.toggle_headlights()
 	GraphicsSettings.high = false
 	GraphicsSettings.apply(self)
 	_check(beams.all(func(n: Light3D): return not n.visible), "graphics LOW turns them off (owner's laptop)")

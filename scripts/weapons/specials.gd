@@ -33,7 +33,7 @@ static func _cone(v: Vehicle, id: String, def: Dictionary, charged: bool) -> voi
 		v.launch(id, v.target)
 		return
 	var from := v.launch_point()
-	var dir := v.flat_forward()
+	var dir := v.aim_forward()
 	var t := v.target
 	if is_instance_valid(t) and not t.is_dead:
 		var to_t := (t.aim_point() - from).normalized()

@@ -186,7 +186,7 @@ func _physics_process(delta: float) -> void:
 		step = velocity * delta
 	else:
 		var homing: float = def.get("homing", 0.0)
-		if homing > 0.0 and is_instance_valid(target) and not target.is_dead:
+		if homing > 0.0 and is_instance_valid(target) and not target.is_dead and not target.is_hidden():
 			var desired := (target.aim_point() - global_position).normalized()
 			var angle := direction.angle_to(desired)
 			if angle > 0.001:

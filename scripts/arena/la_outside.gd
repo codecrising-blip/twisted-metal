@@ -3,7 +3,7 @@ extends Node3D
 ## BAKE ONLY (owner, round 5: "anything outside the walls must not cost frames, a photo is enough").
 ## The hills north of the arena with the HOLLYWOOD sign and scrub, and Calypso's blimp. Rendered by
 ## tests/bake_backdrop.gd into the Los Angeles backdrop panorama together with LaCity; never built
-## in the game. (The shoot-the-letters easter egg went with it.)
+## in the game. The HOLLYWOOD letters themselves are real 3D in the stage (round 6: the secret is back).
 
 var _rng := RandomNumberGenerator.new()
 var _shrub: ArrayMesh
@@ -11,7 +11,7 @@ var _shrub: ArrayMesh
 
 func build() -> void:
 	_rng.seed = 1996
-	_hollywood_sign()
+	_hollywood_hills()
 	_blimp()
 
 
@@ -55,7 +55,7 @@ const GLYPHS := {
 }
 
 
-func _glyph_strokes(ch: String) -> Array:
+static func glyph_strokes(ch: String) -> Array:
 	if ch == "O": # a tall rounded oval
 		var ring: Array[Vector2] = []
 		for k in 21:
@@ -67,7 +67,7 @@ func _glyph_strokes(ch: String) -> Array:
 	return GLYPHS[ch]
 
 
-func _hollywood_sign() -> void:
+func _hollywood_hills() -> void:
 	# Hills: a height grid, scrub texture, and 3D scrub clumps scattered on the slopes.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -112,35 +112,6 @@ func _hollywood_sign() -> void:
 		var sc := _rng.randf_range(2.2, 4.5)
 		scrub.append(Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(sc, sc * 0.7, sc)), Vector3(x, y - 0.4, z)))
 	add_child(_scatter(_bush_mesh(), scrub))
-	# The letters: bold strokes, weathered white paint, two steel legs behind each.
-	var word := "HOLLYWOOD"
-	var u := 1.3
-	var t := 0.95 * u
-	var paint := MatKit.paint(Color(0.88, 0.87, 0.83), 0.25, 0.15, 0.45, 3.0, 0.4, 150)
-	var posts := MeshBuilder.new()
-	var steel := MatKit.steel(Color(0.2, 0.2, 0.21), 0.6, 1.0)
-	for i in word.length():
-		var x := sign_x0 + 4.5 + i * 9.0
-		var base := Vector3(x, LosAngelesArena.hill_height(x, LosAngelesArena.SIGN_Z) + 0.8, LosAngelesArena.SIGN_Z)
-		var letter := Node3D.new()
-		letter.position = base
-		letter.rotation_degrees.x = -10.0
-		add_child(letter)
-		var lmb := MeshBuilder.new()
-		for stroke: Array in _glyph_strokes(word[i]):
-			for k in stroke.size() - 1:
-				var a: Vector2 = stroke[k]
-				var b: Vector2 = stroke[k + 1]
-				var pa := Vector3((a.x - 2.0) * u, (a.y + 0.5) * u, 0)
-				var pb := Vector3((b.x - 2.0) * u, (b.y + 0.5) * u, 0)
-				var dir := (pb - pa).normalized()
-				var across := Vector3(-dir.y, dir.x, 0)
-				var length := pa.distance_to(pb) + t # overlap at the joints
-				lmb.box(paint, Vector3(t, 0.5, length), Transform3D(Basis(across, Vector3.BACK, dir), (pa + pb) * 0.5), 0.0)
-		lmb.commit(letter, true, 0.4)
-		for px: float in [-1.8, 1.8]:
-			posts.box(steel, Vector3(0.18, 7.0, 0.18), MeshBuilder.at(base + Vector3(px, 2.0, -1.6), Vector3(-20, 0, 0)), 0.0)
-	posts.commit(self)
 
 
 ## Calypso's blimp, far away in stage 1 (it gets closer every stage).

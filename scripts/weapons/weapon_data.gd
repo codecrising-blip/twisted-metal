@@ -88,6 +88,23 @@ const DEFS := {
 		"label": "Freeze", "kind": "freeze", "color": Color(0.55, 0.9, 1.0),
 		"speed": 70.0, "damage": 3.0, "homing": 2.2, "life": 2.5, "cooldown": 0.5, "freeze": 2.0,
 	},
+	# Energy moves (design 5.2): the rear freeze is the same ball thrown backwards, a bit slower.
+	"rear_freeze": {
+		"label": "Rear Freeze", "kind": "freeze", "color": Color(0.55, 0.9, 1.0),
+		"speed": 60.0, "damage": 3.0, "homing": 1.8, "life": 2.5, "cooldown": 0.5, "freeze": 2.0,
+	},
+	# Rear attack: two missiles out of the back, 12 each, steering 2.0.
+	"rear_missile": {
+		"label": "Rear Missile", "kind": "missile", "color": Color(1.0, 0.55, 0.2),
+		"speed": 50.0, "damage": 12.0, "homing": 2.0, "life": 3.5, "cooldown": 0.3, "push": 2.5,
+		"trail": Color(1.0, 0.55, 0.2), "trail_len": 0.25, "trail_w": 0.7, "squish": 0.03, "shake": 0.2,
+	},
+	# Energy mine: one small mine behind you, arms in 0.6 s, lasts 20 s, 20 and a light toss. Up to 3.
+	"energy_mine": {
+		"label": "Mine", "kind": "mine", "color": Color(1.0, 0.3, 0.2),
+		"arm": 0.6, "trigger": 2.2, "life": 20.0, "damage": 20.0, "edge_damage": 8.0, "radius": 5.0, "core": 2.0,
+		"push": 10.0, "blast_size": 2.0, "launch": {"light": 4.0, "medium": 3.0, "heavy": 2.0, "super": 1.2},
+	},
 	# ---- Specials: one per driver.
 	# Sweet Tooth (owner, play-test 1, Head-On style): tap = a homing flaming cone, 45 (a power
 	# missile's damage) + burning. Hold fire 2 s and let go = charged cone, 90 + burning, but it

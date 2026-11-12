@@ -73,7 +73,7 @@ static func _headlights(m: Node3D, points: Array, spot_pos: Vector3, round := fa
 	spot.spot_attenuation = 0.8
 	spot.rotation_degrees = Vector3(-6, 0, 0)
 	spot.add_to_group(GraphicsSettings.HEADLIGHT_GROUP)
-	spot.visible = GraphicsSettings.high
+	spot.visible = false # switched with the headlights button (Vehicle.toggle_headlights)
 	m.add_child(spot)
 
 

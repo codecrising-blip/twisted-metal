@@ -35,21 +35,16 @@ void fragment() {
 }
 """
 
-const HELP_TEXT := """W / S  ............  gas / brake-reverse
-A / D  ............  steer
-SPACE  ............  handbrake (power slide)
-SHIFT  ............  turbo (refill: blue turbo pickups)
-J or L-MOUSE  .....  machine guns
-K or R-MOUSE  .....  fire selected weapon
-                     Napalm Cone: tap = homing, hold 2 s = charged
-                     Napalm / Remote / taser: press again to
-                     drop / blow / mash
-Q / E  ............  change weapon
-C  ................  jump  (energy)
-F  ................  freeze (energy)
-B  ................  look back
-ESC pause (pick another driver there)
-ENTER restart   F1 hide help"""
+const HELP_TEXT := """W/S gas, brake-reverse   A/D steer   SPACE handbrake   SHIFT turbo
+J guns   K weapon (hold: charge the Napalm Cone; press again: drop / blow / mash)
+Q/E change weapon   B look back   H headlights   V camera (near / far / in the car)
+ENERGY (quick taps on WASD / arrows / D-pad / left stick, or the number keys):
+  UP UP LEFT jump (1)        UP UP RIGHT shield (4)      LEFT RIGHT UP freeze (2)
+  LEFT RIGHT DOWN rear freeze (3)    RIGHT LEFT DOWN invisible (5)
+  DOWN DOWN RIGHT mines (6)  DOWN DOWN LEFT rear attack (7)   RIGHT LEFT UP secondary (8)
+PAD: Square gas (double-tap + hold turbo)  X handbrake  Circle headlights  Triangle look back
+     R2 weapon  L2 guns  R1/L1 change  R3 camera  OPTIONS pause
+ESC pause (driver, music, volumes, graphics)   ENTER restart   F1 hide help   F3 info"""
 
 
 class Reticle extends Control:
@@ -187,13 +182,13 @@ func _build() -> void:
 
 	# Left: controls (hidden after a few seconds, F1 shows them again).
 	_help = _label(HELP_TEXT, 15, Color(0.85, 0.83, 0.77, 0.9))
-	_pin(_help, 0.0, 0.0, Rect2(28, 30, 480, 266))
+	_pin(_help, 0.0, 0.0, Rect2(28, 56, 760, 266)) # below the two F3 lines
 	root.add_child(_help)
 	get_tree().create_timer(14.0, true).timeout.connect(func(): _help.visible = false)
 
 	# Top-left corner: frames per second (F3), so the owner can tell how fast it runs.
 	_fps = _label("", 16, Color(0.75, 1.0, 0.75))
-	_pin(_fps, 0.0, 0.0, Rect2(8, 4, 160, 22))
+	_pin(_fps, 0.0, 0.0, Rect2(8, 4, 900, 44))
 	root.add_child(_fps)
 
 	# Center: big messages.

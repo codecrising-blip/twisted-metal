@@ -43,7 +43,9 @@ const TOWER_AT := Vector3(52, PLAT_H, 48)
 const BURNT_AT := Vector3(-52, PLAT_H, -38)
 const VEHICLE_BARRIER_LAYER := 16 # physics layer 5: only cars collide with it
 const BARRIER_H := 120.0
-const SIGN_Z := -200.0 # the HOLLYWOOD letters, on the hill north of the arena
+const SIGN_Z := -200.0 # where the hills' sign area is in the baked backdrop
+const SIGN3D_Z := -178.0 # the real 3D letters, on a scaffold past the north fence
+const SIGN_BASE_Y := 21.0 # above the fence: hit them with a missile fired nose-up (the tunnel-roof ramps) # the HOLLYWOOD letters, on the hill north of the arena
 const BACKDROP := "res://assets/backdrops/los_angeles_city.jpg"
 
 ## Road loop control points (x, z), Catmull-Rom. Starts on the north straight (tunnels).
@@ -73,6 +75,7 @@ var _m := {} # materials
 var _tower_legs := 4
 var _tower_upper: Node3D
 var _shrub: ArrayMesh
+var _letters_left := 0
 
 static var _road: PackedVector3Array
 static var _hills: Array = []
@@ -99,6 +102,7 @@ func build() -> void:
 	_hot_dog_stands()
 	_palms()
 	_bushes()
+	_hollywood_sign()
 	var props := LaProps.new()
 	props.name = "Props"
 	add_child(props)
@@ -1565,6 +1569,64 @@ static func hill_height(x: float, z: float) -> float:
 	var spur := (0.45 - absf(sin(x * 0.052 + sin(z * 0.035) * 0.9))) * 14.0
 	spur *= lerpf(0.3, 1.0, smoothstep(35.0, 80.0, absf(x + 10.0)))
 	return -25.0 + (rise + (peaks + spur) * smoothstep(0.15, 0.7, t)) * lateral
+
+
+## The HOLLYWOOD secret (owner, round 6): the hills behind stay a picture, but the nine letters
+## are real, on a steel scaffold just past the north fence and high above it. Fire a missile with the
+## nose up (driving up the tunnel-roof ramps, or off a jump) to hit them; knock all nine down and
+## Calypso pays out.
+func _hollywood_sign() -> void:
+	var word := "HOLLYWOOD"
+	var u := 1.3
+	var t := 0.95 * u
+	var paint := MatKit.paint(Color(0.88, 0.87, 0.83), 0.25, 0.15, 0.45, 3.0, 0.4, 150)
+	var steel := MatKit.steel(Color(0.2, 0.2, 0.21), 0.6, 1.0)
+	var x0 := -10.0 - 4.5 * 9.0
+	var frame := MeshBuilder.new()
+	# Scaffold: a deck truss under the letters, legs down behind the fence, cross braces.
+	frame.box(steel, Vector3(84.0, 0.5, 0.5), MeshBuilder.at(Vector3(-10.0, SIGN_BASE_Y - 0.3, SIGN3D_Z)), 0.0)
+	frame.box(steel, Vector3(84.0, 0.4, 0.4), MeshBuilder.at(Vector3(-10.0, SIGN_BASE_Y - 0.3, SIGN3D_Z - 3.0)), 0.0)
+	for k in 8:
+		var lx := x0 + k * 11.5
+		for dz: float in [0.0, -3.0]:
+			frame.box(steel, Vector3(0.45, SIGN_BASE_Y + 14.0, 0.45), MeshBuilder.at(Vector3(lx, (SIGN_BASE_Y - 14.0) * 0.5, SIGN3D_Z + dz)), 0.0)
+		frame.box(steel, Vector3(0.25, 0.25, 4.2), MeshBuilder.at(Vector3(lx, SIGN_BASE_Y - 3.0, SIGN3D_Z - 1.5), Vector3(-45, 0, 0)), 0.0)
+		if k < 7:
+			frame.box(steel, Vector3(13.0, 0.22, 0.22), MeshBuilder.at(Vector3(lx + 5.75, SIGN_BASE_Y - 5.0, SIGN3D_Z), Vector3(0, 0, 28)), 0.0)
+	batch_builder(frame, false)
+	for i in word.length():
+		var x := x0 + 4.5 + i * 9.0
+		var letter := Breakable.new()
+		letter.style = Breakable.Style.TOPPLE
+		letter.smash_on_contact = false
+		letter.health = 20.0
+		letter.debris_color = Color(0.92, 0.92, 0.88)
+		letter.position = Vector3(x, SIGN_BASE_Y, SIGN3D_Z)
+		add_child(letter)
+		letter.add_box_shape(Vector3(5.0 * u, 7.5 * u, 1.2), Vector3(0, 3.75 * u, 0))
+		var lmb := MeshBuilder.new()
+		for stroke: Array in LaOutside.glyph_strokes(word[i]):
+			for k in stroke.size() - 1:
+				var a: Vector2 = stroke[k]
+				var b: Vector2 = stroke[k + 1]
+				var pa := Vector3((a.x - 2.0) * u, (a.y + 0.5) * u, 0)
+				var pb := Vector3((b.x - 2.0) * u, (b.y + 0.5) * u, 0)
+				var dir := (pb - pa).normalized()
+				var across := Vector3(-dir.y, dir.x, 0)
+				var length := pa.distance_to(pb) + t # overlap at the joints
+				lmb.box(paint, Vector3(t, 0.5, length), Transform3D(Basis(across, Vector3.BACK, dir), (pa + pb) * 0.5), 0.0)
+		lmb.commit(letter.visual, false, 0.4)
+		letter.broken.connect(_on_letter_broken)
+		_letters_left += 1
+
+
+func _on_letter_broken(_letter: Breakable, _by: Vehicle) -> void:
+	_letters_left -= 1
+	if _letters_left > 0:
+		return
+	easter_egg.emit("HOLLYWOOD IS DEAD", "Calypso: \"I never liked that sign. Take these, with my compliments.\"")
+	for k in 3:
+		Pickup.create(self, "power", Vector3(-10.0 + k * 10.0, ROOF_Y, (TUNNEL_Z0 + TUNNEL_Z1) * 0.5 + 6.0), true)
 
 
 ## For the HUD radar: the outer wall, the road, the battleground edge and the tunnels.

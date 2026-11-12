@@ -86,7 +86,7 @@ static func apply(tree: SceneTree) -> void:
 			env.ssil_enabled = high
 			env.ssr_enabled = high
 	for n in tree.get_nodes_in_group(HEADLIGHT_GROUP):
-		(n as Light3D).visible = high
+		(n as Light3D).visible = (n as Node).get_meta("on", false) # gameplay: on only when switched on (any level)
 	for n in tree.get_nodes_in_group(EXTRA_LIGHT_GROUP):
 		(n as Light3D).visible = high
 	for n in tree.get_nodes_in_group(BLOB_GROUP):

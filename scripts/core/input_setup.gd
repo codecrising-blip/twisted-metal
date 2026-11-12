@@ -14,9 +14,23 @@ const KEYS := {
 	"fire_weapon": [KEY_K, KEY_ALT],
 	"weapon_prev": [KEY_Q],
 	"weapon_next": [KEY_E],
-	"energy_jump": [KEY_C],
-	"energy_freeze": [KEY_F],
 	"look_back": [KEY_B],
+	"headlights": [KEY_H],
+	"camera_mode": [KEY_V],
+	# Energy moves, one key each (easy play). The combos below work too.
+	"move_jump": [KEY_1, KEY_C],
+	"move_freeze": [KEY_2, KEY_F],
+	"move_rear_freeze": [KEY_3],
+	"move_shield": [KEY_4],
+	"move_invisible": [KEY_5],
+	"move_mines": [KEY_6],
+	"move_rear_attack": [KEY_7],
+	"move_secondary": [KEY_8],
+	# Combo taps (owner, play-test 1): the arrows / WASD double as the D-pad.
+	"dir_up": [KEY_W, KEY_UP],
+	"dir_down": [KEY_S, KEY_DOWN],
+	"dir_left": [KEY_A, KEY_LEFT],
+	"dir_right": [KEY_D, KEY_RIGHT],
 	"pause": [KEY_ESCAPE],
 	"restart": [KEY_ENTER],
 	"toggle_help": [KEY_F1],
@@ -40,27 +54,39 @@ const MOUSE := {
 	"fire_weapon": MOUSE_BUTTON_RIGHT,
 }
 
+## PlayStation pad (owner, play-test 1; Godot's names: A = Cross, B = Circle, X = Square, Y = Triangle).
+## Square drives (double-tap and hold = turbo), Cross handbrake, Circle headlights, Triangle look back,
+## R1/L1 switch weapon, R2 fire weapon, L2 machine guns, R3 camera mode. D-pad and the left stick
+## steer, up drives, down reverses, and both enter the energy combos.
 const PAD_BUTTONS := {
-	"fire_guns": JOY_BUTTON_A,
-	"fire_weapon": JOY_BUTTON_X,
-	"handbrake": JOY_BUTTON_B,
-	"turbo": JOY_BUTTON_Y,
-	"weapon_prev": JOY_BUTTON_LEFT_SHOULDER,
-	"weapon_next": JOY_BUTTON_RIGHT_SHOULDER,
-	"energy_jump": JOY_BUTTON_DPAD_UP,
-	"energy_freeze": JOY_BUTTON_DPAD_DOWN,
-	"look_back": JOY_BUTTON_RIGHT_STICK,
-	"pause": JOY_BUTTON_START,
-	"restart": JOY_BUTTON_START,
-	"toggle_help": JOY_BUTTON_BACK,
+	"accelerate": [JOY_BUTTON_X, JOY_BUTTON_DPAD_UP],
+	"pad_gas": [JOY_BUTTON_X], # Square alone: its double-tap is turbo
+	"brake": [JOY_BUTTON_DPAD_DOWN],
+	"steer_left": [JOY_BUTTON_DPAD_LEFT],
+	"steer_right": [JOY_BUTTON_DPAD_RIGHT],
+	"handbrake": [JOY_BUTTON_A],
+	"headlights": [JOY_BUTTON_B],
+	"look_back": [JOY_BUTTON_Y],
+	"weapon_prev": [JOY_BUTTON_LEFT_SHOULDER],
+	"weapon_next": [JOY_BUTTON_RIGHT_SHOULDER],
+	"camera_mode": [JOY_BUTTON_RIGHT_STICK],
+	"dir_up": [JOY_BUTTON_DPAD_UP],
+	"dir_down": [JOY_BUTTON_DPAD_DOWN],
+	"dir_left": [JOY_BUTTON_DPAD_LEFT],
+	"dir_right": [JOY_BUTTON_DPAD_RIGHT],
+	"pause": [JOY_BUTTON_START],
+	"restart": [JOY_BUTTON_BACK],
+	"toggle_help": [JOY_BUTTON_TOUCHPAD],
 }
 
-# action -> [axis, direction]
+# action -> [[axis, direction], ...]
 const PAD_AXES := {
-	"accelerate": [JOY_AXIS_TRIGGER_RIGHT, 1.0],
-	"brake": [JOY_AXIS_TRIGGER_LEFT, 1.0],
-	"steer_left": [JOY_AXIS_LEFT_X, -1.0],
-	"steer_right": [JOY_AXIS_LEFT_X, 1.0],
+	"fire_weapon": [[JOY_AXIS_TRIGGER_RIGHT, 1.0]],
+	"fire_guns": [[JOY_AXIS_TRIGGER_LEFT, 1.0]],
+	"accelerate": [[JOY_AXIS_LEFT_Y, -1.0]],
+	"brake": [[JOY_AXIS_LEFT_Y, 1.0]],
+	"steer_left": [[JOY_AXIS_LEFT_X, -1.0]],
+	"steer_right": [[JOY_AXIS_LEFT_X, 1.0]],
 }
 
 
@@ -80,15 +106,17 @@ static func setup() -> void:
 		InputMap.action_add_event(action, ev)
 	for action in PAD_BUTTONS:
 		_ensure(action)
-		var ev := InputEventJoypadButton.new()
-		ev.button_index = PAD_BUTTONS[action]
-		InputMap.action_add_event(action, ev)
+		for button in PAD_BUTTONS[action]:
+			var ev := InputEventJoypadButton.new()
+			ev.button_index = button
+			InputMap.action_add_event(action, ev)
 	for action in PAD_AXES:
 		_ensure(action)
-		var ev := InputEventJoypadMotion.new()
-		ev.axis = PAD_AXES[action][0]
-		ev.axis_value = PAD_AXES[action][1]
-		InputMap.action_add_event(action, ev)
+		for pair: Array in PAD_AXES[action]:
+			var ev := InputEventJoypadMotion.new()
+			ev.axis = pair[0]
+			ev.axis_value = pair[1]
+			InputMap.action_add_event(action, ev)
 
 
 static func _ensure(action: String) -> void:

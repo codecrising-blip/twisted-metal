@@ -37,7 +37,17 @@ func _run() -> void:
 	var cam: ChaseCamera = main.camera
 	var player: Vehicle = main.player
 
-	if shot == "gameplay":
+	if shot == "incar" or shot == "shield":
+		# In-car camera (round 6); "shield": the energy shield up, seen from the chase camera.
+		ChaseCamera.mode = "car" if shot == "incar" else "near"
+		Input.action_press("accelerate")
+		await _frames(50)
+		if shot == "shield":
+			player.energy = 100.0
+			player.want_move = "shield"
+			player.toggle_headlights()
+		await _frames(10)
+	elif shot == "gameplay":
 		Input.action_press("accelerate")
 		await _frames(70)
 		Input.action_press("fire_guns")

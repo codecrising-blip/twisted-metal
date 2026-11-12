@@ -14,7 +14,7 @@ All files: mono Ogg Vorbis, peak -1 dB, converted from the owner's TM1 / TM2 / T
 | `launch_zoomy` | Zoomy salvo (TM 2012 zoomy_launch) |
 | `launch_napalm_cone` | Sweet Tooth's Napalm Cone (TM1 Sweet Tooth special) |
 | `launch_reaper_skull`, `launch_ghost_missile` | Mr. Grimm's and Spectre's specials (TM2) |
-| `charge_up` | the Napalm Cone starts charging (TM 2012 reticle charge) |
+| `charge_up` | Napalm Cone charging: five rising beeps (then `taser_loop` hums until you let go) |
 | `missile_flyby` | a missile passing close to the camera (TM 2012) |
 | `special_outlaw`, `taser_loop`, `taser_fizzle` | Outlaw's taser: link (TM2), crackle while held and fizzle at the end (TM 2012 field surge) |
 | `guns_loop`, `guns_stop`, `shell_1..2`, `ricochet_1..3` | machine guns: loop while firing, barrels spinning down, casings, ricochets off the world |
@@ -24,11 +24,11 @@ All files: mono Ogg Vorbis, peak -1 dB, converted from the owner's TM1 / TM2 / T
 | `death_male`, `death_female` | a driver dies (`"female": true` in `Roster`) |
 | `ignite`, `fire_loop` | a car catches fire; fire pools and the pit of fire |
 | `mine_drop` | the Remote mine is planted (TM4 SFX 37, owner's pick) |
-| `sat_scan_loop`, `sat_incoming`, `sat_strike` | SAT: scan hum while the zone is locked, warning 1.4 s before, the beam (TM 2012) |
+| `sat_launch`, `sat_scan_loop`, `sat_incoming`, `sat_strike` | SAT: launch at the shooter, scan hum while locked, warning 1.4 s before, the beam (+ big blast layers) (TM 2012) |
+| `shield_activate`, `shield_loop`, `shield_impact`, `shield_off` | energy shield (TM 2012) |
 | `pickup_weapon`, `pickup_health`, `pickup_turbo` | pickups (TM2 / TM1 health regeneration) |
 | `weapon_switch` | changing weapons (TM 2012) |
 | `teleport`, `menu_select`, `not_available` | teleport pad, pause menu, nothing to fire (TM2) |
-| `amb_city_traffic`, `amb_horn_1..3`, `amb_scream` | Los Angeles: far traffic, now and then a horn or a scream (TM 2012) |
 | `special_*`, `energy_shield`, `lightning`, `splash`, `pedestrian_scream` | kept for cars and moves not built yet |
 
 Not here on purpose: `audio/later/` (TM 2012 sounds for features not built yet: shield, Sweet Bot, Primeval,

@@ -74,6 +74,12 @@ func _draw() -> void:
 		chips.append(["FROZEN", Color(0.55, 0.85, 1.0)])
 	if player.invulnerable_time > 0.0:
 		chips.append(["PROTECTED", Color(0.95, 0.9, 0.5)])
+	if player.shield_time > 0.0:
+		chips.append(["SHIELD", Color(0.4, 0.8, 1.0)])
+	if player.invisible_time > 0.0:
+		chips.append(["INVISIBLE" if player.revealed_time <= 0.0 else "SEEN", Color(0.75, 0.6, 1.0)])
+	if player.headlights_on:
+		chips.append(["LIGHTS", Color(1.0, 0.95, 0.75)])
 	var cx := 350.0
 	for c in chips:
 		var tw := font.get_string_size(c[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 13).x

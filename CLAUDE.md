@@ -252,6 +252,20 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   `linear_velocity`, `speed`, `is_on_floor()`, `get_floor_normal()`; renamed `push()` (was apply_impulse),
   `freeze_for()` (was freeze), `weight` (was mass) because RigidBody3D owns those names. Rams still deal design damage
   and knock the cars apart (bodies alone stick together). Physics per tick in a fight: 6.6 -> 1.55 ms.
+- **Round 6 (owner: "lag is GONE", physics "so much better"), full text `docs/design/11-owner-round-6.md`:**
+  remote side hits throw the car sideways (tyres don't grip for `KNOCK_TIME` after a blast); F3 shows position from
+  the pit of fire (x east, z south) + heading; `Roster.SPEED_SCALE` 1.2, `DRIFT_SCALE` 1.15; walls hurt (`WALL_DAMAGE`);
+  special green all over the weapons panel; horns/crowd moved to `audio/later/stages/hong_kong` (none in LA); SAT
+  launch / incoming / bigger strike; cars-only wall far above the fence (`VEHICLE_BARRIER_LAYER` 16, missiles pass);
+  Napalm Cone charge: silent tap, 5 rising beeps, settling hum. **Rams** (`Vehicle._ram`): ram power per car
+  (`Roster` "ram") x part hit: ATTACK front 1 / side,rear 0.3, DEFENSE front 1 / side 1.6 / rear 1.3, base (closing-8)
+  x0.9 up to 45, one resolution per pair per second. **HOLLYWOOD secret back:** 9 `Breakable` letters on a scaffold at
+  z -178, y 21 (hills stay baked); missiles fly along `aim_forward()` (body pitch, +-35 deg), so nose-up on the
+  tunnel-roof ramps hits them. **Step 4 built:** PS5 layout + combos (`PlayerController`, `InputSetup`), energy moves
+  (`Vehicle.energy_move`: shield, invisibility, mines `Mine.drop_energy`, rear freeze, rear attack; secondary = Sweet
+  Bot NOT built), camera modes (`ChaseCamera.mode` near/far/car), headlights (`toggle_headlights`, reveal hidden cars,
+  any graphics level). AI: shield vs big missiles, mines/rear attack on chasers, headlights vs invisible, re-picks a
+  ramp when its goal moves, slows on ramps (real bodies slid off the side).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -388,9 +402,9 @@ and date palms (no more "chopsticks"), bushes, street props, ramps paved in asph
 stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
 
 **Next candidates (agree with owner first):**
-0. **Rest of play-test 1:** energy combos (U U L jump ... on D-pad and left stick), PS pad layout (double-tap Square
-   turbo), camera modes with the in-car view, headlights that reveal invisible cars. Owner to judge session 6's
-   AI, Napalm Cone, movement, turbo and weapons.
+0. **Sweet Bot** (secondary weapon, R L U): transform model + robot state (design 01, Sweet Tooth). The driver's
+   hands for the in-car camera. Owner to judge round 6 (rams, energy moves, PS5 pad, cameras, headlights).
+   AI at 1.2x speed climbs ramps slower (15-20 s from the pocket test, was 6-10 s): tune after the owner plays.
 1. Owner play-test of the LA stage: driving feel, wall slide, damage/health, AI, the new specials.
 2. Owner's verdict on the preview cars; then the same detail for the other cars, new Laughing Ghost look.
 3. Remaining energy moves and Sweet Bot; napalm pickup (needed for the Tokyo puzzle).
@@ -462,3 +476,6 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
   Round 5 (owner's choices): measured perf pass, real rigid-body car, music/SFX buses + volumes, TM 2012 sound batch.
   Gotchas: Ubuntu's 7zip can't read RAR5 (use `unar`); 21 files in the owner's RAR were damaged; physics tests that
   follow a mine blast must re-place the car (it may still be tumbling).
+  Round 6: owner's list + step 4. Gotchas: AI ramp choice was kept when its goal moved (it drove to a ramp across the
+  map: now re-picked past 30 m); stronger rams left the test AI under 30% health so it retreated (heal it first);
+  test cars parked near the battleground edge tip over (place them well inside).

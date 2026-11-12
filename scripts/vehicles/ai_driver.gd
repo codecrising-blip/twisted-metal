@@ -47,6 +47,7 @@ var _phase_t := 0.0
 var _drift := false
 var _plan_jump := false
 var drifts := 0 # handbrake turns started (tests)
+var _energy_think := 1.0 # seconds to the next energy-move decision
 
 
 func drive(v: Vehicle, delta: float) -> void:
@@ -56,6 +57,7 @@ func drive(v: Vehicle, delta: float) -> void:
 	if _retarget <= 0.0:
 		_retarget = 0.6
 		v.target = _choose_target(v)
+	_energy_moves(v, delta)
 
 	if v.flipped: # on its roof or side: gas + steer rolls it back over (round 5)
 		v.in_throttle = 1.0
@@ -124,6 +126,14 @@ func drive(v: Vehicle, delta: float) -> void:
 	else:
 		_stuck = 0.0
 
+	# Coming in to a ramp not yet lined up: ease off (round 6: cars are 1.2x faster and overshot
+	# the line again and again).
+	if not _ramp_goal.is_empty() and not _ramp_goal.get("climbing", false) and _reverse <= 0.0:
+		var to_foot := Vector2(v.global_position.x - (_ramp_goal.foot as Vector3).x, v.global_position.z - (_ramp_goal.foot as Vector3).z).length()
+		if to_foot < 20.0 and v.speed > 18.0:
+			throttle = minf(throttle, 0.3)
+	elif not _ramp_goal.is_empty() and _ramp_goal.get("climbing", false) and v.speed > 16.0:
+		throttle = minf(throttle, 0.35) # on the ramp: steady, or the real body slides off its side
 	v.in_throttle = throttle
 	v.in_steer = steer
 	v.in_handbrake = handbrake
@@ -142,13 +152,44 @@ func _watch_missiles(v: Vehicle) -> void:
 		var to := v.global_position - p.global_position
 		if to.length() > 28.0 or p.direction.dot(to.normalized()) < 0.7:
 			continue
-		if randf() < 0.55 * aggression: # 1.2 aggression: about two missiles in three get a dodge
+		var big := float(p.def.get("damage", 0.0)) >= 30.0
+		if big and v.energy >= Vehicle.SHIELD_COST and v.shield_time <= 0.0 and randf() < 0.5:
+			v.want_move = "shield" # a big one coming: shield up (energy move)
+			_dodge_scan = 1.0
+		elif randf() < 0.55 * aggression: # 1.2 aggression: about two missiles in three get a dodge
 			_dodge_t = 0.55
 			var side := p.direction.cross(Vector3.UP)
 			_dodge_steer = 1.0 if side.dot(v.flat_forward().cross(Vector3.UP)) > 0.0 else -1.0
 		else:
 			_dodge_scan = 1.0 # this one gets through: don't try again at once
 		return
+
+
+## Energy moves for the AI (play-test 1 list): a chaser behind gets a mine or the rear attack, an
+## enemy gone invisible nearby gets the headlights, and they go off again when nobody hides.
+func _energy_moves(v: Vehicle, delta: float) -> void:
+	_energy_think -= delta
+	if _energy_think > 0.0:
+		return
+	_energy_think = randf_range(0.8, 1.6)
+	var hidden_near := false
+	for node in v.get_tree().get_nodes_in_group("vehicles"):
+		var o := node as Vehicle
+		if o != v and not o.is_dead and o.invisible_time > 0.0 and o.global_position.distance_to(v.global_position) < 40.0:
+			hidden_near = true
+	if hidden_near != v.headlights_on:
+		v.toggle_headlights()
+	var t := v.target
+	if not is_instance_valid(t) or t.is_dead:
+		return
+	var to := t.global_position - v.global_position
+	var behind := v.flat_forward().dot(to.normalized()) < -0.6
+	# Only while driving on forward: never into its own mine while backing out of a corner.
+	if behind and to.length() < 30.0 and v.speed > 10.0 and _reverse <= 0.0 and randf() < 0.35 * aggression:
+		if v.energy >= Vehicle.REAR_ATTACK_COST + 25.0 and randf() < 0.5:
+			v.want_move = "rear_attack"
+		elif v.energy >= Vehicle.MINE_COST + 25.0:
+			v.want_move = "mines"
 
 
 ## Where to drive, how hard, and whether to use turbo.
@@ -303,6 +344,8 @@ func _choose_target(v: Vehicle) -> Vehicle:
 		var o := node as Vehicle
 		if o == v or o.is_dead:
 			continue
+		if o.is_hidden() and v.global_position.distance_to(o.global_position) > 12.0:
+			continue # invisible: lost past 12 m (design 5.2)
 		var score := v.global_position.distance_to(o.global_position)
 		if o.is_player:
 			score *= 0.6 if on_player < MAX_ON_PLAYER or v.target == o else 3.0
@@ -319,6 +362,11 @@ func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
 	if arena == null or arena.ramps.is_empty() or goal.y < v.global_position.y + 3.5:
 		_ramp_goal = {}
 		return goal
+	# The goal moved a long way since this ramp was picked (it was chosen for a wander point, a
+	# pickup, an old position of the target): pick again, unless already on the way up.
+	if not _ramp_goal.is_empty() and not _ramp_goal.get("climbing", false) \
+			and goal.distance_to(_ramp_goal.get("for", goal)) > 30.0:
+		_ramp_goal = {}
 	if _ramp_goal.is_empty():
 		var best_d := INF
 		for r: Dictionary in arena.ramps:
@@ -329,6 +377,7 @@ func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
 				best_d = d
 				_ramp_goal = r.duplicate()
 				_ramp_goal["climbing"] = false
+				_ramp_goal["for"] = goal
 		if _ramp_goal.is_empty():
 			return goal
 	var foot: Vector3 = _ramp_goal.foot
