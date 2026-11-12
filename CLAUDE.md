@@ -66,6 +66,16 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
   non-directional light added on LOW: they re-shaded the merged stage, the fire-pit and taser lag). `GameFeel.prewarm`
   draws each effect once at match start (shader build stalls). Worst view 449, centre 272 draw calls. Real FPS only
   from the owner's F3 numbers.
+  **Round 5 (owner's F3: 34 paused, 7-17 in fights):** measured, not guessed. (1) Ground collision was a 1 m
+  HeightMapShape3D: ~2 ms per car per physics tick on Godot Physics, and low FPS runs several ticks per frame (spiral).
+  Now a quadtree trimesh (`_ground_faces`: big triangles where flat, 13k instead of 205k): ~0.24 ms. (2) 37% of the
+  stage's triangles were bushes (384 tris x 537), 420 of them on the hills OUTSIDE the walls. Owner's rule: nothing
+  past the walls costs frames. Hills, HOLLYWOOD sign (its easter egg is gone) and blimp moved to `la_outside.gd`, BAKE
+  ONLY, rendered into the backdrop; bushes ~84 tris, fade at 170 m. Views: 430-570k -> 230-350k triangles.
+  (3) HUD filter copied the screen with mipmaps every frame: no mipmaps, and on LOW it only runs while a hit flashes.
+  (4) Pit of fire on LOW: ~45 flame quads instead of ~110 (the pit's FirePool draws no flames of its own).
+  (5) `max_physics_steps_per_frame` 4. (6) F3 shows physics ms, scripts ms, draws, triangles. AI rate untouched (owner).
+  Measure CPU with `Performance.TIME_PHYSICS_PROCESS` headless; cars are ~36k triangles each (hero models).
 - The game starts in the **preview match** (Sweet Tooth vs Outlaw only). `-- full` = all five cars (tests use it).
   `-- high` / `-- low` force a graphics level for one run.
 

@@ -13,7 +13,7 @@ var music_label := "" # shown in the pause menu
 
 const POST_SHADER := """
 shader_type canvas_item;
-uniform sampler2D screen_tex : hint_screen_texture, filter_linear_mipmap;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear; // no mipmaps: one less full-screen pass
 uniform float grain = 0.02;
 uniform float vignette = 0.25;
 uniform float desaturate = 0.0;
@@ -72,6 +72,8 @@ var game_over := false
 var drivers: Array[String] = [] # names for the pause menu's driver pick (keys 1-5)
 
 var _post: ShaderMaterial
+var _fps_t := 0.0
+var _post_rect: ColorRect # full-screen filter: copies the whole screen each frame, so on LOW only while a hit flashes
 var _whiteout: ColorRect
 var _whiteout_tween: Tween
 var _title_font: SystemFont
@@ -130,6 +132,7 @@ func _build() -> void:
 	_post.shader = shader
 	post_rect.material = _post
 	add_child(post_rect)
+	_post_rect = post_rect
 
 	var root := Control.new()
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -273,6 +276,7 @@ func _process(delta: float) -> void:
 	if _damage_flash > 0.0:
 		_damage_flash = maxf(0.0, _damage_flash - delta * 1.8)
 		_post.set_shader_parameter("damage", _damage_flash)
+	_post_rect.visible = GraphicsSettings.high or _damage_flash > 0.0
 	if not is_instance_valid(player):
 		return
 	_update_target()
@@ -284,7 +288,17 @@ func _handle_input() -> void:
 	if Input.is_action_just_pressed("toggle_fps"):
 		_fps.visible = not _fps.visible
 	if _fps.visible:
-		_fps.text = "FPS %d" % Engine.get_frames_per_second()
+		_fps_t -= get_process_delta_time()
+		if _fps_t <= 0.0:
+			_fps_t = 0.3
+			# Round 5: enough to tell where a slow frame goes (owner's reports): physics and scripts are
+			# the CPU, draws and triangles are the graphics card.
+			_fps.text = "FPS %d   physics %.1f ms   scripts %.1f ms   draws %d   triangles %dk" % [
+				Engine.get_frames_per_second(),
+				Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
+				Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+				Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
+				Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000]
 	if Input.is_action_just_pressed("pause") and not game_over:
 		get_tree().paused = not get_tree().paused
 		GameFeel.ui("menu_select", get_tree())

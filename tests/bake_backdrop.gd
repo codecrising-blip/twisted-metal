@@ -45,6 +45,9 @@ func _run() -> void:
 	var city := LaCity.new()
 	world.add_child(city)
 	city.build()
+	var outside := LaOutside.new() # the hills, HOLLYWOOD sign and blimp (round 5: no 3D past the walls)
+	world.add_child(outside)
+	outside.build()
 
 	var vp := SubViewport.new()
 	vp.size = Vector2i(face_px, face_px)

@@ -70,7 +70,6 @@ var _rng := RandomNumberGenerator.new()
 var _m := {} # materials
 var _tower_legs := 4
 var _tower_upper: Node3D
-var _letters_left := 0
 var _shrub: ArrayMesh
 
 static var _road: PackedVector3Array
@@ -98,12 +97,10 @@ func build() -> void:
 	_hot_dog_stands()
 	_palms()
 	_bushes()
-	_hollywood_sign()
 	var props := LaProps.new()
 	props.name = "Props"
 	add_child(props)
 	props.build(self)
-	_blimp()
 	_points()
 	_flush_batch()
 
@@ -501,17 +498,20 @@ func _terrain() -> void:
 	body.collision_mask = 0
 	add_child(body)
 	var n := MAP_HALF * 2 + 1
-	var hm := HeightMapShape3D.new()
-	hm.map_width = n
-	hm.map_depth = n
 	var data := PackedFloat32Array()
 	data.resize(n * n)
 	for j in n:
 		for i in n:
 			data[j * n + i] = height_at(i - MAP_HALF, j - MAP_HALF)
-	hm.map_data = data
+	# Collision (performance, round 5): a 1 m heightmap made every car's move cost ~2 ms per physics
+	# tick on Godot Physics. The same surface as a trimesh with big triangles where the ground is
+	# flat and small ones only where it bends costs ~8x less (13k triangles instead of 205k).
+	var faces := PackedVector3Array()
+	_ground_faces(data, n, -MAP_HALF, -MAP_HALF, MAP_HALF * 2, MAP_HALF * 2, faces)
+	var trimesh := ConcavePolygonShape3D.new()
+	trimesh.set_faces(faces)
 	var shape := CollisionShape3D.new()
-	shape.shape = hm
+	shape.shape = trimesh
 	body.add_child(shape)
 
 	# Visual chunks on a 2 m grid (sampled from the same heights), so each mesh is only lit by
@@ -573,6 +573,45 @@ func _terrain() -> void:
 		var out := basis * Vector3(0, 0, -1)
 		mb.box(_m.retain, (basis * Vector3(MAP_HALF * 2.0 + 4.0, 14.0, 2.0)).abs(), MeshBuilder.at(out * (MAP_HALF + 1.0) + Vector3(0, -7.0, 0)), 0.0)
 	batch_builder(mb, false)
+
+
+## Collision faces for the rectangle [x0, x0+sx] x [z0, z0+sz] of the 1 m height grid: two triangles
+## when every sample inside lies on the patch through its corners (within 2 cm), else split in four.
+func _ground_faces(data: PackedFloat32Array, n: int, x0: int, z0: int, sx: int, sz: int, faces: PackedVector3Array) -> void:
+	var h := func(x: int, z: int) -> float: return data[(z + MAP_HALF) * n + x + MAP_HALF]
+	var h00: float = h.call(x0, z0)
+	var h10: float = h.call(x0 + sx, z0)
+	var h01: float = h.call(x0, z0 + sz)
+	var h11: float = h.call(x0 + sx, z0 + sz)
+	var flat := sx <= 1 and sz <= 1
+	if not flat:
+		flat = true
+		for j in sz + 1:
+			var v := float(j) / sz
+			for i in sx + 1:
+				var u := float(i) / sx
+				var want := lerpf(lerpf(h00, h10, u), lerpf(h01, h11, u), v)
+				if absf(data[(z0 + j + MAP_HALF) * n + x0 + i + MAP_HALF] - want) > 0.02:
+					flat = false
+					break
+			if not flat:
+				break
+	if flat:
+		var p00 := Vector3(x0, h00, z0)
+		var p10 := Vector3(x0 + sx, h10, z0)
+		var p01 := Vector3(x0, h01, z0 + sz)
+		var p11 := Vector3(x0 + sx, h11, z0 + sz)
+		faces.append_array([p00, p10, p01, p10, p11, p01])
+		return
+	var hx := maxi(1, sx / 2)
+	var hz := maxi(1, sz / 2)
+	_ground_faces(data, n, x0, z0, hx, hz, faces)
+	if sx > hx:
+		_ground_faces(data, n, x0 + hx, z0, sx - hx, hz, faces)
+	if sz > hz:
+		_ground_faces(data, n, x0, z0 + hz, hx, sz - hz, faces)
+	if sx > hx and sz > hz:
+		_ground_faces(data, n, x0 + hx, z0 + hz, sx - hx, sz - hz, faces)
 
 
 func _normal_at(x: float, z: float) -> Vector3:
@@ -1040,27 +1079,31 @@ func _fire_pit() -> void:
 			a += _rng.randf_range(-0.3, 0.3)
 			p += Vector3(cos(a), 0, sin(a)) * 2.4
 		_drape(pts, 0.6, 0.1, _m.crack)
-	FirePool.spawn(self, bottom, 4.5, 0.0, 4.0, null)
+	FirePool.spawn(self, bottom, 4.5, 0.0, 4.0, null, false) # burns cars; the flames below draw it
 	for k in 3:
 		var a := k * TAU / 3.0 + 0.4
 		var p := bottom + Vector3(cos(a) * 2.6, 0.4, sin(a) * 2.6)
 		var pipe := MeshKit.cylinder(self, 0.55, 3.4, p, _m.rust, Vector3(0, 0, 0), 10)
 		pipe.basis = Basis(Quaternion(Vector3.UP, Vector3(-cos(a) * 0.5, 1.0, -sin(a) * 0.5).normalized()))
-	var column := FxKit.fire(4.5, 45) # fewer, big flames: far less overdraw on the HD 5500
+	# Round 5 (frames at the pit): on LOW the pit is one column of fewer flames, two side fires and
+	# light smoke (was ~110 big see-through quads stacked on each other; now ~45).
+	var high := GraphicsSettings.high
+	var column := FxKit.fire(4.5 if high else 3.9, 45 if high else 26) # amount is cut again by particles()
 	column.position = bottom + Vector3.UP * 0.8
 	column.emission_sphere_radius = 1.6
 	column.initial_velocity_max = 7.0
 	column.lifetime = 1.4
 	add_child(column)
 	column.emitting = true
-	for k in 3:
+	for k in (3 if high else 2):
 		var a := k * TAU / 3.0 + 0.5
-		var f := FxKit.fire(2.4, 18)
+		var f := FxKit.fire(2.4, 18 if high else 12)
 		f.position = ground(cos(a) * 3.5, sin(a) * 3.5, 0.3)
 		f.emission_sphere_radius = 1.0
+		f.visibility_range_end = 150.0
 		add_child(f)
 		f.emitting = true
-	var smoke := FxKit.smoke(3.0, 16)
+	var smoke := FxKit.smoke(3.0, 16 if high else 10)
 	smoke.position = bottom + Vector3.UP * 7.0
 	add_child(smoke)
 	smoke.emitting = true
@@ -1457,20 +1500,23 @@ func _bushes() -> void:
 			continue
 		var s := _rng.randf_range(0.8, 1.5)
 		xforms.append(Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(s, s * _rng.randf_range(0.8, 1.2), s)), ground(p.x, p.z)))
-	add_child(_scatter(_bush_mesh(), xforms))
+	var shrubs := _scatter(_bush_mesh(), xforms)
+	shrubs.visibility_range_end = 170.0
+	add_child(shrubs)
 
 
-## One shrub (a few lumps of dark and olive green), shared by every bush on the stage.
+## One shrub (a few low-poly lumps of dark and olive green), shared by every bush on the stage.
+## Round 5: ~120 triangles (was 384 x 537 bushes = 37% of the whole stage's triangles).
 func _bush_mesh() -> ArrayMesh:
 	if _shrub:
 		return _shrub
 	var mb := MeshBuilder.new()
 	var green := MatKit.paint(Color(0.2, 0.28, 0.14), 0.1, 0.0, 0.5, 1.0, 0.9, 170)
 	var olive := MatKit.paint(Color(0.32, 0.34, 0.18), 0.1, 0.0, 0.5, 1.0, 0.9, 171)
-	for k in 5:
-		var a := TAU * k / 5.0
-		mb.sphere(green if k % 2 == 0 else olive, 0.7, MeshBuilder.at(Vector3(cos(a) * 0.55, 0.45, sin(a) * 0.55), Vector3.ZERO, Vector3(1.0, 0.75, 1.0)), 8, 5)
-	mb.sphere(green, 0.75, MeshBuilder.at(Vector3(0, 0.7, 0), Vector3.ZERO, Vector3(1.0, 0.8, 1.0)), 8, 5)
+	for k in 3:
+		var a := TAU * k / 3.0
+		mb.sphere(green if k % 2 == 0 else olive, 0.75, MeshBuilder.at(Vector3(cos(a) * 0.5, 0.45, sin(a) * 0.5), Vector3(0, k * 40.0, 0), Vector3(1.0, 0.75, 1.0)), 5, 3)
+	mb.sphere(green, 0.8, MeshBuilder.at(Vector3(0, 0.7, 0), Vector3(0, 20, 0), Vector3(1.0, 0.8, 1.0)), 6, 3)
 	_shrub = mb.build_mesh(0.4, 0.0, true)
 	return _shrub
 
@@ -1504,162 +1550,6 @@ static func hill_height(x: float, z: float) -> float:
 	var spur := (0.45 - absf(sin(x * 0.052 + sin(z * 0.035) * 0.9))) * 14.0
 	spur *= lerpf(0.3, 1.0, smoothstep(35.0, 80.0, absf(x + 10.0)))
 	return -25.0 + (rise + (peaks + spur) * smoothstep(0.15, 0.7, t)) * lateral
-
-
-## Letter strokes (center lines) on a 4 x 6.5 grid; the HOLLYWOOD sign's tall, bold sans letters.
-const GLYPHS := {
-	"H": [[Vector2(0, 0), Vector2(0, 6.5)], [Vector2(4, 0), Vector2(4, 6.5)], [Vector2(0, 3.3), Vector2(4, 3.3)]],
-	"L": [[Vector2(0, 6.5), Vector2(0, 0), Vector2(3.8, 0)]],
-	"Y": [[Vector2(0, 6.5), Vector2(2, 3.1), Vector2(4, 6.5)], [Vector2(2, 3.1), Vector2(2, 0)]],
-	"W": [[Vector2(0, 6.5), Vector2(0.9, 0), Vector2(2, 4.3), Vector2(3.1, 0), Vector2(4, 6.5)]],
-	"D": [[Vector2(0, 0), Vector2(0, 6.5), Vector2(1.8, 6.5), Vector2(3.2, 5.8), Vector2(4, 4.4),
-		Vector2(4, 2.1), Vector2(3.2, 0.7), Vector2(1.8, 0), Vector2(0, 0)]],
-}
-
-
-func _glyph_strokes(ch: String) -> Array:
-	if ch == "O": # a tall rounded oval
-		var ring: Array[Vector2] = []
-		for k in 21:
-			var a := TAU * k / 20.0
-			var c := cos(a)
-			var sn := sin(a)
-			ring.append(Vector2(2.0 + 2.0 * signf(c) * pow(absf(c), 0.75), 3.25 + 3.25 * signf(sn) * pow(absf(sn), 0.75)))
-		return [ring]
-	return GLYPHS[ch]
-
-
-func _hollywood_sign() -> void:
-	# Hills: a height grid, scrub texture, and 3D scrub clumps scattered on the slopes.
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var x0 := -320.0
-	var x1 := 300.0
-	var z0 := -380.0
-	var z1 := -163.0
-	var nx := 84
-	var nz := 32
-	var grid: Array[Vector3] = []
-	for j in nz + 1:
-		for i in nx + 1:
-			var x := lerpf(x0, x1, float(i) / nx)
-			var z := lerpf(z0, z1, float(j) / nz)
-			grid.append(Vector3(x, hill_height(x, z), z))
-	for j in nz:
-		for i in nx:
-			var a := grid[j * (nx + 1) + i]
-			var b := grid[j * (nx + 1) + i + 1]
-			var c := grid[(j + 1) * (nx + 1) + i]
-			var d := grid[(j + 1) * (nx + 1) + i + 1]
-			for v: Vector3 in [a, b, c, b, d, c]:
-				st.set_uv(Vector2(v.x, v.z)) # chaparral reads UVs in meters
-				st.add_vertex(v)
-	st.generate_normals()
-	var hill := MeshInstance3D.new()
-	hill.mesh = st.commit()
-	hill.material_override = MatKit.chaparral(36.0, 21)
-	hill.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(hill)
-	var scrub: Array[Transform3D] = []
-	var sign_x0 := -10.0 - 4.5 * 9.0
-	var sign_x1 := -10.0 + 4.5 * 9.0
-	while scrub.size() < 420:
-		var x := _rng.randf_range(-260.0, 240.0)
-		var z := _rng.randf_range(-330.0, -172.0)
-		if x > sign_x0 and x < sign_x1 and absf(z - SIGN_Z) < 9.0:
-			continue # keep the letters clear
-		var y := hill_height(x, z)
-		if y < -12.0:
-			continue
-		var sc := _rng.randf_range(2.2, 4.5)
-		scrub.append(Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(sc, sc * 0.7, sc)), Vector3(x, y - 0.4, z)))
-	add_child(_scatter(_bush_mesh(), scrub))
-	# The letters: bold strokes, weathered white paint, two steel legs behind each.
-	var word := "HOLLYWOOD"
-	var u := 1.3
-	var t := 0.95 * u
-	var paint := MatKit.paint(Color(0.88, 0.87, 0.83), 0.25, 0.15, 0.45, 3.0, 0.4, 150)
-	var posts := MeshBuilder.new()
-	var steel := MatKit.steel(Color(0.2, 0.2, 0.21), 0.6, 1.0)
-	for i in word.length():
-		var x := sign_x0 + 4.5 + i * 9.0
-		var base := Vector3(x, hill_height(x, SIGN_Z) + 0.8, SIGN_Z)
-		var letter := Breakable.new()
-		letter.style = Breakable.Style.TOPPLE
-		letter.smash_on_contact = false
-		letter.health = 20.0
-		letter.debris_color = Color(0.92, 0.92, 0.88)
-		letter.position = base
-		letter.rotation_degrees.x = -10.0
-		add_child(letter)
-		letter.add_box_shape(Vector3(5.0 * u, 7.5 * u, 1.2), Vector3(0, 3.75 * u, 0))
-		var lmb := MeshBuilder.new()
-		for stroke: Array in _glyph_strokes(word[i]):
-			for k in stroke.size() - 1:
-				var a: Vector2 = stroke[k]
-				var b: Vector2 = stroke[k + 1]
-				var pa := Vector3((a.x - 2.0) * u, (a.y + 0.5) * u, 0)
-				var pb := Vector3((b.x - 2.0) * u, (b.y + 0.5) * u, 0)
-				var dir := (pb - pa).normalized()
-				var across := Vector3(-dir.y, dir.x, 0)
-				var length := pa.distance_to(pb) + t # overlap at the joints
-				lmb.box(paint, Vector3(t, 0.5, length), Transform3D(Basis(across, Vector3.BACK, dir), (pa + pb) * 0.5), 0.0)
-		lmb.commit(letter.visual, true, 0.4)
-		letter.broken.connect(_on_letter_broken)
-		_letters_left += 1
-		for px: float in [-1.8, 1.8]:
-			posts.box(steel, Vector3(0.18, 7.0, 0.18), MeshBuilder.at(base + Vector3(px, 2.0, -1.6), Vector3(-20, 0, 0)), 0.0)
-	batch_builder(posts)
-
-
-func _on_letter_broken(_letter: Breakable, _by: Vehicle) -> void:
-	_letters_left -= 1
-	if _letters_left > 0:
-		return
-	easter_egg.emit("HOLLYWOOD IS DEAD", "Calypso: \"I never liked that sign. Take these, with my compliments.\"")
-	for k in 3:
-		Pickup.create(self, "power", Vector3(-10.0 + k * 10.0, ROOF_Y, (TUNNEL_Z0 + TUNNEL_Z1) * 0.5 + 6.0), true)
-
-
-## Calypso's blimp, still far away in stage 1. It gets closer every stage.
-func _blimp() -> void:
-	var blimp := Node3D.new()
-	blimp.name = "CalypsoBlimp"
-	blimp.position = Vector3(620, 330, -1050)
-	blimp.rotation_degrees.y = 25.0
-	blimp.scale = Vector3.ONE * 1.7
-	add_child(blimp)
-	var skin := MeshKit.mat(Color(0.18, 0.17, 0.2), 0.5, 0.3)
-	var gold := MeshKit.mat(Color(0.85, 0.65, 0.2), 0.3, 1.0)
-	MeshKit.sphere(blimp, 14.0, Vector3.ZERO, skin, Vector3(4.2, 1.0, 1.0), 20)
-	MeshKit.torus(blimp, 13.8, 14.4, Vector3(-18, 0, 0), gold, Vector3(0, 0, 90))
-	MeshKit.torus(blimp, 13.0, 13.6, Vector3(22, 0, 0), gold, Vector3(0, 0, 90))
-	for k in 4:
-		var fin := Node3D.new()
-		fin.position = Vector3(50, 0, 0)
-		fin.rotation.x = k * PI * 0.5
-		blimp.add_child(fin)
-		MeshKit.box(fin, Vector3(14, 0.8, 12), Vector3(0, 0, 9), skin)
-	MeshKit.box(blimp, Vector3(22, 5, 7), Vector3(0, -15, 0), gold)
-	for side: float in [-1.0, 1.0]:
-		var l := Label3D.new()
-		l.text = "CALYPSO"
-		l.font_size = 400
-		l.pixel_size = 0.035
-		l.modulate = Color(1.3, 1.0, 0.4)
-		l.outline_size = 0
-		l.position = Vector3(0, 2, side * 14.3)
-		l.rotation_degrees.y = 0.0 if side > 0 else 180.0
-		blimp.add_child(l)
-	var blinker := Blinker.new()
-	blinker.period = 0.9
-	blimp.add_child(blinker)
-	for x: float in [-55.0, 55.0]:
-		var lamp := MeshKit.sphere(blimp, 0.8, Vector3(x, 0, 0), MeshKit.emissive(Color(1, 0.1, 0.05), 8.0))
-		blinker.group_a.append(lamp)
-	var tw := blimp.create_tween().set_loops()
-	tw.tween_property(blimp, "position:y", 338.0, 8.0).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(blimp, "position:y", 330.0, 8.0).set_trans(Tween.TRANS_SINE)
 
 
 ## For the HUD radar: the outer wall, the road, the battleground edge and the tunnels.
