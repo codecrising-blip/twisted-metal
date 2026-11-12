@@ -7,6 +7,9 @@ extends CanvasLayer
 
 signal restart_requested
 signal driver_requested(index: int)
+signal music_requested # pause menu M: try the next theme
+
+var music_label := "" # shown in the pause menu
 
 const POST_SHADER := """
 shader_type canvas_item;
@@ -295,6 +298,9 @@ func _handle_input() -> void:
 	if get_tree().paused and not game_over and Input.is_action_just_pressed("toggle_graphics"):
 		GraphicsSettings.toggle(get_tree())
 		_show_pause()
+	if get_tree().paused and not game_over and Input.is_action_just_pressed("cycle_music"):
+		music_requested.emit()
+		_show_pause()
 	if game_over or get_tree().paused:
 		for i in mini(drivers.size(), 5):
 			if Input.is_action_just_pressed("pick_%d" % (i + 1)):
@@ -305,7 +311,7 @@ func _handle_input() -> void:
 
 
 func _show_pause() -> void:
-	show_message("PAUSED", "ESC to resume   ENTER to restart   G graphics: %s\n\n%s" % [GraphicsSettings.label(), _driver_menu()])
+	show_message("PAUSED", "ESC to resume   ENTER to restart   G graphics: %s\nM music: %s\n\n%s" % [GraphicsSettings.label(), music_label, _driver_menu()])
 
 
 func _driver_menu() -> String:

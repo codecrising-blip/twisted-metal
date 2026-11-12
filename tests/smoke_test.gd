@@ -64,6 +64,15 @@ func _run() -> void:
 	_check(not GameFeel.streams("launch_power").is_empty(), "power missile launch sound loads")
 	_check(player._engine_snd != null and player._engine_snd.stream.get("loop"), "Sweet Tooth has a looping heavy engine")
 	_check(player._gun_snd != null and player._skid_snd != null, "gun and skid loops are ready")
+	# Music: LA plays its own theme; M in the pause menu tries the next track (owner's music test).
+	var la_theme: String = main.music.stream.resource_path if main.music and main.music.stream else ""
+	_check(la_theme.ends_with("los_angeles.ogg"), "Los Angeles plays its own theme (%s)" % la_theme)
+	_check(main.music_tracks().size() >= 14, "all picked and unpicked themes are playable (%d)" % main.music_tracks().size())
+	main._cycle_music()
+	var tried: String = main.music.stream.resource_path
+	_check(main.music_pick != "" and tried.ends_with("paris.ogg") and main.music.playing, "M steps to the next theme in story order (%s)" % tried.get_file())
+	main.music_pick = ""
+	main._start_music()
 	var brains: Array = main.enemies.map(func(e: Vehicle): return e.controller)
 	_park(main)
 	var enemy_starts: Array = main.enemies.map(func(e: Vehicle): return e.global_position)

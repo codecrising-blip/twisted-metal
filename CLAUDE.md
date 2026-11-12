@@ -283,7 +283,9 @@ scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, amm
 scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickups, walls/road from radar_lines()
 tests/                      smoke_test.gd (headless, ~65 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py
 assets/backdrops/           stage backdrops (equirectangular panoramas shown as the sky)
-audio/music/                FINAL themes only, `<arena.music>.mp3`; empty until the owner's theme list (see its README)
+audio/music/                FINAL themes (owner's list, see its README): `<arena.music>.ogg` per stage + boss names
+                            (manslaughter, warhawk, minion, calypso); unpicked/ = candidates. -16 LUFS, trimmed.
+                            Pause menu M = music test (try any track on this stage, story order, `main.gd`)
 audio/reference/            owner's study material, NOT game files (.gdignore): Calypso's voice, Warhawk intro speech,
                             menu / Antarctica theme references, other tracks. Never assign these to stages yourself
 audio/sfx/                  sound effects by name (see its README): owner's TM1/TM2/TM4 sounds as mono .ogg. Owner
@@ -369,9 +371,11 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
 2. Owner's verdict on the preview cars; then the same detail for the other cars, new Laughing Ghost look.
 3. Remaining energy moves and Sweet Bot; napalm pickup (needed for the Tokyo puzzle).
 4. Sounds: effects wired (engine/guns/skid loops, screech, crashes, deaths, launches, pickups, fire, teleport, menu).
-   **Music: the owner has NOT picked any stage/boss theme yet** (everything so far is reference); wait for the list
-   of which theme goes where, then put each in `audio/music/` and delete duplicates. Calypso's lines and the
-   Warhawk intro are to be written later from the voice references.
+   **Music (owner's list, session 6):** LA, Paris, vs Manslaughter, Egypt, Tokyo, Antarctica, Hong Kong, vs Warhawk,
+   Rome, Amazonia, vs Minion, Calypso placed in `audio/music/`. Undecided: Chernobyl, London, Primeval, New York,
+   Athens. Owner's later plan: rework every song into original TM-flavoured music (same intensity, rhythm, pitch).
+   Energy arc and suggestions: `docs/design/10-music-plan.md`. Only place music the owner assigns; delete what the owner
+   drops. Calypso's lines and the Warhawk intro are written later from the voice references.
 5. Story skeleton, sub-boss arrival sequence (replays, silence, break-in), save after sub bosses.
 6. Next stage: Paris.
 

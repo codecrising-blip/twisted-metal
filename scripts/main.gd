@@ -15,9 +15,15 @@ const START_LIVES := 3
 const RESPAWN_DELAY := 6.0
 const FALL_LIMIT := -25.0 # below this a car fell out of the world: put it back
 const MUSIC_DIR := "res://audio/music"
+## Themes in story order (owner's list, session 6): the M music test steps through them in this order.
+const MUSIC_ORDER := ["los_angeles", "paris", "manslaughter", "egypt", "tokyo", "antarctica", "hong_kong",
+	"warhawk", "rome", "amazonia", "minion", "calypso", "unpicked_1", "unpicked_2"]
 
 static var player_car := "sweet_tooth" # survives scene reloads
 static var full_roster := false # true = FULL_DRIVERS (tests, `-- full`)
+## Music test (owner, session 6): M in the pause menu swaps the stage's theme for any other track in
+## audio/music (unpicked ones too), to hear whether it fits. "" = the stage's own theme. Kept until quit.
+static var music_pick := ""
 
 var state := "playing" # playing | won | lost
 var lives := START_LIVES # counts the life in use; spare lives = lives - 1
@@ -72,6 +78,7 @@ func _ready() -> void:
 	hud.bind(player, camera)
 	hud.restart_requested.connect(_restart)
 	hud.driver_requested.connect(_pick_driver)
+	hud.music_requested.connect(_cycle_music)
 	hud.drivers.assign(drivers.map(func(id: String): return String(Roster.get_car(id).get("name", id))))
 	hud.set_enemies_left(enemies.size())
 	hud.set_lives(lives - 1)
@@ -163,37 +170,76 @@ func _respawn_player() -> void:
 			wreck.queue_free())
 
 
-## Plays the stage's own theme, audio/music/<arena.music>.(ogg|mp3|wav). Silent until the owner has
-## picked that stage's theme (owner, session 6: everything sent so far is reference, see audio/reference).
+## Plays the stage's own theme, audio/music/<arena.music>.(ogg|mp3|wav), or the track picked with M in
+## the pause menu. Silent when the stage has no theme yet.
 func _start_music() -> void:
-	var dir := DirAccess.open(MUSIC_DIR)
-	if dir == null:
+	var tracks := music_tracks()
+	var path := music_pick if music_pick in tracks else _stage_theme(tracks)
+	if music == null:
+		music = AudioStreamPlayer.new()
+		music.volume_db = -6.0
+		music.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(music)
+	music.stop()
+	hud.music_label = _track_label(path)
+	if path == "":
 		return
-	var tracks: Array[String] = []
-	for f in dir.get_files():
-		var file := f.trim_suffix(".import").trim_suffix(".remap")
-		if file.get_extension().to_lower() in ["ogg", "mp3", "wav"] and not tracks.has(file):
-			tracks.append(file)
-	if tracks.is_empty():
-		return
-	var pick := ""
-	var wanted: String = arena.get("music") if arena.get("music") else ""
-	for t in tracks:
-		if t.get_basename() == wanted:
-			pick = t
-	if pick == "":
-		return
-	var stream := load(MUSIC_DIR + "/" + pick) as AudioStream
+	var stream := load(path) as AudioStream
 	if stream == null:
 		return
 	if "loop" in stream:
 		stream.set("loop", true)
-	music = AudioStreamPlayer.new()
 	music.stream = stream
-	music.volume_db = -6.0
-	music.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(music)
 	music.play()
+
+
+## Every playable track: the themes in audio/music and the ones in audio/music/unpicked.
+static func music_tracks() -> Array[String]:
+	var out: Array[String] = []
+	for dir_path: String in [MUSIC_DIR, MUSIC_DIR + "/unpicked"]:
+		var dir := DirAccess.open(dir_path)
+		if dir == null:
+			continue
+		for f in dir.get_files():
+			var file := f.trim_suffix(".import").trim_suffix(".remap")
+			var path := dir_path + "/" + file
+			if file.get_extension().to_lower() in ["ogg", "mp3", "wav"] and not out.has(path):
+				out.append(path)
+	out.sort_custom(func(a: String, b: String) -> bool:
+		var ia := MUSIC_ORDER.find(a.get_file().get_basename())
+		var ib := MUSIC_ORDER.find(b.get_file().get_basename())
+		ia = MUSIC_ORDER.size() if ia < 0 else ia
+		ib = MUSIC_ORDER.size() if ib < 0 else ib
+		return ia < ib if ia != ib else a < b)
+	return out
+
+
+func _stage_theme(tracks: Array[String]) -> String:
+	var wanted: String = arena.get("music") if arena.get("music") else ""
+	for t in tracks:
+		if t.get_file().get_basename() == wanted and not t.contains("/unpicked/"):
+			return t
+	return ""
+
+
+func _track_label(path: String) -> String:
+	if path == "":
+		return "NONE"
+	var label := path.get_file().get_basename().replace("_", " ").to_upper()
+	return label + ("  (this stage's theme)" if path == _stage_theme(music_tracks()) else "")
+
+
+## M in the pause menu: the next track (after the last one, back to the stage's own theme).
+func _cycle_music() -> void:
+	var tracks := music_tracks()
+	if tracks.is_empty():
+		return
+	var current := music_pick if music_pick in tracks else _stage_theme(tracks)
+	var i := tracks.find(current)
+	music_pick = tracks[(i + 1) % tracks.size()]
+	if music_pick == _stage_theme(tracks):
+		music_pick = ""
+	_start_music()
 
 
 func _on_damaged(v: Vehicle, amount: float, _attacker: Vehicle) -> void:

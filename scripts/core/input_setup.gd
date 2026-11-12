@@ -21,6 +21,7 @@ const KEYS := {
 	"restart": [KEY_ENTER],
 	"toggle_help": [KEY_F1],
 	"toggle_graphics": [KEY_G], # pause menu: graphics LOW / HIGH
+	"cycle_music": [KEY_M], # pause menu: try another theme on this stage (owner's music test)
 	"toggle_fps": [KEY_F3], # frames-per-second counter
 	# Pause menu: pick a driver (restarts the stage).
 	"pick_1": [KEY_1],
