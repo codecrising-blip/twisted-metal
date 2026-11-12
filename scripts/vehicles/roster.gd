@@ -9,6 +9,8 @@ extends RefCounted
 ## handbrake numbers halfway back between the first (very loose) and play-test 1 (too stiff) values,
 ## the same step for every class so the cast stays balanced. No crazy drifts for big cars,
 ## so heavy classes keep more grip with the handbrake on and turn less sharply.
+## ram = ram power 1-10 (round 6): who wins a collision (Vehicle._ram). Weight first, then armour
+## and what the car rams with (plows, push bars, spikes). Full cast table: docs/design/11-owner-round-6.md.
 ## mass class: light 1.0, medium 1.4, heavy 2.0, super 2.8 (rams, knockback, wall speed loss).
 ## size = collision box (width, height, length); camera = chase camera [height, distance].
 
@@ -29,35 +31,35 @@ const DRIFT_TURN := {"light": 1.62, "medium": 1.55, "heavy": 1.46, "super": 1.41
 
 const CARS := {
 	"sweet_tooth": {
-		"name": "Sweet Tooth", "engine": "ic_truck", "driver": "Needles Kane",
+		"name": "Sweet Tooth", "ram": 7.5, "engine": "ic_truck", "driver": "Needles Kane",
 		"spd": 4, "arm": 8, "hnd": 4, "spc": 8, "class": "heavy",
 		"special": "napalm_cone", "freeze_cost": 35.0, # perk: Brain Freeze
 		"size": Vector3(2.5, 2.8, 6.6), "camera": [6.4, 13.0],
 		"tagline": "He laughs louder than the engine.",
 	},
 	"outlaw": {
-		"name": "Outlaw", "engine": "taxi", "driver": "Jamie Roberts", "female": true,
+		"name": "Outlaw", "ram": 5.0, "engine": "taxi", "driver": "Jamie Roberts", "female": true,
 		"spd": 7, "arm": 6, "hnd": 6, "spc": 5, "class": "medium",
 		"special": "omni_taser", "brake_mult": 1.3, # perk: Interceptor
 		"size": Vector3(2.2, 1.6, 5.0),
 		"tagline": "She stopped telling them it was about justice.",
 	},
 	"junkyard_dog": {
-		"name": "Junkyard Dog", "engine": "tow", "driver": "Billy Ray Stillwell",
+		"name": "Junkyard Dog", "ram": 7.0, "engine": "tow", "driver": "Billy Ray Stillwell",
 		"spd": 5, "arm": 8, "hnd": 4, "spc": 7, "class": "heavy",
 		"special": "chain_bomb",
 		"size": Vector3(2.4, 2.0, 5.8),
 		"tagline": "Everything ends up in his yard.",
 	},
 	"mr_grimm": {
-		"name": "Mr. Grimm", "engine": "moto", "driver": "Mr. Grimm",
+		"name": "Mr. Grimm", "ram": 2.5, "engine": "moto", "driver": "Mr. Grimm",
 		"spd": 8, "arm": 1, "hnd": 6, "spc": 9, "class": "light",
 		"special": "reaper_skull",
 		"size": Vector3(2.0, 1.9, 3.2), "camera": [3.8, 9.0],
 		"tagline": "Death rides a motorcycle.",
 	},
 	"spectre": {
-		"name": "Spectre", "engine": "suv", "driver": "Ken",
+		"name": "Spectre", "ram": 3.5, "engine": "suv", "driver": "Ken",
 		"spd": 8, "arm": 2, "hnd": 8, "spc": 6, "class": "light",
 		"special": "ghost_missile",
 		"size": Vector3(2.1, 1.4, 4.6), "camera": [3.8, 9.5],

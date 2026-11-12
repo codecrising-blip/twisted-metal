@@ -168,15 +168,34 @@ func _run() -> void:
 		hp.queue_free()
 	await _frames(1)
 
-	# Ram damage by weight: heavy Sweet Tooth into medium Outlaw at 30 m/s closing.
+	# Rams (owner, round 6): ram power and the part that takes the hit decide who wins.
 	var outlaw: Vehicle = main.enemies.filter(func(e: Vehicle): return e.car_id == "outlaw")[0]
-	outlaw.velocity = Vector3.ZERO
-	var o_hp := outlaw.health
-	var p_hp := player.health
-	player._ram(outlaw, Vector3(0, 0, -30), Vector3(0, 0, 1))
-	var expected := (30.0 - 10.0) * 0.5 * sqrt(2.0 / 1.4)
-	_check(absf((o_hp - outlaw.health) - expected) < 0.1, "ram damage follows the weight formula (%.1f)" % (o_hp - outlaw.health))
-	_check(absf((p_hp - player.health) - expected * 0.1) < 0.1, "the heavier rammer takes 10%% back")
+	var grimm_car: Vehicle = main.enemies.filter(func(e: Vehicle): return e.car_id == "mr_grimm")[0]
+	var ram_at := Vector3(30, 0, 60)
+	# Nose to nose: Sweet Tooth (7.5) beats Outlaw (5).
+	player.global_transform = Transform3D(Basis.IDENTITY, LosAngelesArena.ground(ram_at.x, ram_at.z, 0.05)) # facing north
+	outlaw.global_transform = Transform3D(Basis(Vector3.UP, PI), player.global_position + Vector3(0, 0, -6.5)) # facing south
+	Vehicle._ram_pairs.clear()
+	player._ram(outlaw, Vector3(0, 0, -15), Vector3(0, 0, 1), player.global_position + Vector3(0, 1, -3.2))
+	var r: Dictionary = player.last_ram
+	_check(r.me == "front" and r.it == "front" and r.to_it > r.to_me, "nose to nose the stronger rammer wins (%.1f vs %.1f)" % [r.to_it, r.to_me])
+	# Outlaw's nose into Sweet Tooth's side: the T-bone wins for Outlaw.
+	outlaw.global_transform = Transform3D(Basis(Vector3.UP, PI * 0.5), player.global_position + Vector3(4.0, 0, 0)) # facing west
+	Vehicle._ram_pairs.clear()
+	outlaw._ram(player, Vector3(-15, 0, 0), Vector3(1, 0, 0), player.global_position + Vector3(1.1, 1, 0))
+	r = outlaw.last_ram
+	_check(r.me == "front" and r.it == "side" and r.to_it > r.to_me, "a nose into a stronger car's side wins (%.1f vs %.1f)" % [r.to_it, r.to_me])
+	# Mr. Grimm (2.5) into Sweet Tooth's side: too weak, still loses (like Twister into Axel).
+	grimm_car.global_transform = outlaw.global_transform
+	outlaw.global_position += Vector3(0, 0, 30)
+	Vehicle._ram_pairs.clear()
+	grimm_car._ram(player, Vector3(-15, 0, 0), Vector3(1, 0, 0), player.global_position + Vector3(1.1, 1, 0))
+	r = grimm_car.last_ram
+	_check(r.it == "side" and r.to_it < r.to_me, "a much weaker car loses even hitting a side (%.1f vs %.1f)" % [r.to_it, r.to_me])
+	player.health = player.max_health
+	outlaw.health = outlaw.max_health
+	grimm_car.health = grimm_car.max_health
+	_place(grimm_car, -120, -100, 0)
 
 	# Wall slide: 45 degrees into the south wall keeps most of the speed and turns along it.
 	player.health = player.max_health

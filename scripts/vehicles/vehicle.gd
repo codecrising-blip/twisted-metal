@@ -45,8 +45,11 @@ const FREEZE_BREAK := 15.0 # a single hit this big shatters the ice
 const GRIT_TIME := 3.0 # immune to full disables after one ends
 const SPAWN_SHIELD := 2.0
 const WRECK_SOLID_TIME := 5.0 # wrecks stop blocking the road after this
-const RAM_MIN_CLOSING := 10.0
-const RAM_MAX := 25.0
+const RAM_MIN_CLOSING := 8.0
+const RAM_PER_MS := 0.9
+const RAM_MAX := 45.0
+const RAM_ATTACK := {"front": 1.0, "side": 0.3, "rear": 0.3}
+const RAM_DEFENSE := {"front": 1.0, "side": 1.6, "rear": 1.3}
 const TARGET_RANGE := 120.0
 const TARGET_CONE := deg_to_rad(40.0)
 const AIM_ASSIST_CONE := deg_to_rad(12.0)
@@ -116,7 +119,8 @@ var _energy_pause := 0.0
 var _burn_tick := 0.0
 var _burn_source: Vehicle
 var _clock := 0.0
-var _ram_times := {} # other car's instance id -> time of our last ram on it
+static var _ram_pairs := {} # "id:id" -> time of the last ram between those two cars
+var last_ram := {} # the last ram this car was in (parts and damage): tests and HUD
 var _wall_cooldown := 0.0
 var _wall_contact := 0.0
 var _last_wall_normal := Vector3.ZERO
@@ -613,7 +617,7 @@ func _contacts(state: PhysicsDirectBodyState3D) -> void:
 		var other := state.get_contact_collider_object(k)
 		var n := state.get_contact_local_normal(k)
 		if other is Vehicle:
-			_ram(other as Vehicle, _prev_velocity, n)
+			_ram(other as Vehicle, _prev_velocity, n, state.get_contact_collider_position(k))
 		elif other != null and other.has_method("vehicle_contact"):
 			# Breakables (stands, glass, palms) shatter and barely slow the car.
 			if other.vehicle_contact(self, _prev_velocity):
@@ -677,32 +681,58 @@ func _unstick(dt: float) -> void:
 		_stuck_time = 0.0
 
 
-## Ram damage (design 1.3): (closing speed - 10) * 0.5 * sqrt(my weight / its weight), max 25,
-## once per second per pair. The rammer takes some back unless it is heavier. The bodies bounce off
-## each other by themselves now; this adds the damage, the sound and the class knockback.
-func _ram(other: Vehicle, before: Vector3, n: Vector3) -> void:
+## Rams (owner, round 6): ramming is a real weapon. Every car has a ram power (Roster "ram", 1-10)
+## and what part of each car takes the hit matters:
+##   damage to the other = base x (my power / its power) x ATTACK[my part] x DEFENSE[its part]
+## base = (closing speed - 8) x 0.9, max 45 per hit. A nose hits hard (1.0), a side or tail barely
+## hits back (0.3); a side is soft (x1.6, the T-bone), a tail x1.3, a nose x1.0. So nose to nose the
+## stronger car wins; a nose into a side wins unless the side's car is over ~2.3x stronger (Twister
+## into Axel's side still loses). Once a second per pair; both cars' damage comes from one hit.
+func _ram(other: Vehicle, before: Vector3, n: Vector3, at: Vector3) -> void:
 	if other.is_dead:
 		return
-	var key := other.get_instance_id()
-	if _clock - float(_ram_times.get(key, -10.0)) < 1.0:
+	var a := get_instance_id()
+	var b := other.get_instance_id()
+	var key := "%d:%d" % [mini(a, b), maxi(a, b)]
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - float(_ram_pairs.get(key, -10.0)) < 1.0:
 		return
 	var closing := (before - other._prev_velocity).dot(-n)
 	if closing < RAM_MIN_CLOSING:
 		return
-	_ram_times[key] = _clock
+	_ram_pairs[key] = now
+	var mine := hit_part(at)
+	var its := other.hit_part(at)
+	var base := (closing - RAM_MIN_CLOSING) * RAM_PER_MS
+	var ratio := ram_power() / other.ram_power()
+	var to_it := minf(RAM_MAX, base * ratio * float(RAM_ATTACK[mine]) * float(RAM_DEFENSE[its]))
+	var to_me := minf(RAM_MAX, base / ratio * float(RAM_ATTACK[its]) * float(RAM_DEFENSE[mine]))
+	last_ram = {"me": mine, "it": its, "to_it": to_it, "to_me": to_me}
+	other.last_ram = {"me": its, "it": mine, "to_it": to_me, "to_me": to_it}
 	GameFeel.play("ram", (global_position + other.global_position) * 0.5 + Vector3.UP, get_parent(), clampf(-14.0 + closing * 0.8, -14.0, 0.0))
-	var ratio := sqrt(weight / other.weight)
-	var dmg := minf(RAM_MAX, (closing - RAM_MIN_CLOSING) * 0.5 * ratio)
-	other.take_damage(dmg, self)
-	var recoil := 0.2
-	if weight < other.weight - 0.01:
-		recoil = 0.3
-	elif weight > other.weight + 0.01:
-		recoil = 0.1
-	take_damage(dmg * recoil, other)
-	# Bodies alone stick together after a hit (little bounce): the ram knocks them apart like before.
-	other.push(-n * closing * 0.35 * other.knockback * ratio + Vector3.UP * 2.0)
-	push(n * closing * 0.15 * knockback / ratio)
+	other.take_damage(to_it, self)
+	take_damage(to_me, other)
+	other.hit_react(-n, to_it)
+	hit_react(n, to_me)
+	# Bodies alone stick together after a hit (little bounce): knock them apart, the loser further.
+	var share := to_it / maxf(to_it + to_me, 0.01)
+	other.push(-n * closing * (0.2 + 0.3 * share) * other.knockback + Vector3.UP * 2.0)
+	push(n * closing * (0.2 + 0.3 * (1.0 - share)) * knockback)
+
+
+func ram_power() -> float:
+	return float(stats.get("ram", 5.0))
+
+
+## Which part of this car is at `at` (a world point): "front", "rear" or "side".
+func hit_part(at: Vector3) -> String:
+	var size: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
+	var p := global_basis.inverse() * (at - global_position)
+	if p.z < -size.z * 0.3:
+		return "front"
+	if p.z > size.z * 0.3:
+		return "rear"
+	return "side"
 
 
 ## Knock the car (weapons, rams, recoil): a change of velocity.
