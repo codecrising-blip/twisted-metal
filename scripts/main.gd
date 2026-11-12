@@ -163,7 +163,8 @@ func _respawn_player() -> void:
 			wreck.queue_free())
 
 
-## Plays the first track found in audio/music (ogg, mp3 or wav). Silent if the folder is empty.
+## Plays the stage's own theme, audio/music/<arena.music>.(ogg|mp3|wav). Silent until the owner has
+## picked that stage's theme (owner, session 6: everything sent so far is reference, see audio/reference).
 func _start_music() -> void:
 	var dir := DirAccess.open(MUSIC_DIR)
 	if dir == null:
@@ -175,14 +176,13 @@ func _start_music() -> void:
 			tracks.append(file)
 	if tracks.is_empty():
 		return
-	tracks.sort()
-	# Each stage plays its own track (the owner's soundtrack, session 6): audio/music/<stage music>.mp3,
-	# else the first track there.
-	var pick := tracks[0]
+	var pick := ""
 	var wanted: String = arena.get("music") if arena.get("music") else ""
 	for t in tracks:
 		if t.get_basename() == wanted:
 			pick = t
+	if pick == "":
+		return
 	var stream := load(MUSIC_DIR + "/" + pick) as AudioStream
 	if stream == null:
 		return

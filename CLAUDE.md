@@ -283,11 +283,11 @@ scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, amm
 scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickups, walls/road from radar_lines()
 tests/                      smoke_test.gd (headless, ~65 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py
 assets/backdrops/           stage backdrops (equirectangular panoramas shown as the sky)
-audio/music/                one track per stage, named after `arena.music`: los_angeles, paris, egypt, chernobyl, amazonia,
-                            calypso (final). Owner's tracks waiting for a use: main_menu, intro, south_central_opening,
-                            hangar_18, neon_city, more_human_than_human_remix. clips/ = short 9-20 s TM3/TMB clips
-audio/sfx/                  sound effects by name (see its README): owner's TM2/TM4 sounds as mono .ogg; unsorted/ =
-                            TM4 clips not yet identified. Owner uploads land in the repo root: sort them (see README)
+audio/music/                FINAL themes only, `<arena.music>.mp3`; empty until the owner's theme list (see its README)
+audio/reference/            owner's study material, NOT game files (.gdignore): Calypso's voice, Warhawk intro speech,
+                            menu / Antarctica theme references, other tracks. Never assign these to stages yourself
+audio/sfx/                  sound effects by name (see its README): owner's TM1/TM2/TM4 sounds as mono .ogg. Owner
+                            uploads land in the repo root or audio/sfx: sort them, delete exact duplicates
 docs/GDD.md                 game design document (living); docs/design/ = design bible (Arabic)
 ```
 
@@ -368,8 +368,10 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
 1. Owner play-test of the LA stage: driving feel, wall slide, damage/health, AI, the new specials.
 2. Owner's verdict on the preview cars; then the same detail for the other cars, new Laughing Ghost look.
 3. Remaining energy moves and Sweet Bot; napalm pickup (needed for the Tokyo puzzle).
-4. Sound effects: 52 of the owner's ~74 files sorted and wired (engine/guns/skid loops, crashes, deaths, launches,
-   pickups, fire, teleport, menu). Owner to name the 11 `unsorted/tm4_sfx_*` clips; more files may come.
+4. Sounds: effects wired (engine/guns/skid loops, screech, crashes, deaths, launches, pickups, fire, teleport, menu).
+   **Music: the owner has NOT picked any stage/boss theme yet** (everything so far is reference); wait for the list
+   of which theme goes where, then put each in `audio/music/` and delete duplicates. Calypso's lines and the
+   Warhawk intro are to be written later from the voice references.
 5. Story skeleton, sub-boss arrival sequence (replays, silence, break-in), save after sub bosses.
 6. Next stage: Paris.
 

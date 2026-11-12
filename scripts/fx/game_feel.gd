@@ -58,14 +58,11 @@ static func shake(pos: Vector3, amount: float, reach := 45.0) -> void:
 		camera.add_shake(amount * (1.0 - d / reach))
 
 
-## Sounds that borrow another file: name -> [file, pitch, volume dB]. One TM2 recording can serve
-## two weapons (the Zoomy salvo is the fire missile, higher and quieter).
+## Sounds that borrow another file: name -> [file, pitch, volume dB] (one crash recording serves
+## wall slams and rams).
 const SOUND_ALIAS := {
 	"wall_slam": ["crash", 1.0, 0.0],
 	"ram": ["crash", 0.9, 0.0],
-	"launch_zoomy": ["launch_fire", 1.35, -7.0],
-	"launch_napalm_cone": ["launch_napalm", 0.85, 0.0],
-	"pickup_turbo": ["pickup_health", 1.25, 0.0],
 }
 
 

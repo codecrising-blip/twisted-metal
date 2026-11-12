@@ -149,6 +149,8 @@ var _engine_snd: AudioStreamPlayer3D
 var _gun_snd: AudioStreamPlayer3D
 var _skid_snd: AudioStreamPlayer3D
 var _gun_snd_t := 0.0
+var _was_skidding := false
+var _screech_t := 0.0
 
 
 ## Call before adding to the tree.
@@ -817,6 +819,12 @@ func _update_sounds(delta: float) -> void:
 	if _skid_snd:
 		var side := absf(velocity.dot(global_basis.x))
 		var skid := is_on_floor() and not flipped and (side > 5.0 or (in_handbrake and absf(speed) > 8.0))
+		# A screech as a hard slide starts, then the skid loop carries it.
+		_screech_t -= delta
+		if skid and not _was_skidding and side > 7.0 and _screech_t <= 0.0:
+			_screech_t = 1.2
+			GameFeel.play("screech", global_position, get_parent(), -8.0)
+		_was_skidding = skid
 		if skid:
 			_skid_snd.volume_db = -18.0 + clampf(side / 14.0, 0.0, 1.0) * 9.0
 			if not _skid_snd.playing:
