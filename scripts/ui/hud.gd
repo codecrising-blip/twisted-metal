@@ -42,8 +42,8 @@ ENERGY (quick taps on WASD / arrows / D-pad / left stick, or the number keys):
   UP UP LEFT jump (1)        UP UP RIGHT shield (4)      LEFT RIGHT UP freeze (2)
   LEFT RIGHT DOWN rear freeze (3)    RIGHT LEFT DOWN invisible (5)
   DOWN DOWN RIGHT mines (6)  DOWN DOWN LEFT rear attack (7)   RIGHT LEFT UP secondary (8)
-PAD: Square gas (double-tap + hold turbo)  X handbrake  Circle headlights  Triangle look back
-     R2 weapon  L2 guns  R1/L1 change  R3 camera  OPTIONS pause
+PAD: Square gas, Triangle reverse (double-tap + hold: turbo)  X / Circle handbrake  L3 lights
+     R3 rear view on/off  R2 guns  L2 weapon  R1/L1 change  CREATE camera  TOUCHPAD pause
 ESC pause (driver, music, volumes, graphics)   ENTER restart   F1 hide help   F3 info"""
 
 
@@ -75,12 +75,7 @@ var _title_font: SystemFont
 var _status: HudStatus
 var _weapons: HudWeapons
 var _radar: Radar
-var _target_box: VBoxContainer
-var _target_name: Label
-var _target_health: ProgressBar
-var _target_trail: ProgressBar # pale bar that catches up after a hit: shows how much it just lost
-var _trail_target: Vehicle
-var _trail_hold := 0.0
+var _target_box: HudTarget
 var _reticle: Reticle
 var _title: Label
 var _sub: Label
@@ -145,22 +140,12 @@ func _build() -> void:
 	_pin(_status, 0.0, 1.0, Rect2(24, -24 - HudStatus.H, HudStatus.W, HudStatus.H))
 	root.add_child(_status)
 
-	# Top-center: locked target.
-	_target_box = VBoxContainer.new()
-	_pin(_target_box, 0.5, 0.0, Rect2(-160, 22, 320, 0))
+	# Top-center: locked target (round 7: health colours and a heartbeat when it is nearly dead).
+	_target_box = HudTarget.new()
+	_target_box.font = _title_font
+	_pin(_target_box, 0.5, 0.0, Rect2(-HudTarget.W * 0.5, 18, HudTarget.W, HudTarget.H))
 	_target_box.visible = false
 	root.add_child(_target_box)
-	_target_name = _label("", 22, Color(1, 0.35, 0.3), true)
-	_target_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_target_box.add_child(_target_name)
-	var bars := Control.new()
-	bars.custom_minimum_size = Vector2(320, 10)
-	_target_box.add_child(bars)
-	_target_trail = _plain_bar(Color(0.95, 0.92, 0.85), 320)
-	bars.add_child(_target_trail)
-	_target_health = _plain_bar(Color(0.85, 0.1, 0.08), 320)
-	_target_health.add_theme_stylebox_override("background", StyleBoxEmpty.new())
-	bars.add_child(_target_health)
 
 	# Top-right: radar (enemies left under it), kill feed below.
 	_radar = Radar.new()
@@ -242,6 +227,9 @@ func _label(text: String, size: int, color: Color, title := false) -> Label:
 	l.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.9))
 	l.add_theme_constant_override("shadow_offset_x", 2)
 	l.add_theme_constant_override("shadow_offset_y", 2)
+	# A shadow with an outline (Godot's default 1) uses another glyph texture, so every letter
+	# became its own draw call: the F3 line alone cost ~190 draws (round 7). No outline: one batch.
+	l.add_theme_constant_override("shadow_outline_size", 0)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	if title:
 		l.add_theme_font_override("font", _title_font)
@@ -286,12 +274,19 @@ func _handle_input() -> void:
 		_fps_t -= get_process_delta_time()
 		if _fps_t <= 0.0:
 			_fps_t = 0.3
-			# Round 5: enough to tell where a slow frame goes (owner's reports): physics and scripts are
-			# the CPU, draws and triangles are the graphics card.
-			_fps.text = "FPS %d   physics %.1f ms   scripts %.1f ms   draws %d   triangles %dk" % [
+			# Where a slow frame goes (owner's reports). Round 7: Godot's "process" time also holds the
+			# drawing and the wait for the graphics card, so it is split: "draw" = the processor
+			# preparing the picture, "gpu" = the graphics card drawing it, "scripts" = the rest (game code
+			# and waiting). gpu near the whole frame time = the graphics card is the limit.
+			var vp := get_viewport().get_viewport_rid()
+			RenderingServer.viewport_set_measure_render_time(vp, true)
+			var process := Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+			var draw_cpu := RenderingServer.viewport_get_measured_render_time_cpu(vp)
+			_fps.text = "FPS %d   physics %.1f   scripts %.1f   draw %.1f   gpu %.1f ms   draws %d   triangles %dk" % [
 				Engine.get_frames_per_second(),
 				Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0,
-				Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0,
+				maxf(0.0, process - draw_cpu), draw_cpu,
+				RenderingServer.viewport_get_measured_render_time_gpu(vp),
 				Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME),
 				Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME) / 1000]
 			# Where you are (owner, round 6), to point at odd spots: metres from the middle of the
@@ -340,7 +335,7 @@ func _heading_name(f: Vector3) -> String:
 
 
 func _show_pause() -> void:
-	show_message("PAUSED", "ESC to resume   ENTER to restart   G graphics: %s\nM music: %s\n%s\n\n%s" % [GraphicsSettings.label(), music_label, AudioSettings.label(), _driver_menu()])
+	show_message("PAUSED", "ESC / OPTIONS to resume   ENTER / CREATE to restart   G graphics: %s\nM music: %s\n%s\n\n%s" % [GraphicsSettings.label(), music_label, AudioSettings.label(), _driver_menu()])
 
 
 func _driver_menu() -> String:
@@ -353,22 +348,10 @@ func _driver_menu() -> String:
 func _update_target() -> void:
 	var t := player.target
 	var valid := is_instance_valid(t) and not t.is_dead and not player.is_dead
-	_target_box.visible = valid
+	_target_box.target = t if valid else null
 	_reticle.visible = false
 	if not valid:
 		return
-	_target_name.text = t.display_name.to_upper()
-	var hp := t.health / t.max_health * 100.0
-	if t != _trail_target:
-		_trail_target = t
-		_target_trail.value = hp
-	if hp < _target_health.value - 0.01:
-		_trail_hold = 0.45 # just hit: hold the pale part a moment, then let it drain
-	_target_health.value = hp
-	_trail_hold -= get_process_delta_time()
-	if _trail_hold <= 0.0:
-		_target_trail.value = move_toward(_target_trail.value, hp, 45.0 * get_process_delta_time())
-	_target_trail.value = maxf(_target_trail.value, hp)
 	if camera == null:
 		return
 	var p := t.global_position + Vector3.UP * 1.4

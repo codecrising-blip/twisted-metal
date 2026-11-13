@@ -236,3 +236,67 @@ static func spark(parent: Node, pos: Vector3, normal := Vector3.UP) -> void:
 	var tw := p.create_tween()
 	tw.tween_interval(0.6)
 	tw.tween_callback(p.queue_free)
+
+
+## Car-on-car impact (rams, round 7: "show it strong"): a fan of sparks sprayed along the hit, bent
+## metal bits thrown off and a white-hot flash at the contact. power 0..1 (a light tap .. a full ram).
+static func crash_burst(parent: Node, pos: Vector3, normal: Vector3, power: float) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var root := Node3D.new()
+	parent.add_child(root)
+	root.global_position = pos
+	var sparks := CPUParticles3D.new()
+	sparks.mesh = particle_mesh(true)
+	sparks.one_shot = true
+	sparks.explosiveness = 1.0
+	sparks.amount = int(14 + 26 * power * GraphicsSettings.particles())
+	sparks.lifetime = 0.7
+	sparks.local_coords = false
+	sparks.direction = (normal + Vector3.UP * 0.6).normalized()
+	sparks.spread = 75.0
+	sparks.gravity = Vector3(0, -20, 0)
+	sparks.initial_velocity_min = 7.0 + 6.0 * power
+	sparks.initial_velocity_max = 14.0 + 12.0 * power
+	sparks.scale_amount_min = 0.08
+	sparks.scale_amount_max = 0.2
+	sparks.color_ramp = _ramp([Color(1, 0.97, 0.8, 1), Color(1, 0.6, 0.15, 1), Color(1, 0.3, 0.05, 0)])
+	root.add_child(sparks)
+	sparks.emitting = true
+	var bits := CPUParticles3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.18, 0.05, 0.26)
+	var metal := StandardMaterial3D.new()
+	metal.albedo_color = Color(0.16, 0.15, 0.14)
+	metal.metallic = 0.6
+	metal.roughness = 0.5
+	box.material = metal
+	bits.mesh = box
+	bits.one_shot = true
+	bits.explosiveness = 1.0
+	bits.amount = int(3 + 7 * power)
+	bits.lifetime = 1.2
+	bits.local_coords = false
+	bits.direction = (normal + Vector3.UP).normalized()
+	bits.spread = 60.0
+	bits.gravity = Vector3(0, -26, 0)
+	bits.initial_velocity_min = 5.0
+	bits.initial_velocity_max = 9.0 + 6.0 * power
+	bits.angular_velocity_min = -900.0
+	bits.angular_velocity_max = 900.0
+	bits.scale_amount_min = 0.7
+	bits.scale_amount_max = 1.5
+	root.add_child(bits)
+	bits.emitting = true
+	var smoke := smoke(0.6 + 0.6 * power, 6)
+	smoke.one_shot = true
+	smoke.explosiveness = 0.9
+	smoke.lifetime = 1.2
+	root.add_child(smoke)
+	smoke.emitting = true
+	GameFeel.flash(parent, pos, 1.0 + 1.6 * power, Color(1.0, 0.85, 0.6), 0.1)
+	if power > 0.45:
+		GameFeel.shockwave(parent, pos - Vector3.UP * 0.6, 4.0 + 5.0 * power, Color(1.0, 0.75, 0.45))
+	var tw := root.create_tween()
+	tw.tween_interval(1.6)
+	tw.tween_callback(root.queue_free)

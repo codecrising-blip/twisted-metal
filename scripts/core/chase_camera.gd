@@ -18,11 +18,13 @@ static var mode := "near" # kept across restarts
 var _shake := 0.0
 var _orbit := 0.0
 var _looking_back := false
+var rear_view := false # R3 (round 7): toggled, looks back until pressed again
 
 
 ## Follow a car, using its roster camera settings if it has any.
 func follow(v: Vehicle) -> void:
 	target = v
+	rear_view = false
 	var c: Array = v.stats.get("camera", [4.2, 10.0])
 	height = c[0]
 	distance = c[1]
@@ -50,12 +52,14 @@ func _physics_process(delta: float) -> void:
 		mode = MODES[(MODES.find(mode) + 1) % MODES.size()]
 		target.notice.emit(target, "CAMERA: " + {"near": "NEAR", "far": "FAR", "car": "IN THE CAR"}[mode])
 		snap()
+	if Input.is_action_just_pressed("rear_view"):
+		rear_view = not rear_view
 	if mode == "car":
 		_in_car(delta)
 		return
 	near = 0.05
 	var fwd := _target_forward()
-	var back := Input.is_action_pressed("look_back")
+	var back := looking_back()
 	if back:
 		fwd = -fwd
 	var desired := _avoid_walls(_desired_position(fwd))
@@ -80,11 +84,16 @@ func _in_car(delta: float) -> void:
 	var xf := target.global_transform
 	global_position = xf * eye
 	var fwd := -xf.basis.z
-	if Input.is_action_pressed("look_back"):
+	if looking_back():
 		fwd = -fwd
 	look_at(global_position + fwd * 10.0, xf.basis.y)
 	fov = lerpf(fov, 78.0 + clampf(absf(target.speed) - 20.0, 0.0, 25.0) * 0.5, 4.0 * delta)
 	_apply_shake(delta)
+
+
+## B held on the keyboard, or the pad's R3 toggle.
+func looking_back() -> bool:
+	return rear_view or Input.is_action_pressed("look_back")
 
 
 func _target_forward() -> Vector3:

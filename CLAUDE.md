@@ -266,6 +266,28 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   Bot NOT built), camera modes (`ChaseCamera.mode` near/far/car), headlights (`toggle_headlights`, reveal hidden cars,
   any graphics level). AI: shield vs big missiles, mines/rear attack on chasers, headlights vs invisible, re-picks a
   ramp when its goal moves, slows on ramps (real bodies slid off the side).
+- **Round 7, full text `docs/design/12-owner-round-7.md`:** `SPEED_SCALE` 1.4, `DRIFT_SCALE` 1.2 (owner: "still slow").
+  **Perf (measured):** label shadows with the default outline drew every glyph as its own draw call (F3 ~190, help text
+  ~1200): `_label` sets `shadow_outline_size` 0; segmented bars use `draw_primitive` (polygons don't batch); HUD 327 -> 52
+  draws. Real headlight SpotLights redraw the merged stage on Compatibility: LOW fakes the beam (`VehicleFx.headlight_beams`:
+  additive ground pool + faint cone, group `HEADLIGHT_FAKE_GROUP`), real light HIGH only. Fence = one quad sheet mesh.
+  F3: `scripts` (process minus render cpu), `draw` (render cpu), `gpu` (viewport GPU time) - Godot's TIME_PROCESS includes
+  drawing and the GPU wait. **Invisible walls:** the body box's bottom edge caught on slopes and the solver's sideways
+  normal triggered the wall slam. Body is now a `ConvexPolygonShape3D` box with 45-degree chamfered bottom edges, and
+  `_ground_contact` ignores contacts on group "ground" terrain whose surface (ray) is drivable. Hill sides run to
+  `HILL_SIDE` 22 m (were 49 degree banks). **Traps:** the pit between the tunnel-roof ramps is filled; barrier row and two
+  hot dog stands moved off ramp sides. `tests/map_check.gd` = reachability + slot scan of the whole map (want 0/0).
+  Only the front/back bottom edges are chamfered: chamfered sides rode over the ramps' low rails. Back on its wheels
+  after a roll, the roll is stopped (it went over onto the other side). AI brakes coming in to a ramp at speed and
+  retries a failed ramp when every other one is much further; climbing from beside a ramp is still unreliable at
+  1.4x speed (`tests/ai_ramp_check.gd`: 5/12), to tune after the owner plays.
+  **Remote:** own mine blown within `Mine.OWN_BLAST_TIME` (1 s) catches the owner even past the radius (forward kick,
+  knock, wobble). **Rams:** loser thrown along the hit (`RAM_THROW_MAX` 22, weight ratio), tyres slide, side/rear hits
+  spin it; `_ram_feel`: `FxKit.crash_burst` (sparks, metal bits, flash, ring), `ram` + `ram_impact` + low thud, hit-stop
+  if the player is in it, shake, elastic dip. **Target bar** `HudTarget`: health colours, trail, heartbeat pulse + beep
+  (`low_health_beep`) under 30%. **PS5 (round 7):** Square gas, Triangle reverse (double-tap+hold = turbo either way),
+  Cross/Circle handbrake, L3 lights, R3 rear-view toggle (`ChaseCamera.rear_view`), R2 guns, L2 weapon, R1/L1 switch,
+  touchpad/Options pause, Create camera (+ restart when paused / match over). Godot 4.3 can't read touchpad halves.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -273,9 +295,7 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 - **Pickups:** less bright; each shows its weapon's shape and color (fire vs homing must be obvious), health clear.
 - **Energy combos** (quick, ~0.5 s, on the D-pad AND the left stick): jump U U L, shield U U R, front freeze L R U,
   secondary weapon R L U, rear freeze L R D, invisibility R L D, mines D D R, rear attack D D L.
-- **Pad layout (PS):** Square drive, **double-tap Square and hold the second press = turbo** (stops on release), X handbrake, Circle headlights, Triangle rear view,
-  R1/L1 switch weapon, R2 fire weapon, L2 machine guns, R3 camera mode, L3/left stick = D-pad (steer + combos),
-  D-pad left/right steer, down reverse, up drive.
+- **Pad layout (PS):** replaced in round 7 (see Round 7 above). Left stick / D-pad = steer, gas, reverse and the combos.
 - **Camera modes (R3):** near chase, far chase, **in-car view showing the driver's hands** (TM2 had it; our own driver design, later).
 - **Headlights:** reveal invisible cars from the start; the key tool against Calypso's clones later.
 - **Later (after the above):** serious daytime stage look; real buildings with depth (motel, taco place, hot dog stand
@@ -316,8 +336,11 @@ scripts/fx/                 FxKit (fire/smoke/explosions + debris), GameFeel (hi
 scripts/ui/hud.gd           HUD layout (target, feed, messages, help, countdown, pause) + grain/vignette shader
 scripts/ui/hud_status.gd    bottom-left panel: name, lives, segmented health (trail), turbo, energy, state chips
 scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, ammo), other weapons as chips
+scripts/ui/hud_target.gd    top-center: locked enemy, health-coloured bar, trail, heartbeat + beep when low
 scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickups, walls/road from radar_lines()
-tests/                      smoke_test.gd (headless, ~65 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py
+tests/                      smoke_test.gd (headless, ~145 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py,
+                            map_check.gd (traps + narrow slots over the whole map), ai_ramp_check.gd (AI gets up
+                            from beside each ramp: 5/12 in round 7, tune with the owner), _perf.gd (draw calls)
 assets/backdrops/           stage backdrops (equirectangular panoramas shown as the sky)
 audio/music/                FINAL themes (owner's list, see its README): `<arena.music>.ogg` per stage + boss names
                             (manslaughter, warhawk, minion, calypso); unpicked/ = candidates. -16 LUFS, trimmed.
@@ -479,3 +502,10 @@ stroke letters on chaparral hills with scrub. Waiting for the owner's verdict.
   Round 6: owner's list + step 4. Gotchas: AI ramp choice was kept when its goal moved (it drove to a ramp across the
   map: now re-picked past 30 m); stronger rams left the test AI under 30% health so it retreated (heal it first);
   test cars parked near the battleground edge tip over (place them well inside).
+- **Session 7 (round 7):** speed/drift, perf (HUD draw calls, fake LOW headlights, F3 split), invisible walls (chamfered
+  body hull + ground-contact check, gentle hill sides), traps (filled ramp pit, moved barrier/stands, `map_check.gd`),
+  own-Remote blast, ram knock-back and feel, `HudTarget`, new PS5 layout. Gotchas: Godot's `TIME_PROCESS` includes
+  rendering and the wait for the GPU (it is not "scripts"); a Label shadow's default `shadow_outline_size` 1 breaks text
+  batching on Compatibility; `draw_colored_polygon` never batches, 4-point `draw_primitive` does; perf measurements right
+  after teleporting a car are wrong until the chase camera settles (~90 frames); headless `--fixed-fps 60` runs long
+  physics checks faster than real time; a box collider's bottom edge on a trimesh slope reports a sideways normal.

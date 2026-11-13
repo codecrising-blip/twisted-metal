@@ -213,6 +213,29 @@ func _run() -> void:
 	await _tap("camera_mode")
 	_check(ChaseCamera.mode == "near", "...then back to near")
 	await _frames(60)
+	# PS5 layout (owner, round 7): R3 rear view toggles, Triangle reverses, the triggers swapped.
+	await _tap("rear_view")
+	_check(cam.looking_back(), "R3 turns the camera round and keeps it there")
+	await _tap("rear_view")
+	_check(not cam.looking_back(), "...R3 again looks forward")
+	var pad_ok := func(action: String, button: int) -> bool:
+		return InputMap.action_get_events(action).any(func(e: InputEvent): return e is InputEventJoypadButton and (e as InputEventJoypadButton).button_index == button)
+	var axis_ok := func(action: String, axis: int) -> bool:
+		return InputMap.action_get_events(action).any(func(e: InputEvent): return e is InputEventJoypadMotion and (e as InputEventJoypadMotion).axis == axis)
+	_check(pad_ok.call("brake", JOY_BUTTON_Y) and pad_ok.call("handbrake", JOY_BUTTON_A) and pad_ok.call("handbrake", JOY_BUTTON_B)
+		and pad_ok.call("headlights", JOY_BUTTON_LEFT_STICK) and pad_ok.call("camera_mode", JOY_BUTTON_BACK) and pad_ok.call("pause", JOY_BUTTON_TOUCHPAD)
+		and axis_ok.call("fire_guns", JOY_AXIS_TRIGGER_RIGHT) and axis_ok.call("fire_weapon", JOY_AXIS_TRIGGER_LEFT),
+		"pad: Triangle reverse, Cross/Circle drift, L3 lights, Create camera, touchpad pause, R2 guns, L2 weapon")
+	# (Through the player's own controller in real frames: "just pressed" only counts inside a frame.)
+	Input.action_press("brake")
+	await _tap("pad_reverse")
+	Input.action_press("pad_reverse")
+	await _frames(2)
+	_check(player.in_turbo and player.in_throttle < 0.0, "double-tap Triangle and hold: turbo in reverse")
+	Input.action_release("pad_reverse")
+	Input.action_release("brake")
+	await _frames(2)
+	_check(not player.in_turbo, "...let go: turbo off")
 
 	# Freeze, ice breaking, Grit.
 	var victim: Vehicle = main.enemies[0]
@@ -240,15 +263,20 @@ func _run() -> void:
 	player.global_transform = Transform3D(Basis.IDENTITY, LosAngelesArena.ground(ram_at.x, ram_at.z, 0.05)) # facing north
 	outlaw.global_transform = Transform3D(Basis(Vector3.UP, PI), player.global_position + Vector3(0, 0, -6.5)) # facing south
 	Vehicle._ram_pairs.clear()
+	outlaw.linear_velocity = Vector3.ZERO
+	outlaw._knock = 0.0
 	player._ram(outlaw, Vector3(0, 0, -15), Vector3(0, 0, 1), player.global_position + Vector3(0, 1, -3.2))
 	var r: Dictionary = player.last_ram
 	_check(r.me == "front" and r.it == "front" and r.to_it > r.to_me, "nose to nose the stronger rammer wins (%.1f vs %.1f)" % [r.to_it, r.to_me])
+	_check(outlaw.linear_velocity.z < -6.0 and outlaw._knock > 0.0, "...and the loser is thrown back, tyres sliding (round 7: %.1f m/s)" % -outlaw.linear_velocity.z)
 	# Outlaw's nose into Sweet Tooth's side: the T-bone wins for Outlaw.
 	outlaw.global_transform = Transform3D(Basis(Vector3.UP, PI * 0.5), player.global_position + Vector3(4.0, 0, 0)) # facing west
 	Vehicle._ram_pairs.clear()
-	outlaw._ram(player, Vector3(-15, 0, 0), Vector3(1, 0, 0), player.global_position + Vector3(1.1, 1, 0))
+	player.angular_velocity = Vector3.ZERO
+	outlaw._ram(player, Vector3(-15, 0, 0), Vector3(1, 0, 0), player.global_position + Vector3(1.1, 1, -1.5))
 	r = outlaw.last_ram
 	_check(r.me == "front" and r.it == "side" and r.to_it > r.to_me, "a nose into a stronger car's side wins (%.1f vs %.1f)" % [r.to_it, r.to_me])
+	_check(absf(player.angular_velocity.y) > 0.5, "...and a hit on the side spins the car round (%.1f rad/s)" % player.angular_velocity.y)
 	# Mr. Grimm (2.5) into Sweet Tooth's side: too weak, still loses (like Twister into Axel).
 	grimm_car.global_transform = outlaw.global_transform
 	outlaw.global_position += Vector3(0, 0, 30)
@@ -486,6 +514,25 @@ func _run() -> void:
 	player.health = player.max_health
 	_place(player, 40, 70, 90) # the mine may have left it tumbling: back on its wheels on flat ground
 	await _frames(5)
+	# Owner, round 7: blow your own Remote right after dropping it and it catches your tail, though the
+	# car has already driven past its radius: you take damage, get kicked forward, lose grip.
+	player.add_ammo("remote", 1)
+	player.selected = player.weapon_order.find("remote")
+	player._weapon_cooldowns.clear()
+	player._fire_selected()
+	mine = player.live_special() as Mine
+	player.global_position = mine.global_position + player.flat_forward() * 13.0 + Vector3.UP * 0.4
+	await _frames(15)
+	own_hp = player.health
+	var fwd_before := player.velocity.dot(player.flat_forward())
+	mine.fire_again()
+	var kick := player.velocity.dot(player.flat_forward()) - fwd_before
+	_check(own_hp - player.health >= 20.0 and kick > 8.0 and player.velocity.y > 5.0 and player._knock > 0.0,
+		"blowing your own Remote at once hurts you and kicks you forward out of control (%.1f hp, +%.1f m/s)" % [own_hp - player.health, kick])
+	await _frames(100)
+	player.health = player.max_health
+	_place(player, 40, 70, 90)
+	await _frames(5)
 	FirePool.spawn(main, player.global_position, 3.0, 2.0, 3.0, player)
 	await _frames(40)
 	_check(player.burn_time > 0.0, "friendly fire: your own napalm fire burns you")
@@ -628,7 +675,7 @@ func _run() -> void:
 	await _frames(90)
 	_place(outlaw, 0, 70, 90)
 	var st_car := Roster.get_car("sweet_tooth")
-	_check(float(st_car.max_speed) < float(Roster.get_car("outlaw").max_speed) and float(st_car.max_speed) < 32.0 and float(st_car.max_speed) > 29.0, "Sweet Tooth is a heavy truck, 1.2x the round 5 speed (%.1f m/s)" % st_car.max_speed)
+	_check(float(st_car.max_speed) < float(Roster.get_car("outlaw").max_speed) and float(st_car.max_speed) < 37.5 and float(st_car.max_speed) > 34.0, "Sweet Tooth is a heavy truck, 1.4x the round 5 speed (%.1f m/s)" % st_car.max_speed)
 	# Remote side hit (owner, round 6): thrown sideways away from the blast, the near side lifted.
 	_place(outlaw, 0, 70, 90)
 	await _frames(10)
@@ -739,8 +786,13 @@ func _run() -> void:
 	o_brain._ramp_goal = {}
 	o_brain._ramp_fails = 0
 	o_brain._no_jump = 0.0
+	for e: Vehicle in main.enemies: # only you to chase: another car wandering by turns its head
+		if e != outlaw and not e.is_dead:
+			e.controller = null
+			e.global_position = Vector3(0, 60, 0)
+			e.freeze = true
 	var climbed_at := -1
-	for k in 1800: # round 6: 1.2x faster cars line up slower; can tip at a ramp's side (real physics)
+	for k in 2400: # round 7: 1.4x faster cars brake and line up; can tip at a ramp's side (real physics)
 		await _frames(1)
 		if outlaw.global_position.y > 4.0 and outlaw.is_on_floor():
 			climbed_at = k
@@ -818,6 +870,12 @@ func _run() -> void:
 	GraphicsSettings.high = false
 	GraphicsSettings.apply(self)
 	_check(beams.all(func(n: Light3D): return not n.visible), "graphics LOW turns them off (owner's laptop)")
+	main.player.toggle_headlights()
+	var fake: Array = main.player.model.find_children("HeadlightFx", "Node3D", false, false)
+	_check(beams.all(func(n: Light3D): return not n.visible) and fake.size() == 1 and (fake[0] as Node3D).visible and (fake[0].get_node("Pool") as Node3D).visible,
+		"LOW headlights: no real light (it redraws the stage), a painted beam and ground pool instead")
+	main.player.toggle_headlights()
+	_check(not (fake[0] as Node3D).visible, "headlights off hides the painted beam")
 	GraphicsSettings.high = was_high
 
 	print("")

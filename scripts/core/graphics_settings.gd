@@ -86,7 +86,10 @@ static func apply(tree: SceneTree) -> void:
 			env.ssil_enabled = high
 			env.ssr_enabled = high
 	for n in tree.get_nodes_in_group(HEADLIGHT_GROUP):
-		(n as Light3D).visible = (n as Node).get_meta("on", false) # gameplay: on only when switched on (any level)
+		# Switched on by the player (any level), but the real light only on HIGH; LOW fakes the beam.
+		(n as Light3D).visible = (n as Node).get_meta("on", false) and high
+	for n in tree.get_nodes_in_group(VehicleFx.HEADLIGHT_FAKE_GROUP):
+		VehicleFx.update_headlight_fx(n as Node3D, (n as Node).get_meta("on", false))
 	for n in tree.get_nodes_in_group(EXTRA_LIGHT_GROUP):
 		(n as Light3D).visible = high
 	for n in tree.get_nodes_in_group(BLOB_GROUP):

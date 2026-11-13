@@ -21,6 +21,8 @@ func _run() -> void:
 		"far_corner": [Vector3(-140, 5, 140), Vector3(0, 5, 0)],
 		"roof_hollywood": [Vector3(12, 13.5, -114), Vector3(-10, 22, -200)],
 		"south_buildings": [Vector3(0, 6, 120), Vector3(-60, 4, 155)],
+		"pic1_hollywood": [Vector3(28, 12.5, -137), Vector3(0, 10, -139)],
+		"pic2_ramps": [Vector3(19, 8.5, -63), Vector3(5, 5, -90)],
 	}
 	var counts := {"MeshInstance3D": 0, "OmniLight3D": 0, "SpotLight3D": 0, "CPUParticles3D": 0, "Label3D": 0}
 	for k in counts.keys():

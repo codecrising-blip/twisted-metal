@@ -15,12 +15,14 @@ const COMBOS := {
 const COMBO_GAP := 0.3
 const COMBO_TIME := 0.6
 const DIRECT := ["jump", "freeze", "rear_freeze", "shield", "invisible", "mines", "rear_attack", "secondary"]
-const DOUBLE_TAP := 0.3 # Square twice this fast, held = turbo
+const DOUBLE_TAP := 0.3 # Square (or Triangle) twice this fast, held = turbo (forward / reverse)
 
 var _taps: Array = [] # [letter, time]
 var _stick := ""
 var _gas_last := -10.0
 var _pad_turbo := false
+var _rev_last := -10.0
+var _pad_rev_turbo := false
 
 
 func drive(v: Vehicle, _delta: float) -> void:
@@ -33,7 +35,12 @@ func drive(v: Vehicle, _delta: float) -> void:
 		_gas_last = now
 	if not Input.is_action_pressed("pad_gas"):
 		_pad_turbo = false
-	v.in_turbo = Input.is_action_pressed("turbo") or _pad_turbo
+	if Input.is_action_just_pressed("pad_reverse"):
+		_pad_rev_turbo = now - _rev_last < DOUBLE_TAP
+		_rev_last = now
+	if not Input.is_action_pressed("pad_reverse"):
+		_pad_rev_turbo = false
+	v.in_turbo = Input.is_action_pressed("turbo") or _pad_turbo or _pad_rev_turbo
 	v.in_fire_guns = Input.is_action_pressed("fire_guns")
 	v.in_fire_weapon = Input.is_action_pressed("fire_weapon") # held: charged shots
 	if Input.is_action_just_pressed("fire_weapon"):

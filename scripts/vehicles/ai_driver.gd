@@ -126,12 +126,15 @@ func drive(v: Vehicle, delta: float) -> void:
 	else:
 		_stuck = 0.0
 
-	# Coming in to a ramp not yet lined up: ease off (round 6: cars are 1.2x faster and overshot
-	# the line again and again).
+	# Coming in to a ramp not yet lined up: ease off, and brake when much too fast (round 7: cars are
+	# 1.4x faster and overshot the line again and again).
 	if not _ramp_goal.is_empty() and not _ramp_goal.get("climbing", false) and _reverse <= 0.0:
 		var to_foot := Vector2(v.global_position.x - (_ramp_goal.foot as Vector3).x, v.global_position.z - (_ramp_goal.foot as Vector3).z).length()
-		if to_foot < 20.0 and v.speed > 18.0:
-			throttle = minf(throttle, 0.3)
+		if to_foot < 40.0 and v.speed > 24.0:
+			throttle = minf(throttle, -0.6)
+			handbrake = false
+		elif to_foot < 25.0 and v.speed > 16.0:
+			throttle = minf(throttle, 0.25)
 	elif not _ramp_goal.is_empty() and _ramp_goal.get("climbing", false) and v.speed > 16.0:
 		throttle = minf(throttle, 0.35) # on the ramp: steady, or the real body slides off its side
 	v.in_throttle = throttle
@@ -368,18 +371,30 @@ func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
 			and goal.distance_to(_ramp_goal.get("for", goal)) > 30.0:
 		_ramp_goal = {}
 	if _ramp_goal.is_empty():
+		# Nearest ramp by the whole trip (to its foot, then from its top to the goal). One that went
+		# wrong twice is avoided for a while, but not when every other ramp is much further: then
+		# try it again (round 7: it drove across the map to another ramp and never got up).
 		var best_d := INF
+		var best: Dictionary = {}
+		var best_any := INF
+		var any: Dictionary = {}
 		for r: Dictionary in arena.ramps:
-			if absf(r.top.y - goal.y) > 2.0 or _bad_ramps.has(_ramp_key(r)):
+			if absf(r.top.y - goal.y) > 2.0:
 				continue
 			var d: float = v.global_position.distance_to(r.foot) + (r.top as Vector3).distance_to(goal)
-			if d < best_d:
+			if d < best_any:
+				best_any = d
+				any = r
+			if d < best_d and not _bad_ramps.has(_ramp_key(r)):
 				best_d = d
-				_ramp_goal = r.duplicate()
-				_ramp_goal["climbing"] = false
-				_ramp_goal["for"] = goal
-		if _ramp_goal.is_empty():
+				best = r
+		if best.is_empty() or best_d > best_any * 1.8 + 30.0:
+			best = any
+		if best.is_empty():
 			return goal
+		_ramp_goal = best.duplicate()
+		_ramp_goal["climbing"] = false
+		_ramp_goal["for"] = goal
 	var foot: Vector3 = _ramp_goal.foot
 	var top: Vector3 = _ramp_goal.top
 	var axis := Vector3(foot.x - top.x, 0, foot.z - top.z).normalized() # from the top out to the foot

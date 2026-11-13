@@ -21,6 +21,8 @@ All files: mono Ogg Vorbis, peak -1 dB, converted from the owner's TM1 / TM2 / T
 | `engine_<set>_idle/slow/fast/rev` | engine layers crossfaded by speed, rev on the gas from low speed. Sets (TM 2012): `ic_truck` Sweet Tooth, `taxi` Outlaw, `tow` Junkyard Dog, `moto` Mr. Grimm, `suv` Spectre, `tank` for super heavies later (`Roster` "engine") |
 | `skid_loop`, `screech` | tyres sliding (TM2), a hard slide starting (TM1) |
 | `crash_1..4` | wall slams and rams (TM2) |
+| `ram_impact` | heavy layer under every ram (TM 2012 power-ram impact, round 7) |
+| `low_health_beep` | the target bar's heartbeat beep under 30% health (generated, round 7) |
 | `death_male`, `death_female` | a driver dies (`"female": true` in `Roster`) |
 | `ignite`, `fire_loop` | a car catches fire; fire pools and the pit of fire |
 | `mine_drop` | the Remote mine is planted (TM4 SFX 37, owner's pick) |

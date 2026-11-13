@@ -32,6 +32,7 @@ const RAMP_ANGLES := [12.0, 105.0, 192.0, 322.0] # degrees around the battlegrou
 const ROAD_W := 18.0
 const HILL_H := 3.0
 const HILL_AT := [0.33, 0.6, 0.86] # where the three hills sit along the road loop (0..1)
+const HILL_SIDE := 22.0 # how far from the road's middle a hill's side runs out (gentle, under 20 degrees)
 const ROOF_Y := 9.0 # tunnel roof
 const ROAD_NORTH_Z := -128.0 # the north straight through the tunnels
 const TUNNEL_X := 32.0 # tunnels run from -TUNNEL_X to TUNNEL_X
@@ -278,9 +279,11 @@ static func height_at(x: float, z: float) -> float:
 		for hill: Dictionary in hills():
 			var rel := Vector2(x, z) - (hill.p as Vector2)
 			var a: float = rel.dot(hill.d) / 12.0
-			var c: float = absf(rel.dot(Vector2(-hill.d.y, hill.d.x))) / 13.0
-			if absf(a) < 1.0 and c < 1.0:
-				h += HILL_H * pow(cos(a * PI * 0.5), 2.0) * (1.0 - smoothstep(0.7, 1.0, c))
+			var c: float = absf(rel.dot(Vector2(-hill.d.y, hill.d.x)))
+			# Full height across the road, then a long gentle side (round 7: the sides fell 3 m in
+			# ~4 m, a 49 degree bank the car's body hit like an invisible wall when crossing at an angle).
+			if absf(a) < 1.0 and c < HILL_SIDE:
+				h += HILL_H * pow(cos(a * PI * 0.5), 2.0) * (1.0 - smoothstep(ROAD_W * 0.5, HILL_SIDE, c))
 	return h
 
 
@@ -500,6 +503,7 @@ static func sky_material() -> ProceduralSkyMaterial:
 func _terrain() -> void:
 	var body := StaticBody3D.new()
 	body.name = "Ground"
+	body.add_to_group(&"ground") # Vehicle: drivable terrain is never mistaken for a wall
 	body.collision_layer = 1
 	body.collision_mask = 0
 	add_child(body)
@@ -863,6 +867,10 @@ func _outer_wall() -> void:
 	var barrier_h := 2.8
 	var corners := _wall_corners()
 	var mb := MeshBuilder.new()
+	# The chain-link: one flat sheet per side, all in one mesh (it was a thin box per side: two
+	# see-through layers to shade and a draw call each).
+	var fence := SurfaceTool.new()
+	fence.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in corners.size():
 		var a: Vector3 = corners[i]
 		var b: Vector3 = corners[(i + 1) % corners.size()]
@@ -908,8 +916,18 @@ func _outer_wall() -> void:
 		mb.box(_m.rib, Vector3(length, 0.12, 0.12), Transform3D(basis, mid + Vector3.UP * (h - 0.1)), 0.0)
 		for wire in 3:
 			mb.box(_m.rib, Vector3(length, 0.03, 0.03), Transform3D(basis, mid + Vector3.UP * (h + 0.15 + wire * 0.22) + out * (0.15 + wire * 0.15)), 0.0)
-		var fence := MeshKit.box(self, Vector3(length, h - barrier_h - 0.2, 0.05), mid + Vector3.UP * (barrier_h + (h - barrier_h) * 0.5), _m.chainlink, Vector3(0, yaw, 0))
-		fence.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var f0 := mid - dir * length * 0.5 + Vector3.UP * (barrier_h + 0.1)
+		var f1 := mid + dir * length * 0.5 + Vector3.UP * (barrier_h + 0.1)
+		var up := Vector3.UP * (h - barrier_h - 0.2)
+		fence.set_normal(-out)
+		for v: Vector3 in [f0, f0 + up, f1 + up, f0, f1 + up, f1]:
+			fence.add_vertex(v)
+	var fence_mi := MeshInstance3D.new()
+	fence_mi.name = "Fence"
+	fence_mi.mesh = fence.commit()
+	fence_mi.material_override = _m.chainlink
+	fence_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(fence_mi)
 	batch_builder(mb, true, 0.8)
 	# Graffiti, Calypso's tournament everywhere (painted on the steel).
 	var tags := [
@@ -990,6 +1008,10 @@ func _tunnels() -> void:
 			var z := lerpf(z0, z1, t)
 			mb.box(_m.yellow_line, Vector3(9.0, 0.05, 1.2), MeshBuilder.at(Vector3(x, PLAT_H + (ROOF_Y - PLAT_H) * t + 0.06, z), Vector3(rad_to_deg(atan((ROOF_Y - PLAT_H) / run)), 0, 0)), 0.0)
 		ramps.append({"foot": Vector3(x, PLAT_H, z0 + 10.0), "top": Vector3(x, ROOF_Y, z1 - 8.0)})
+	# The gap between the two ramps' supports was a closed pit: a car that fell in had no way out
+	# (owner, round 7). Filled to battleground height: a concrete apron in front of the tunnel.
+	var fz0 := -PLAT_B + 0.5
+	MeshKit.solid_box(self, Vector3(18.2, PLAT_H, absf(TUNNEL_Z1 - fz0) + 1.0), Vector3(0, PLAT_H * 0.5, (fz0 + TUNNEL_Z1) * 0.5), _m.concrete_dark)
 	batch_builder(mb)
 	# Teleporter on the roof: straight into the cage with the super health.
 	var tp := Teleporter.new()
@@ -1284,8 +1306,9 @@ func _on_tower_leg_broken(leg: Breakable, by: Vehicle) -> void:
 
 func _hot_dog_stands() -> void:
 	var spots := [
-		[Vector3(-30, 0, 52), 0.0], [Vector3(66, 0, 8), 90.0], [Vector3(-12, 0, -58), 180.0],
-		[Vector3(-118, 0, -8), 90.0], [Vector3(96, 0, 70), -60.0], [Vector3(-60, 0, 108), 0.0],
+		# Round 7: two stands moved off the ramp sides (a 2-3 m slot beside a ramp traps a car).
+		[Vector3(-30, 0, 52), 0.0], [Vector3(80, 0, 14), 90.0], [Vector3(-12, 0, -58), 180.0],
+		[Vector3(-123, 0, 6), 90.0], [Vector3(96, 0, 70), -60.0], [Vector3(-60, 0, 108), 0.0],
 	]
 	for s in spots:
 		var p: Vector3 = s[0]

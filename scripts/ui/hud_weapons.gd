@@ -78,17 +78,30 @@ func _draw() -> void:
 		var c: Color = SPECIAL_GREEN if d.get("special", false) else d.get("color", Color.WHITE)
 		var sel: bool = id == current
 		var chip := Rect2(x, 112, 58, 34)
+		if d.get("special", false):
+			_special_chip(chip, sel, int(player.ammo.get(id, 0)))
+			x += 64.0
+			continue
 		draw_rect(chip, Color(c.r, c.g, c.b, 0.3 if sel else 0.1))
 		draw_rect(chip, Color(c.r, c.g, c.b, 0.9 if sel else 0.35), false, 1.5)
-		if d.get("special", false):
-			_special_emblem(Rect2(chip.position + Vector2(3, 3), Vector2(28, 28)), true)
-		else:
-			_icon(String(d.get("icon", d.get("kind", "missile"))), chip.position + Vector2(17, 17), 10.0, c if sel else c.darkened(0.35))
+		_icon(String(d.get("icon", d.get("kind", "missile"))), chip.position + Vector2(17, 17), 10.0, c if sel else c.darkened(0.35))
 		var count_color := Color(0.92, 0.9, 0.85) if sel else Color(0.6, 0.58, 0.55)
-		if d.get("special", false):
-			count_color = SPECIAL_GREEN if sel else SPECIAL_GREEN.darkened(0.3)
 		draw_string(font, chip.position + Vector2(30, 24), str(player.ammo.get(id, 0)), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, count_color)
 		x += 64.0
+
+
+## The special in the chip row (owner, round 7: it read as two boxes on top of each other): one
+## green plate holding the S and the count, nothing boxed inside it.
+func _special_chip(chip: Rect2, sel: bool, count: int) -> void:
+	var lime := SPECIAL_GREEN if sel else SPECIAL_GREEN.darkened(0.25)
+	draw_rect(chip, Color(0.03, 0.16, 0.06, 0.95 if sel else 0.8))
+	draw_rect(Rect2(chip.position, Vector2(chip.size.x, chip.size.y * 0.45)), Color(0.12, 0.38, 0.14, 0.5 if sel else 0.3)) # top sheen
+	draw_rect(chip, Color(lime.r, lime.g, lime.b, 0.95 if sel else 0.55), false, 1.5)
+	var fs := 24
+	var base := chip.position + Vector2(8, 26)
+	draw_string_outline(font, base, "S", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0.0, 0.08, 0.02))
+	draw_string(font, base, "S", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, lime)
+	draw_string(font, chip.position + Vector2(30, 24), str(count), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, lime)
 
 
 ## The universal SPECIAL emblem (owner, session 6, after a TM Head-On reference: a green S): a dark

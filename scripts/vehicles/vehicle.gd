@@ -58,6 +58,7 @@ const WRECK_SOLID_TIME := 5.0 # wrecks stop blocking the road after this
 const RAM_MIN_CLOSING := 8.0
 const RAM_PER_MS := 0.9
 const RAM_MAX := 45.0
+const RAM_THROW_MAX := 22.0 # m/s: the most a ram throws the car it hits (light cars get more via knockback)
 const RAM_ATTACK := {"front": 1.0, "side": 0.3, "rear": 0.3}
 const RAM_DEFENSE := {"front": 1.0, "side": 1.6, "rear": 1.3}
 const TARGET_RANGE := 120.0
@@ -230,11 +231,27 @@ func setup(id: String, player: bool) -> void:
 	pm.bounce = 0.05
 	physics_material_override = pm
 
+	# The body: a box with its front and back bottom edges cut off like a sled (round 7). A plain box's bottom edge
+	# caught on slopes and curved ground (hill sides, the crater, ramp feet); the contact pushed
+	# straight back like a wall and stopped the car dead: the owner's "invisible walls". The cut
+	# faces lean 45 degrees, so the ground pushes the nose up and over instead.
 	var shape := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	box.size = Vector3(size.x, size.y - BODY_CLEARANCE, size.z)
-	shape.shape = box
-	shape.position = Vector3(0, BODY_CLEARANCE + (size.y - BODY_CLEARANCE) * 0.5, 0)
+	var hull := ConvexPolygonShape3D.new()
+	var hw := size.x * 0.5
+	var hl := size.z * 0.5
+	var bottom := BODY_CLEARANCE
+	var roof := size.y
+	var cut := minf(0.45, (roof - bottom) * 0.4) # how high the chamfers reach
+	var pts := PackedVector3Array()
+	for sx: float in [-1.0, 1.0]:
+		for sz: float in [-1.0, 1.0]:
+			pts.append(Vector3(sx * hw, roof, sz * hl))
+			pts.append(Vector3(sx * hw, bottom + cut, sz * hl))
+			# Only the front and back edges are cut: chamfered sides rode up over the low rails of
+			# the ramps and slid off them.
+			pts.append(Vector3(sx * hw, bottom, sz * (hl - cut)))
+	hull.points = pts
+	shape.shape = hull
 	add_child(shape)
 
 	_visual = Node3D.new()
@@ -600,6 +617,9 @@ func _upside_watch(dt: float, up: Vector3, state: PhysicsDirectBodyState3D, v: V
 		GameFeel.shake(global_position, 0.3)
 	elif flipped and up.y > 0.75 and _grounded:
 		flipped = false
+		# Back on its wheels: stop the roll, or it carries on over onto the other side (round 7).
+		var w0 := state.angular_velocity
+		state.angular_velocity = Vector3(0.0, w0.y * 0.5, 0.0)
 	_recover_kick -= dt
 	if not flipped:
 		return v
@@ -645,8 +665,23 @@ func _contacts(state: PhysicsDirectBodyState3D) -> void:
 				state.linear_velocity = Vector3(_prev_velocity.x, state.linear_velocity.y, _prev_velocity.z) * 0.95
 			elif absf(n.y) < 0.55:
 				_wall_hit(state, n)
-		elif absf(n.y) < 0.55:
+		elif absf(n.y) < 0.55 and not _ground_contact(state, k, other):
 			_wall_hit(state, n)
+
+
+## The terrain touched low on the body where the ground itself is drivable (a slope, a hill side,
+## the crater): not a wall, whatever sideways normal the solver reported (round 7, the owner's
+## invisible walls). The battleground's edge stays a wall: there the ground is a cliff.
+func _ground_contact(state: PhysicsDirectBodyState3D, k: int, other: Object) -> bool:
+	if not (other is Node and (other as Node).is_in_group(&"ground")):
+		return false
+	var at := state.get_contact_collider_position(k)
+	if (state.transform.affine_inverse() * at).y > BODY_CLEARANCE + 0.7:
+		return false # high on the body: a real wall
+	var q := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 1.5, at + Vector3.DOWN * 1.0, 1)
+	q.exclude = [get_rid()]
+	var r := state.get_space_state().intersect_ray(q)
+	return not r.is_empty() and (r.normal as Vector3).y > 0.6 and absf((r.position as Vector3).y - at.y) < 0.7
 
 
 ## Wall hits (owner, session 6): 55-90 degrees into a wall is a slam (the body stops, a small
@@ -730,15 +765,45 @@ func _ram(other: Vehicle, before: Vector3, n: Vector3, at: Vector3) -> void:
 	var to_me := minf(RAM_MAX, base / ratio * float(RAM_ATTACK[its]) * float(RAM_DEFENSE[mine]))
 	last_ram = {"me": mine, "it": its, "to_it": to_it, "to_me": to_me}
 	other.last_ram = {"me": its, "it": mine, "to_it": to_me, "to_me": to_it}
-	GameFeel.play("ram", (global_position + other.global_position) * 0.5 + Vector3.UP, get_parent(), clampf(-14.0 + closing * 0.8, -14.0, 0.0))
 	other.take_damage(to_it, self)
 	take_damage(to_me, other)
 	other.hit_react(-n, to_it)
 	hit_react(n, to_me)
-	# Bodies alone stick together after a hit (little bounce): knock them apart, the loser further.
+	_ram_feel(other, at, n, closing, to_it, to_me)
+	# Knock-back (round 7, owner: "no pushback after they get hit"). The loser is thrown off along the
+	# hit, its tyres let go for a moment (it slides, it doesn't grip back in line), and a hit on its
+	# side or tail spins it. The winner keeps going but loses most of its speed into the hit.
 	var share := to_it / maxf(to_it + to_me, 0.01)
-	other.push(-n * closing * (0.2 + 0.3 * share) * other.knockback + Vector3.UP * 2.0)
-	push(n * closing * (0.2 + 0.3 * (1.0 - share)) * knockback)
+	var travel := Vector3(before.x - other._prev_velocity.x, 0.0, before.z - other._prev_velocity.z)
+	var line := travel.normalized() if travel.length() > 1.0 else -n
+	var heavier := clampf(weight / other.weight, 0.6, 1.6) # a truck throws a bike further than the reverse
+	var throw_it := minf(RAM_THROW_MAX, closing * (0.45 + 0.55 * share) * heavier) * other.knockback
+	other.push(line * throw_it + Vector3.UP * (1.5 + 3.5 * share))
+	other._knock = maxf(other._knock, KNOCK_TIME * (0.4 + 0.6 * share))
+	if its != "front":
+		var lever := other.global_basis.inverse() * (at - other.global_position)
+		other.angular_velocity.y += clampf(lever.z * line.dot(other.global_basis.x) * 0.25, -1.0, 1.0) * (2.0 + 4.0 * share) * other.knockback
+	var throw_me := minf(RAM_THROW_MAX, closing * (0.45 + 0.55 * (1.0 - share)) / heavier) * knockback
+	push(-line * throw_me * 0.6 + Vector3.UP * (1.0 + 2.0 * (1.0 - share)))
+
+
+## What a ram looks and sounds like (round 7, the owner's game-feel videos): sparks sprayed along the
+## hit, metal bits, a white flash, a ring on big ones, a heavy layered crash, a short freeze of time
+## when you are in it, a camera kick, the loser's body dips and both flash.
+func _ram_feel(other: Vehicle, at: Vector3, n: Vector3, closing: float, to_it: float, to_me: float) -> void:
+	var power := clampf((closing - RAM_MIN_CLOSING) / 26.0, 0.0, 1.0)
+	var mid := at + Vector3.UP * 0.4
+	FxKit.crash_burst(get_parent(), mid, -n if to_it >= to_me else n, power)
+	var vol := lerpf(-8.0, 2.0, power)
+	GameFeel.play("ram", mid, get_parent(), vol)
+	GameFeel.play("ram_impact", mid, get_parent(), vol - 2.0, lerpf(1.15, 0.85, power))
+	if power > 0.5:
+		GameFeel.play("explosion_big", mid, get_parent(), -10.0 + 6.0 * power, 0.55) # low thud under it
+	GameFeel.shake(mid, 0.25 + 0.6 * power, 40.0)
+	var loser := other if to_it >= to_me else self
+	loser.squish(loser.global_position - at, 0.03 + 0.04 * power) # elastic dip, a few degrees (never goofy)
+	if (is_player or other.is_player) and power > 0.25:
+		GameFeel.hitstop(get_tree(), 0.05 + 0.07 * power, 0.05)
 
 
 func ram_power() -> float:
@@ -1047,10 +1112,15 @@ func _show_shield(on: bool) -> void:
 ## Headlights on/off (owner: Circle / H). They light the way and show invisible cars in the beam.
 func toggle_headlights() -> void:
 	headlights_on = not headlights_on
+	if headlights_on and model.find_children("HeadlightFx", "Node3D", false, false).is_empty():
+		VehicleFx.headlight_beams(model, stats.get("size", Vector3(2.2, 1.8, 5.0)))
+	VehicleFx.show_headlights(model, headlights_on)
+	# The real light only on HIGH: on the Compatibility renderer a light draws every merged stage mesh
+	# it touches a second time. LOW gets the painted beam instead (round 7).
 	for l in model.find_children("*", "SpotLight3D", true, false):
 		if (l as Node).is_in_group(GraphicsSettings.HEADLIGHT_GROUP):
 			(l as Light3D).set_meta("on", headlights_on)
-			(l as Light3D).visible = headlights_on
+			(l as Light3D).visible = headlights_on and GraphicsSettings.high
 	GameFeel.play("menu_select", global_position + Vector3.UP, self, -12.0, 1.6)
 
 

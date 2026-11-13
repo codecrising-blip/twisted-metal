@@ -331,9 +331,10 @@ func _dumpster_mesh() -> ArrayMesh:
 
 
 func _barriers_and_bins() -> void:
-	# Barrier rows on the battleground (cover to fight around), plus a few along its edge.
+	# Barrier rows on the battleground (cover to fight around), plus a few along its edge. Keep them
+	# well clear of ramp sides and walls: a 2 m slot traps a car (round 7, beside the cage ramp).
 	var rows := [[Vector3(-46, 0, -6), 0.0, 4], [Vector3(36, 0, 22), 90.0, 4], [Vector3(-12, 0, 66), 90.0, 3],
-		[Vector3(64, 0, -6), 0.0, 3], [Vector3(-84, 0, -66), 0.0, 3], [Vector3(-36, 0, 76), 90.0, 3]]
+		[Vector3(78, 0, -16), 0.0, 3], [Vector3(-84, 0, -66), 0.0, 3], [Vector3(-36, 0, 76), 90.0, 3]]
 	for r in rows:
 		var start: Vector3 = r[0]
 		var yaw: float = r[1]

@@ -116,7 +116,8 @@ func _segments(r: Rect2, count: int, value: float, color: Color, trail: float) -
 			c = color.darkened(0.45)
 		elif trail > t0:
 			c = Color(0.85, 0.82, 0.75, 0.75)
-		draw_colored_polygon(poly, c)
+		# A 4-point primitive batches with its neighbours; a polygon is one draw call each (~90 here).
+		draw_primitive(poly, PackedColorArray([c, c, c, c]), PackedVector2Array())
 
 
 func _car_icon(p: Vector2, filled: bool) -> void:

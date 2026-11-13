@@ -65,6 +65,29 @@ func fire_again() -> void:
 	detonate()
 
 
+## Blowing your own Remote right after dropping it (owner, round 7: "it should hurt me, send me flying
+## to the front and mess up my control"). The car has already driven past the blast radius by the
+## time the button is pressed (it drops ~5 m behind, the car moves ~10 m a second-third), so within
+## this window the owner's tail is still in the blast, whatever the distance.
+const OWN_BLAST_TIME := 1.0
+const OWN_BLAST_REACH := 30.0
+
+
+func _own_blast(o: Vehicle, rel: Vector3) -> void:
+	var hit := lerpf(float(def.get("damage", 50.0)), float(def.get("edge_damage", 20.0)), 0.4) * WeaponData.DAMAGE_SCALE
+	o.take_damage(hit, owner_car)
+	o.hit_react(rel, hit)
+	var forward := Vector3(rel.x, 0.0, rel.z)
+	forward = forward.normalized() if forward.length() > 0.3 else o.flat_forward()
+	var heights: Dictionary = def.get("launch", {})
+	var h := float(heights.get(o.stats.get("class", "medium"), 8.4)) * 0.45
+	# Kicked forward and the tail up (it noses over a little), the tyres lose grip for a moment and
+	# the car slews off line.
+	o.blast_knock(forward * float(def.get("push", 24.0)) * 0.7 * (h / 3.8) + Vector3.UP * sqrt(2.0 * Vehicle.GRAVITY * h), 0.0, false)
+	o.angular_velocity += o.global_basis.x * -1.0 + Vector3.UP * randf_range(-1.8, 1.8)
+	o.wobble(0.8)
+
+
 func armed() -> bool:
 	return _t >= float(def.get("arm", 0.8))
 
@@ -103,6 +126,9 @@ func detonate() -> void:
 			continue
 		var rel := o.global_position - global_position
 		var flat := Vector2(rel.x, rel.z).length()
+		if o == owner_car and _t < OWN_BLAST_TIME and flat > radius and flat <= OWN_BLAST_REACH and absf(rel.y) < 6.0 and def.has("launch"):
+			_own_blast(o, rel)
+			continue
 		if flat > radius or absf(rel.y) > 4.0:
 			continue
 		var hit := lerpf(full, edge, clampf((flat - core) / (radius - core), 0.0, 1.0)) * WeaponData.DAMAGE_SCALE

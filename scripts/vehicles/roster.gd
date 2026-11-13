@@ -16,10 +16,10 @@ extends RefCounted
 
 ## One knob for all health (the owner says "longer fights": raise it a little).
 const HEALTH_SCALE := 1.0
-## Round 6 (owner, after the physical car): every car 1.2x faster (top speed, pick-up, reverse) and
-## handbrake drifts 1.15x stronger (sharper drift turn, looser drift grip), same step for every class.
-const SPEED_SCALE := 1.2
-const DRIFT_SCALE := 1.15
+## Round 7 (owner: "still slow, even Outlaw"): every car 1.4x the round-5 speed (top speed, pick-up,
+## reverse) and handbrake drifts 1.2x stronger (sharper drift turn, looser drift grip), same for every class.
+const SPEED_SCALE := 1.4
+const DRIFT_SCALE := 1.2
 
 const MASS := {"light": 1.0, "medium": 1.4, "heavy": 2.0, "super": 2.8}
 ## How hard a car is pushed by hits, per mass class.

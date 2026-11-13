@@ -54,35 +54,40 @@ const MOUSE := {
 	"fire_weapon": MOUSE_BUTTON_RIGHT,
 }
 
-## PlayStation pad (owner, play-test 1; Godot's names: A = Cross, B = Circle, X = Square, Y = Triangle).
-## Square drives (double-tap and hold = turbo), Cross handbrake, Circle headlights, Triangle look back,
-## R1/L1 switch weapon, R2 fire weapon, L2 machine guns, R3 camera mode. D-pad and the left stick
-## steer, up drives, down reverses, and both enter the energy combos.
+## PlayStation pad (owner, round 7; Godot's names: A = Cross, B = Circle, X = Square, Y = Triangle,
+## BACK = Create, START = Options, LEFT_STICK = L3, RIGHT_STICK = R3).
+##   Square gas (double-tap and hold = turbo)    Triangle reverse (double-tap and hold = reverse turbo)
+##   Cross and Circle handbrake (drift going forward or backward)    L3 headlights    R3 rear view
+##   (press again to look forward)    R2 machine guns    L2 fire weapon    R1/L1 switch weapon
+##   Touchpad / Options pause and resume    Create camera mode (in the pause menu: restart)
+## Godot 4.3 reads the touchpad as one button (no left / right half), so the camera sits on Create,
+## the button just left of the touchpad. D-pad and the left stick steer, up drives, down reverses,
+## and both enter the energy combos.
 const PAD_BUTTONS := {
 	"accelerate": [JOY_BUTTON_X, JOY_BUTTON_DPAD_UP],
 	"pad_gas": [JOY_BUTTON_X], # Square alone: its double-tap is turbo
-	"brake": [JOY_BUTTON_DPAD_DOWN],
+	"brake": [JOY_BUTTON_Y, JOY_BUTTON_DPAD_DOWN],
+	"pad_reverse": [JOY_BUTTON_Y], # Triangle alone: its double-tap is turbo in reverse
 	"steer_left": [JOY_BUTTON_DPAD_LEFT],
 	"steer_right": [JOY_BUTTON_DPAD_RIGHT],
-	"handbrake": [JOY_BUTTON_A],
-	"headlights": [JOY_BUTTON_B],
-	"look_back": [JOY_BUTTON_Y],
+	"handbrake": [JOY_BUTTON_A, JOY_BUTTON_B],
+	"headlights": [JOY_BUTTON_LEFT_STICK],
+	"rear_view": [JOY_BUTTON_RIGHT_STICK], # toggle: look back until pressed again
 	"weapon_prev": [JOY_BUTTON_LEFT_SHOULDER],
 	"weapon_next": [JOY_BUTTON_RIGHT_SHOULDER],
-	"camera_mode": [JOY_BUTTON_RIGHT_STICK],
+	"camera_mode": [JOY_BUTTON_BACK],
 	"dir_up": [JOY_BUTTON_DPAD_UP],
 	"dir_down": [JOY_BUTTON_DPAD_DOWN],
 	"dir_left": [JOY_BUTTON_DPAD_LEFT],
 	"dir_right": [JOY_BUTTON_DPAD_RIGHT],
-	"pause": [JOY_BUTTON_START],
-	"restart": [JOY_BUTTON_BACK],
-	"toggle_help": [JOY_BUTTON_TOUCHPAD],
+	"pause": [JOY_BUTTON_START, JOY_BUTTON_TOUCHPAD],
+	"restart": [JOY_BUTTON_BACK], # only read while paused or after the match
 }
 
 # action -> [[axis, direction], ...]
 const PAD_AXES := {
-	"fire_weapon": [[JOY_AXIS_TRIGGER_RIGHT, 1.0]],
-	"fire_guns": [[JOY_AXIS_TRIGGER_LEFT, 1.0]],
+	"fire_weapon": [[JOY_AXIS_TRIGGER_LEFT, 1.0]],
+	"fire_guns": [[JOY_AXIS_TRIGGER_RIGHT, 1.0]],
 	"accelerate": [[JOY_AXIS_LEFT_Y, -1.0]],
 	"brake": [[JOY_AXIS_LEFT_Y, 1.0]],
 	"steer_left": [[JOY_AXIS_LEFT_X, -1.0]],

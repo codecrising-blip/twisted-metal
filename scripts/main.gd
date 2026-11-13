@@ -284,7 +284,7 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 			state = "lost"
 			hud.game_over = true
 			hud.set_lives(0)
-			hud.show_message("GAME OVER", who + "\nNo lives left.  ENTER to try again")
+			hud.show_message("GAME OVER", who + "\nNo lives left.  ENTER / CREATE to try again")
 			return
 		hud.set_lives(lives - 1)
 		_respawn_timer = RESPAWN_DELAY
@@ -297,7 +297,7 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 		hud.game_over = true
 		_respawn_timer = -1.0
 		hud.set_countdown(-1)
-		hud.show_message("%s WINS" % player.display_name.to_upper(), "%s is quiet again.\nENTER to play again" % arena.title.capitalize())
+		hud.show_message("%s WINS" % player.display_name.to_upper(), "%s is quiet again.\nENTER / CREATE to play again" % arena.title.capitalize())
 
 
 func _restart() -> void:
