@@ -23,6 +23,17 @@ All files: mono Ogg Vorbis, peak -1 dB, converted from the owner's TM1 / TM2 / T
 | `crash_1..4` | wall slams and rams (TM2) |
 | `ram_impact` | heavy layer under every ram (TM 2012 power-ram impact, round 7) |
 | `low_health_beep` | the target bar's heartbeat beep under 30% health (generated, round 7) |
+| `glass_shatter_1..2` | tunnel glass breaking (AI-generated with Higgsfield / Mirelo SFX, round 8, trimmed so the crash is at 0) |
+| `ice_break` | the freeze ice bursting off a car (generated, round 8) |
+| `wood_break` | hot dog stand smashed (generated, round 8) |
+| `metal_fall` | sign letters, tower legs, street lights snapping and slamming down (generated, round 8) |
+| `palm_break` | a palm trunk snapping (generated, round 8) |
+| `land_thud` | a car landing after a flight; low-pitched for things falling over (generated, round 8) |
+| `freeze_hit` / `freeze_impact` | the car glazing over / the freeze shot's ice burst (TM 2012 candidates, round 8) |
+| `sat_lock` / `sat_tick` / `mine_arm` | SAT lock tone, SAT ring ticks, mine armed blip (synthesized beeps, round 8) |
+
+**Peaks:** `python3 tests/sound_peaks.py` writes `scripts/fx/sound_peaks.gd` (each file's loudest moment). Run it after
+adding or replacing any sound: `GameFeel.play(..., sync = true)` uses it to put that moment on the impact frame.
 | `death_male`, `death_female` | a driver dies (`"female": true` in `Roster`) |
 | `ignite`, `fire_loop` | a car catches fire; fire pools and the pit of fire |
 | `mine_drop` | the Remote mine is planted (TM4 SFX 37, owner's pick) |

@@ -111,7 +111,7 @@ static func smoke(scale := 1.0, amount := 20) -> CPUParticles3D:
 
 
 ## One-shot explosion: fireball, smoke, sparks and a light flash. Frees itself.
-static func explosion(parent: Node, pos: Vector3, size := 1.0, tint := Color(1.0, 0.5, 0.15)) -> void:
+static func explosion(parent: Node, pos: Vector3, size := 1.0, tint := Color(1.0, 0.5, 0.15), sound := true) -> void:
 	if parent == null or not parent.is_inside_tree():
 		return
 	var root := Node3D.new()
@@ -198,7 +198,8 @@ static func explosion(parent: Node, pos: Vector3, size := 1.0, tint := Color(1.0
 	if size >= 1.0:
 		GameFeel.scorch(parent, pos, 1.2 * size)
 	GameFeel.shake(pos, 0.25 * size)
-	GameFeel.play("explosion_big" if size >= 2.0 else "explosion", pos, parent)
+	if sound: # synced: the boom's loudest moment lands with the flash (some files swell for half a second)
+		GameFeel.play("explosion_big" if size >= 2.0 else "explosion", pos, parent, 0.0, 1.0, true)
 	var tw := root.create_tween()
 	if GraphicsSettings.high: # a moving light per explosion is too costly on LOW: the flash does it
 		var light := OmniLight3D.new()
@@ -300,3 +301,214 @@ static func crash_burst(parent: Node, pos: Vector3, normal: Vector3, power: floa
 	var tw := root.create_tween()
 	tw.tween_interval(1.6)
 	tw.tween_callback(root.queue_free)
+
+
+## A short puff of grey launch smoke that drifts and fades (a missile leaving its tube).
+static func puff(parent: Node, pos: Vector3, size := 0.4) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var p := smoke(size, 6)
+	p.color_ramp = _ramp([Color(0.8, 0.78, 0.74, 0.0), Color(0.78, 0.76, 0.72, 0.4), Color(0.7, 0.68, 0.65, 0.0)]) # pale dust
+	p.one_shot = true
+	p.explosiveness = 0.85
+	p.lifetime = 0.9
+	p.spread = 60.0
+	p.initial_velocity_min = 0.5
+	p.initial_velocity_max = 2.0
+	parent.add_child(p)
+	p.global_position = pos
+	p.emitting = true
+	var tw := p.create_tween()
+	tw.tween_interval(1.2)
+	tw.tween_callback(p.queue_free)
+
+
+## Aftermath of a big blast: a tall column of dark smoke with glowing embers rising in it, for a few
+## seconds (it lingers instead of vanishing with the flash).
+static func smoke_column(parent: Node, pos: Vector3, size := 1.0) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var root := Node3D.new()
+	parent.add_child(root)
+	root.global_position = pos
+	var sm := smoke(size * 1.6, 12)
+	sm.one_shot = true
+	sm.explosiveness = 0.5
+	sm.lifetime = 3.2
+	sm.spread = 12.0
+	sm.gravity = Vector3(0.3, 3.0, 0)
+	sm.initial_velocity_min = 2.0
+	sm.initial_velocity_max = 5.0
+	root.add_child(sm)
+	sm.emitting = true
+	var em := fire(size * 0.4, 10)
+	em.one_shot = true
+	em.explosiveness = 0.6
+	em.lifetime = 1.8
+	em.spread = 35.0
+	em.gravity = Vector3(0, 4.0, 0)
+	em.initial_velocity_min = 3.0
+	em.initial_velocity_max = 7.0
+	em.scale_amount_min = 0.05
+	em.scale_amount_max = 0.12
+	root.add_child(em)
+	em.emitting = true
+	var tw := root.create_tween()
+	tw.tween_interval(4.0)
+	tw.tween_callback(root.queue_free)
+
+
+static var _shard_mesh: PrismMesh
+static var _splinter_mesh: BoxMesh
+static var _shard_mats := {}
+
+
+## See-through glinting material for shards (glass, ice), one per tint.
+static func _shard_material(tint: Color) -> StandardMaterial3D:
+	var key := tint.to_html()
+	if not _shard_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(tint.r, tint.g, tint.b, 0.8)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.metallic = 0.6
+		m.roughness = 0.08
+		m.emission_enabled = true
+		m.emission = tint * 0.45 # they have to read against a bright dusk sky and pale pavers
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		m.vertex_color_use_as_albedo = true # the particles' colour ramp fades them out
+		_shard_mats[key] = m
+	return _shard_mats[key]
+
+
+## Glass (or wood) breaking (juice guide): pieces fly out of the whole panel along the car that went
+## through it, spinning and falling, plus a glitter of tiny bright glints for glass. extents = half
+## size of the panel in world axes.
+static func shatter(parent: Node, center: Vector3, extents: Vector3, dir: Vector3, speed: float, tint: Color, glass: bool) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var root := Node3D.new()
+	parent.add_child(root)
+	root.global_position = center
+	var p := CPUParticles3D.new()
+	if glass:
+		if _shard_mesh == null:
+			_shard_mesh = PrismMesh.new() # a thin triangle: a shard
+			_shard_mesh.size = Vector3(0.7, 0.95, 0.03)
+		p.mesh = _shard_mesh
+		p.material_override = _shard_material(tint)
+	else:
+		if _splinter_mesh == null:
+			_splinter_mesh = BoxMesh.new() # a long thin plank splinter
+			_splinter_mesh.size = Vector3(0.1, 0.06, 0.7)
+		p.mesh = _splinter_mesh
+		p.material_override = MeshKit.mat(tint, 0.8)
+	p.one_shot = true
+	p.explosiveness = 0.95
+	p.amount = int((44 if glass else 26) * GraphicsSettings.particles())
+	p.lifetime = 1.5
+	p.local_coords = false
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+	p.emission_box_extents = extents.abs() + Vector3.ONE * 0.1
+	p.direction = (dir + Vector3.UP * 0.35).normalized()
+	p.spread = 40.0
+	p.gravity = Vector3(0, -26, 0)
+	p.initial_velocity_min = 4.0 + speed * 0.25
+	p.initial_velocity_max = 9.0 + speed * 0.55
+	p.angular_velocity_min = -720.0
+	p.angular_velocity_max = 720.0
+	p.particle_flag_rotate_y = true
+	p.scale_amount_min = 0.5
+	p.scale_amount_max = 1.6
+	# Particles don't collide: fade out about when they reach the ground; the litter takes over.
+	p.lifetime = 0.9
+	p.color_ramp = _ramp([Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	root.add_child(p)
+	p.emitting = true
+	if glass: # glints: tiny white sparkles that catch the light for a moment
+		var g := CPUParticles3D.new()
+		g.mesh = particle_mesh(true)
+		g.one_shot = true
+		g.explosiveness = 0.9
+		g.amount = int(24 * GraphicsSettings.particles())
+		g.lifetime = 0.6
+		g.local_coords = false
+		g.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		g.emission_box_extents = extents.abs()
+		g.direction = p.direction
+		g.spread = 60.0
+		g.gravity = Vector3(0, -12, 0)
+		g.initial_velocity_min = 3.0
+		g.initial_velocity_max = 9.0 + speed * 0.3
+		g.scale_amount_min = 0.08
+		g.scale_amount_max = 0.2
+		g.color_ramp = _ramp([Color(1, 1, 1, 1), Color(0.8, 0.95, 1.0, 0.8), Color(0.7, 0.9, 1.0, 0)])
+		root.add_child(g)
+		g.emitting = true
+	var tw := root.create_tween()
+	tw.tween_interval(1.8)
+	tw.tween_callback(root.queue_free)
+
+
+## Aftermath of glass: a scatter of flat shards left on the ground past the panel (one mesh), glinting,
+## that fade away after a while instead of vanishing.
+static func shard_litter(parent: Node, center: Vector3, dir: Vector3, tint: Color, count := 14) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	flat = flat.normalized() if flat.length() > 0.1 else Vector3.FORWARD
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_normal(Vector3.UP)
+	var base := Specials.ground_below(parent, center + Vector3.UP)
+	for k in count:
+		var c := base + flat * randf_range(0.5, 5.5) + flat.cross(Vector3.UP) * randf_range(-2.5, 2.5)
+		c.y = Specials.ground_below(parent, c + Vector3.UP * 2.0).y + 0.03
+		var a := randf() * TAU
+		var r := randf_range(0.18, 0.42)
+		for j: int in [0, 2, 1]: # clockwise seen from above
+			var ang := a + j * TAU / 3.0 + randf_range(-0.4, 0.4)
+			st.add_vertex(c - base + Vector3(cos(ang), 0, sin(ang)) * r)
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(tint.r, tint.g, tint.b, 0.85)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.metallic = 0.6
+	m.roughness = 0.05
+	m.emission_enabled = true
+	m.emission = tint * 0.5
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	mi.global_position = base
+	var tw := mi.create_tween()
+	tw.tween_interval(9.0)
+	tw.tween_property(m, "albedo_color:a", 0.0, 2.0)
+	tw.tween_callback(mi.queue_free)
+
+
+## A low ring of dust kicked up along the ground (a landing, something heavy falling over).
+static func dust_ring(parent: Node, pos: Vector3, size := 1.0) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var p := smoke(size, 10)
+	p.one_shot = true
+	p.explosiveness = 0.95
+	p.lifetime = 1.1
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_RING
+	p.emission_ring_axis = Vector3.UP
+	p.emission_ring_radius = 1.2 * size
+	p.emission_ring_inner_radius = 0.8 * size
+	p.emission_ring_height = 0.1
+	p.direction = Vector3.UP
+	p.spread = 80.0
+	p.gravity = Vector3(0, 0.6, 0)
+	p.initial_velocity_min = 2.0 * size
+	p.initial_velocity_max = 4.5 * size
+	p.color_ramp = _ramp([Color(0.55, 0.5, 0.42, 0.0), Color(0.5, 0.46, 0.4, 0.45), Color(0.45, 0.42, 0.38, 0.0)])
+	parent.add_child(p)
+	p.global_position = pos + Vector3.UP * 0.2
+	p.emitting = true
+	var tw := p.create_tween()
+	tw.tween_interval(1.4)
+	tw.tween_callback(p.queue_free)

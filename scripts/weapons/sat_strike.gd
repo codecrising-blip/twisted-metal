@@ -17,7 +17,9 @@ var _guide: MeshInstance3D
 var _beam: MeshInstance3D
 var _struck := false
 var _scan: AudioStreamPlayer3D
-var _warned := false
+var _incoming: AudioStreamPlayer3D
+var _ring_was_on := false
+var _tell: MeshInstance3D
 
 
 static func start(v: Vehicle, _id: String, d: Dictionary) -> SatStrike:
@@ -29,6 +31,7 @@ static func start(v: Vehicle, _id: String, d: Dictionary) -> SatStrike:
 	v.get_parent().add_child(s)
 	s.global_position = zone_point(v, d)
 	GameFeel.play("sat_launch", v.global_position + Vector3.UP * 2.0, v.get_parent(), 0.0, 0.85) # off it goes, up to the satellite
+	GameFeel.play("sat_lock", v.global_position + Vector3.UP * 2.0, v.get_parent(), -4.0) # lock tone: the zone is yours
 	if v.is_player:
 		v.notice.emit(v, "SAT LOCKED - KEEP THEM IN FRONT")
 	return s
@@ -66,14 +69,26 @@ func _physics_process(delta: float) -> void:
 	if not _struck and is_instance_valid(shooter) and not shooter.is_dead:
 		global_position = global_position.lerp(zone_point(shooter, def), minf(1.0, 20.0 * delta))
 	if not _struck:
-		# Pulses faster as the strike gets close.
+		# Tell (juice guide): the ring pulses faster as the strike gets close, a tick on every pulse,
+		# rising in pitch; the incoming whistle starts so its loudest moment meets the beam; a thin
+		# white column flickers down just before it.
 		var left := _delay - _t
 		var rate := 2.0 if left > 2.0 else (5.0 if left > 0.8 else 10.0)
-		_ring.visible = fmod(_t * rate, 1.0) < 0.6
+		var on := fmod(_t * rate, 1.0) < 0.6
+		_ring.visible = on
+		if on and not _ring_was_on:
+			GameFeel.play("sat_tick", global_position + Vector3.UP, get_parent(), -6.0, lerpf(1.35, 0.9, clampf(left / _delay, 0.0, 1.0)))
+		_ring_was_on = on
 		_disc.scale = Vector3.ONE * (1.0 - clampf(left / _delay, 0.0, 1.0) * 0.6)
-		if not _warned and left < 1.4:
-			_warned = true
-			GameFeel.play("sat_incoming", global_position + Vector3.UP * 4.0, get_parent(), 2.0)
+		if _incoming == null and left <= GameFeel.peak_of("sat_incoming"):
+			_incoming = GameFeel.play("sat_incoming", global_position + Vector3.UP * 4.0, get_parent(), 2.0)
+			if _incoming:
+				_incoming.pitch_scale = 1.0 # exact: its peak has to meet the beam
+				_incoming.play(maxf(0.0, GameFeel.peak_of("sat_incoming") - left))
+		if left <= TELL_TIME and _tell == null:
+			_show_tell()
+		if _tell:
+			_tell.visible = fmod(_t * 30.0, 1.0) < 0.7
 		if _t >= _delay:
 			_strike()
 		return
@@ -84,14 +99,33 @@ func _physics_process(delta: float) -> void:
 		queue_free()
 
 
+const TELL_TIME := 0.15 # the thin white column before the beam
+
+
+func _show_tell() -> void:
+	var white := MeshKit.emissive(Color(1.0, 1.0, 1.0), 6.0)
+	white.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_tell = MeshKit.cylinder(self, 0.35, 200.0, Vector3.UP * 100.0, white, Vector3.ZERO, 8)
+	_tell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
 func _strike() -> void:
 	_struck = true
 	if _scan:
 		_scan.stop()
-	# The strike (owner, round 6: "needs a bigger sound"): the beam, a big blast and a deep boom under it.
-	GameFeel.play("sat_strike", global_position + Vector3.UP * 2.0, get_parent(), 6.0)
-	GameFeel.play("explosion_big", global_position + Vector3.UP, get_parent(), 6.0, 0.8)
-	GameFeel.play("explosion_big", global_position + Vector3.UP, get_parent(), 4.0, 0.55)
+	if is_instance_valid(_incoming): # the whistle ends where the beam lands
+		var tw := _incoming.create_tween()
+		tw.tween_property(_incoming, "volume_db", -40.0, 0.08)
+		tw.tween_callback(_incoming.queue_free)
+	if _tell:
+		_tell.queue_free()
+		_tell = null
+	# Impact (owner, round 6 "bigger", round 8 "in sync"): every layer synced so the loudest moment of
+	# each lands on this frame with the flash: the beam, a hard blast and a deep boom under it.
+	var at := global_position + Vector3.UP
+	GameFeel.play("sat_strike", at + Vector3.UP, get_parent(), 6.0, 1.0, true)
+	GameFeel.play("explosion_big_3", at, get_parent(), 5.0, 0.85, true)
+	GameFeel.play("explosion_big_4", at, get_parent(), 3.0, 0.55, true)
 	_ring.visible = false
 	_disc.visible = false
 	_guide.visible = false
@@ -100,10 +134,18 @@ func _strike() -> void:
 	_beam = MeshKit.cylinder(self, radius * 0.7, 200.0, Vector3.UP * 100.0, glow, Vector3.ZERO, 16)
 	_beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var world := get_parent()
-	FxKit.explosion(world, global_position + Vector3.UP, 3.2, Color(0.7, 0.8, 1.0))
+	FxKit.explosion(world, global_position + Vector3.UP, 3.2, Color(0.7, 0.8, 1.0), false)
+	GameFeel.flash(world, global_position + Vector3.UP * 3.0, radius * 1.4, Color(0.85, 0.92, 1.0), 0.2)
+	GameFeel.shockwave(world, global_position, radius * 3.0, Color(0.7, 0.85, 1.0))
+	FxKit.smoke_column(world, global_position, 1.6)
+	var hit_player := is_instance_valid(shooter) and shooter.is_player
 	for o in Specials.cars_near(world, global_position + Vector3.UP, radius + 1.0, null):
 		if o.is_player:
+			hit_player = true
 			GameFeel.flash_bang(float(def.get("flashbang", 1.0)))
 			if GameFeel.camera:
 				GameFeel.camera.add_shake(float(def.get("shake", 1.0)))
+	GameFeel.shake(global_position, 0.6, 90.0)
+	if hit_player:
+		GameFeel.hitstop(get_tree(), 0.1, 0.05)
 	Specials.blast(world, global_position + Vector3.UP, radius, float(def.get("damage", 112.0)), shooter)

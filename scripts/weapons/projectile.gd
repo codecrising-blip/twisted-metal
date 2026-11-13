@@ -43,12 +43,20 @@ static func spawn(parent: Node, id: String, from: Vector3, dir: Vector3, by: Veh
 	if p.def.get("kind", "bullet") != "bullet":
 		var col: Color = p.def.get("color", Color(1, 0.6, 0.2))
 		var big := float(p.def.get("damage", 10.0)) >= 40.0
-		GameFeel.muzzle(parent, from, col, 1.6 if big else (0.5 if p.def.get("small", false) else 1.0))
-		GameFeel.play("launch_" + id, from, parent)
-		if big and is_instance_valid(by): # a heavy shot kicks the car back a little
-			by.push(-p.direction * 1.5)
-			if by.is_player:
-				GameFeel.shake(from, 0.18)
+		# Release beat (juice guide): a pop bigger than the missile, a puff of launch smoke, the
+		# launch sound with its peak on this frame, and the car kicks back and dips a little.
+		var small: bool = p.def.get("small", false)
+		GameFeel.muzzle(parent, from, col, 1.6 if big else (0.5 if small else 1.0))
+		GameFeel.play("launch_" + id, from, parent, 0.0, 1.0, true)
+		if not small:
+			FxKit.puff(parent, from - p.direction * 0.6, 0.5 if big else 0.35)
+		if is_instance_valid(by):
+			var kick := 1.5 if big else (0.0 if small else 0.6)
+			if kick > 0.0:
+				by.push(-p.direction * kick)
+				by.squish(p.direction, 0.015 if big else 0.008)
+			if by.is_player and not small:
+				GameFeel.shake(from, 0.18 if big else 0.08)
 	spawned_total += 1
 	return p
 
@@ -278,8 +286,11 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 		FxKit.spark(world, pos, normal)
 		if collider != null and not (collider is Vehicle) and randf() < 0.25:
 			GameFeel.play("ricochet", pos, world, -12.0) # TM 2012 ricochets off walls and ground
-	elif kind == "freeze":
-		FxKit.explosion(world, pos, 0.6, Color(0.5, 0.85, 1.0))
+	elif kind == "freeze": # an ice burst, not a fireball: crystals, frost mist, a cold flash
+		GameFeel.play("freeze_impact", pos, world, -2.0, 1.0, true)
+		GameFeel.flash(world, pos, 1.6, Color(0.75, 0.92, 1.0), 0.08)
+		FxKit.shatter(world, pos, Vector3.ONE * 0.4, normal, 2.0, Color(0.7, 0.92, 1.0), true)
+		FxKit.puff(world, pos, 0.5)
 	elif kind == "cone":
 		FxKit.explosion(world, pos, 1.2 + dmg / 60.0, Color(1.0, 0.5, 0.15))
 	elif kind != "gas":

@@ -10,6 +10,7 @@ var def := {}
 var _t := 0.0
 var _done := false
 var _lamp: MeshInstance3D
+var _armed_told := false
 
 
 static func drop(v: Vehicle, d: Dictionary) -> Mine:
@@ -100,6 +101,10 @@ func _physics_process(delta: float) -> void:
 		return
 	if not armed():
 		return
+	if not _armed_told: # tell beat: a blip and a flash of the lamp the moment it goes live
+		_armed_told = true
+		GameFeel.play("mine_arm", global_position + Vector3.UP * 0.4, get_parent(), -8.0)
+		GameFeel.flash(get_parent(), global_position + Vector3.UP * 0.35, 0.5, Color(1.0, 0.2, 0.1), 0.1)
 	var reach: float = def.get("trigger", 2.4)
 	for node in get_tree().get_nodes_in_group("vehicles"):
 		var o := node as Vehicle
@@ -149,6 +154,13 @@ func detonate() -> void:
 			var side := away * float(def.get("push", 24.0)) * (0.35 + 0.65 * k) * (h / 8.4)
 			o.blast_knock(side + Vector3.UP * up, 0.15 + 0.35 * k, false)
 	FxKit.explosion(world, global_position + Vector3.UP * 0.5, float(def.get("blast_size", 2.8)), Color(1.0, 0.45, 0.12))
+	var player_in := is_instance_valid(owner_car) and owner_car.is_player and global_position.distance_to(owner_car.global_position) < 40.0
+	for node in world.get_tree().get_nodes_in_group("vehicles"):
+		var o := node as Vehicle
+		if o.is_player and o.global_position.distance_to(global_position) < radius:
+			player_in = true
+	if player_in: # impact beat: a blink of hit-stop when you are in it or set it off nearby
+		GameFeel.hitstop(world.get_tree(), 0.07, 0.05)
 	if is_instance_valid(owner_car) and owner_car.live_special() == self:
 		owner_car.set_live_special(null)
 	queue_free()

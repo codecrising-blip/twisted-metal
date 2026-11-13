@@ -166,6 +166,8 @@ var _energy_mines: Array = []
 var _shield_fx: MeshInstance3D
 var _shield_hum: AudioStreamPlayer3D
 var _headlight_t := 0.0
+var _air_t := 0.0 # time in the air this flight
+var _air_vy := 0.0 # fastest fall this flight (negative)
 var _invis_shown := -1.0 # last transparency written to the meshes
 var _charge_beeps := 0
 var _charge_hum: AudioStreamPlayer3D
@@ -470,6 +472,15 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_knock -= dt
 	var upright := up.y > 0.45
 	_grounded = touching >= 2 and upright
+	# Landing (juice guide, speed): after a real flight a thump, a ring of dust and the body dips.
+	if not _grounded:
+		_air_t += dt
+		_air_vy = minf(_air_vy, v.y)
+	else:
+		if _air_t > 0.35 and _air_vy < -7.0:
+			call_deferred("_landed", -_air_vy)
+		_air_t = 0.0
+		_air_vy = 0.0
 	_ground_n = (normal_sum / maxf(1.0, touching)).normalized() if touching > 0 else Vector3.UP
 	v = _upside_watch(dt, up, state, v)
 	if _grounded:
@@ -638,6 +649,17 @@ func _upside_watch(dt: float, up: Vector3, state: PhysicsDirectBodyState3D, v: V
 	return v
 
 
+func _landed(fall_speed: float) -> void:
+	if is_dead:
+		return
+	var k := clampf((fall_speed - 7.0) / 18.0, 0.0, 1.0)
+	GameFeel.play("land_thud", global_position + Vector3.UP * 0.5, get_parent(), lerpf(-12.0, 0.0, k), lerpf(1.15, 0.85, k) / sqrt(weight), true)
+	FxKit.dust_ring(get_parent(), global_position, 0.6 + 0.8 * k)
+	_jolt += Vector3(0.0, -0.08 - 0.14 * k, 0.0)
+	if is_player:
+		GameFeel.shake(global_position, 0.1 + 0.35 * k, 30.0)
+
+
 func is_on_floor() -> bool:
 	return _grounded
 
@@ -796,9 +818,9 @@ func _ram_feel(other: Vehicle, at: Vector3, n: Vector3, closing: float, to_it: f
 	FxKit.crash_burst(get_parent(), mid, -n if to_it >= to_me else n, power)
 	var vol := lerpf(-8.0, 2.0, power)
 	GameFeel.play("ram", mid, get_parent(), vol)
-	GameFeel.play("ram_impact", mid, get_parent(), vol - 2.0, lerpf(1.15, 0.85, power))
+	GameFeel.play("ram_impact", mid, get_parent(), vol - 2.0, lerpf(1.15, 0.85, power), true) # synced: its peak is 0.44 s in
 	if power > 0.5:
-		GameFeel.play("explosion_big", mid, get_parent(), -10.0 + 6.0 * power, 0.55) # low thud under it
+		GameFeel.play("explosion_big", mid, get_parent(), -10.0 + 6.0 * power, 0.55, true) # low thud under it
 	GameFeel.shake(mid, 0.25 + 0.6 * power, 40.0)
 	var loser := other if to_it >= to_me else self
 	loser.squish(loser.global_position - at, 0.03 + 0.04 * power) # elastic dip, a few degrees (never goofy)
@@ -1445,8 +1467,7 @@ func take_damage(amount: float, attacker: Vehicle = null) -> void:
 	if attacker and attacker != self:
 		last_attacker = attacker
 	if frozen_time > 0.0 and amount >= FREEZE_BREAK:
-		_unfreeze()
-		FxKit.explosion(get_parent(), global_position + Vector3.UP, 0.7, Color(0.6, 0.9, 1.0))
+		_unfreeze() # the ice is smashed open (shards and the crash come from _unfreeze)
 	damaged.emit(self, amount, attacker)
 	_update_damage_fx()
 	if health <= 0.0:
@@ -1466,15 +1487,32 @@ func heal(amount: float) -> void:
 func freeze_for(seconds: float) -> bool:
 	if is_dead or grit_time > 0.0 or invulnerable_time > 0.0 or shield_time > 0.0:
 		return false
+	var was := frozen_time > 0.0
 	frozen_time = maxf(frozen_time, seconds)
 	_ice.visible = true
+	if not was:
+		# Impact beat on the car (juice guide): the TM freeze crackle and the ice growing over the body
+		# with a little overshoot, white flash under it.
+		GameFeel.play("freeze_hit", global_position + Vector3.UP, get_parent(), 0.0, 1.0, true)
+		_ice.scale = Vector3.ONE * 0.7
+		var tw := _ice.create_tween()
+		tw.tween_property(_ice, "scale", Vector3.ONE * 1.06, 0.12).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_ice, "scale", Vector3.ONE, 0.1)
+		hit_react(Vector3.ZERO, 10.0)
 	return true
 
 
+## The ice comes off (time's up, or smashed by a hit): it bursts into shards with an icy crash.
 func _unfreeze() -> void:
 	frozen_time = 0.0
 	_ice.visible = false
 	grit_time = GRIT_TIME
+	var size: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
+	var c := global_position + global_basis.y * size.y * 0.5
+	GameFeel.play("ice_break", c, get_parent(), 0.0, 1.0, true)
+	FxKit.shatter(get_parent(), c, (global_basis * (size * 0.5)).abs(), Vector3.UP, 4.0, Color(0.75, 0.95, 1.0), true)
+	GameFeel.flash(get_parent(), c, 2.0, Color(0.8, 0.95, 1.0), 0.08)
+	FxKit.puff(get_parent(), c, 0.6)
 
 
 ## Burning: 3 damage a second. A new flame renews the timer, it doesn't stack.

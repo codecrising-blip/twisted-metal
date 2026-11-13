@@ -84,16 +84,18 @@ static func streams(name: String) -> Array:
 
 ## A sound by name from res://audio/sfx/<name>.ogg, if the owner has dropped it in. The pitch
 ## is nudged every time so repeats don't sound fake. Names: see audio/sfx/README.md.
-static func play(name: String, pos: Vector3, parent: Node, volume_db := 0.0, pitch := 1.0) -> void:
+## sync (juice guide, section 6): the file is started just before its loudest moment, so that
+## moment lands on this frame (an impact) instead of a fraction of a second later. Returns the
+## player (null when the file is missing) so a build-up sound can be cut at the impact.
+static func play(name: String, pos: Vector3, parent: Node, volume_db := 0.0, pitch := 1.0, sync := false) -> AudioStreamPlayer3D:
 	if parent == null or not parent.is_inside_tree():
-		return
+		return null
 	if SOUND_ALIAS.has(name) and streams(name).is_empty():
 		var a: Array = SOUND_ALIAS[name]
-		play(a[0], pos, parent, volume_db + float(a[2]), pitch * float(a[1]))
-		return
+		return play(a[0], pos, parent, volume_db + float(a[2]), pitch * float(a[1]), sync)
 	var list := streams(name)
 	if list.is_empty():
-		return
+		return null
 	var p := AudioStreamPlayer3D.new()
 	p.bus = AudioSettings.SFX_BUS
 	p.stream = list.pick_random()
@@ -103,7 +105,44 @@ static func play(name: String, pos: Vector3, parent: Node, volume_db := 0.0, pit
 	parent.add_child(p)
 	p.global_position = pos
 	p.finished.connect(p.queue_free)
-	p.play()
+	p.play(maxf(0.0, stream_peak(p.stream) - SYNC_LEAD) if sync else 0.0)
+	return p
+
+
+const SYNC_LEAD := 0.02 # a synced sound starts this long before its peak (the attack still sounds)
+
+
+## Seconds from the start of a sound file to its loudest moment (tests/sound_peaks.py).
+static func stream_peak(stream: AudioStream) -> float:
+	if stream == null:
+		return 0.0
+	return float(SoundPeaks.PEAKS.get(stream.resource_path.get_file().get_basename(), 0.0))
+
+
+## The peak of a named sound (its first file when it has variants).
+static func peak_of(name: String) -> float:
+	var list := streams(name)
+	return stream_peak(list[0]) if not list.is_empty() else 0.0
+
+
+## A build-up (an incoming whistle, a charge) timed so its loudest moment lands `seconds` from now,
+## on the impact: started later if there is time, or part-way through if there isn't. Fire and forget
+## (SatStrike times its own whistle, because it also cuts the tail at the beam).
+static func play_to_land(name: String, pos: Vector3, parent: Node, seconds: float, volume_db := 0.0, pitch := 1.0) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var lead := peak_of(name) / pitch
+	if seconds <= lead:
+		var p := play(name, pos, parent, volume_db, pitch)
+		if p:
+			p.pitch_scale = pitch # exact: the timing depends on it
+			p.play((lead - seconds) * pitch)
+		return
+	parent.get_tree().create_timer(seconds - lead, false).timeout.connect(func():
+		if is_instance_valid(parent) and parent.is_inside_tree():
+			var p2 := play(name, pos, parent, volume_db, pitch)
+			if p2:
+				p2.pitch_scale = pitch)
 
 
 ## Screen sounds (menus): not placed in the world, keep playing while the game is paused.
@@ -240,6 +279,10 @@ static func prewarm(parent: Node3D, cam: Camera3D) -> void:
 	FxKit.explosion(parent, p, 1.0)
 	FxKit.spark(parent, p, Vector3.UP)
 	shockwave(parent, p, 1.0)
+	FxKit.shatter(parent, p, Vector3.ONE * 0.2, Vector3.UP, 0.0, Color(0.75, 0.92, 1.0), true) # glass, ice
+	FxKit.shatter(parent, p, Vector3.ONE * 0.2, Vector3.UP, 0.0, Color(0.6, 0.4, 0.2), false) # splinters
+	FxKit.dust_ring(parent, p, 0.3)
+	FxKit.puff(parent, p, 0.2)
 	var holder := Node3D.new()
 	parent.add_child(holder)
 	holder.global_position = p

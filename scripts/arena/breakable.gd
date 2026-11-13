@@ -18,6 +18,11 @@ var loot := "" # "weapon" | "health" | "" -> one-off pickup where it stood
 var loot_offset := Vector3.ZERO
 var visual: Node3D
 var is_broken := false
+## How it breaks, looks and sounds (juice guide, round 8): "glass", "wood", "palm", "metal", "prop"
+## (small street props) or "" (plain debris, no sound).
+var kind := ""
+var size_hint := Vector3(2.0, 2.0, 0.3) # rough extent of the visible part, for where the debris comes from
+var topple_height := 5.0 # how tall it is when it falls over (where it lands)
 
 static var _debris_mesh: BoxMesh
 
@@ -64,7 +69,7 @@ func break_apart(by: Vehicle) -> void:
 		return
 	is_broken = true
 	collision_layer = 0
-	_debris()
+	_break_feel(by)
 	if style == Style.TOPPLE:
 		_topple(by)
 	else:
@@ -88,6 +93,60 @@ func _topple(by: Vehicle) -> void:
 	var tw := create_tween()
 	tw.tween_method(func(t: float):
 		visual.global_basis = Basis(axis, t * deg_to_rad(84.0) * t) * start, 0.0, 1.0, 0.9)
+	# Aftermath: it hits the ground with a thud and a ring of dust where its top lands.
+	tw.tween_callback(func():
+		var top := global_position + away * topple_height * 0.95
+		var thud := "metal_fall" if kind == "metal" else "land_thud"
+		GameFeel.play(thud, top, get_parent(), -4.0, 0.7 if kind != "metal" else 0.85, true)
+		FxKit.dust_ring(get_parent(), Specials.ground_below(get_parent(), top + Vector3.UP * 3.0), 1.2)
+		GameFeel.shake(top, 0.2, 35.0))
+
+
+## The break itself, by kind: the sound (peak on this frame), what flies off and where to (along the
+## car that hit it), a flash, dust, a camera bump and, if you did it, a blink of hit-stop.
+func _break_feel(by: Vehicle) -> void:
+	var world := get_parent()
+	var center := global_position + global_basis * Vector3(0, size_hint.y * 0.5, 0)
+	var push := Vector3.ZERO
+	if is_instance_valid(by):
+		push = by.linear_velocity
+		push.y = 0.0
+		if push.length() < 2.0:
+			push = (global_position - by.global_position) * Vector3(1, 0, 1)
+	var dir := push.normalized() if push.length() > 0.1 else Vector3.UP
+	var speed := push.length()
+	var you: bool = is_instance_valid(by) and by.is_player
+	match kind:
+		"glass":
+			GameFeel.play("glass_shatter", center, world, 2.0, 1.0, true)
+			FxKit.shatter(world, center, global_basis * (size_hint * 0.5), dir, speed, Color(0.75, 0.92, 1.0), true)
+			FxKit.shard_litter(world, center, dir, Color(0.7, 0.88, 1.0))
+			GameFeel.flash(world, center, 2.4, Color(0.85, 0.95, 1.0), 0.08)
+			FxKit.puff(world, center, 0.6)
+			GameFeel.shake(center, 0.18, 35.0)
+			if you:
+				GameFeel.hitstop(get_tree(), 0.035, 0.1)
+		"wood":
+			GameFeel.play("wood_break", center, world, 2.0, 1.0, true)
+			FxKit.shatter(world, center, global_basis * (size_hint * 0.5), dir, speed, debris_color, false)
+			FxKit.puff(world, center, 0.9)
+			GameFeel.shake(center, 0.25, 35.0)
+			if you:
+				GameFeel.hitstop(get_tree(), 0.045, 0.1)
+		"palm":
+			GameFeel.play("palm_break", center, world, 0.0, 1.0, true)
+			_debris()
+		"metal":
+			GameFeel.play("metal_fall", center, world, 0.0, 1.1, true)
+			FxKit.crash_burst(world, global_position + Vector3.UP * 1.0, dir if dir != Vector3.UP else Vector3.FORWARD, 0.5)
+			_debris()
+		"prop":
+			GameFeel.play("crash", center, world, -10.0, 1.35, true)
+			_debris()
+			if you:
+				GameFeel.shake(center, 0.1, 20.0)
+		_:
+			_debris()
 
 
 func _debris() -> void:

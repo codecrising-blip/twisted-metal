@@ -135,6 +135,9 @@ func _street_lights() -> void:
 		lamp.style = Breakable.Style.TOPPLE
 		lamp.health = 10.0
 		lamp.debris_color = Color(0.3, 0.32, 0.3)
+		lamp.kind = "metal"
+		lamp.size_hint = Vector3(0.5, 8.0, 0.5)
+		lamp.topple_height = 8.0
 		lamp.position = _ground_at(pos.x, pos.z)
 		lamp.basis = Basis.looking_at(toward_road, Vector3.UP) # arm (local -Z) reaches over the road
 		add_child(lamp)
@@ -530,6 +533,8 @@ func _street_bits() -> void:
 			continue
 		var b := Breakable.new()
 		b.health = 6.0
+		b.kind = "prop"
+		b.size_hint = Vector3(0.6, 1.0, 0.6)
 		b.debris_color = [Color(0.55, 0.1, 0.07), Color(0.16, 0.24, 0.18), Color(0.75, 0.3, 0.06), Color(0.75, 0.3, 0.06)][kind]
 		b.position = _ground_at(pos.x, pos.z)
 		b.rotation.y = _rng.randf() * TAU

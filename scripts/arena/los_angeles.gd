@@ -1031,6 +1031,8 @@ func _tunnel_lamp() -> StandardMaterial3D:
 func _glass_panel(at: Vector3, thick: float) -> void:
 	var b := Breakable.new()
 	b.health = 8.0
+	b.kind = "glass"
+	b.size_hint = Vector3(6.6, ROOF_Y - 1.4, 0.3)
 	b.debris_color = Color(0.7, 0.9, 1.0)
 	b.position = at
 	add_child(b)
@@ -1221,6 +1223,8 @@ func _power_tower() -> void:
 		leg.smash_on_contact = false
 		leg.ram_damage_mult = 1.0
 		leg.debris_color = Color(0.45, 0.46, 0.48)
+		leg.kind = "metal"
+		leg.size_hint = Vector3(1.8, 9.0, 1.8)
 		leg.position = at + s * 5.0
 		add_child(leg)
 		leg.add_box_shape(Vector3(1.4, 9.0, 1.4), Vector3(-s.x * 0.7, 4.5, -s.z * 0.7))
@@ -1319,6 +1323,8 @@ func _hot_dog_stands() -> void:
 func _hot_dog_stand(pos: Vector3, yaw: float) -> void:
 	var b := Breakable.new()
 	b.health = 12.0
+	b.kind = "wood"
+	b.size_hint = Vector3(4.2, 3.0, 3.0)
 	b.loot = "weapon"
 	b.debris_color = Color(0.95, 0.85, 0.6)
 	b.position = pos
@@ -1401,6 +1407,9 @@ func _palm(pos: Vector3, fan := false) -> void:
 	var b := Breakable.new()
 	b.style = Breakable.Style.TOPPLE
 	b.health = 15.0
+	b.kind = "palm"
+	b.size_hint = Vector3(1.0, 6.0, 1.0)
+	b.topple_height = 7.0
 	b.debris_color = Color(0.45, 0.36, 0.24)
 	b.position = pos
 	b.rotation.y = _rng.randf() * TAU
@@ -1624,6 +1633,9 @@ func _hollywood_sign() -> void:
 		letter.smash_on_contact = false
 		letter.health = 20.0
 		letter.debris_color = Color(0.92, 0.92, 0.88)
+		letter.kind = "metal"
+		letter.size_hint = Vector3(5.0 * u, 7.5 * u, 1.0)
+		letter.topple_height = 7.5 * u
 		letter.position = Vector3(x, SIGN_BASE_Y, SIGN3D_Z)
 		add_child(letter)
 		letter.add_box_shape(Vector3(5.0 * u, 7.5 * u, 1.2), Vector3(0, 3.75 * u, 0))
