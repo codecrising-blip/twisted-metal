@@ -5,7 +5,7 @@ extends Node3D
 ## projectile_hit(damage, shooter) (stands, glass, sign letters) takes the hit too.
 ## Napalm cans are thrown (gravity) and wait for the next fire press: fire_again() drops them.
 
-const HIT_MASK := 1 | 2 # world + vehicles
+const HIT_MASK := 1 | 2 | Breakable.COVER_LAYER # world + vehicles + cover around palms and street lights
 const LOB_GRAVITY := 30.0
 
 static var spawned_total := 0 # used by tests
@@ -20,6 +20,11 @@ var velocity := Vector3.ZERO # thrown shots only
 var _life := 1.0
 var _trail: CPUParticles3D
 var _body: Node3D # parts that spin in flight (cones)
+var _wig: Node3D # zoomy: the missile corkscrews round its true path (looks only, hits are unchanged)
+var _wig_phase := 0.0
+var _halo: MeshInstance3D # cone: the fireball halo throbs in flight
+var _drop_mark: MeshInstance3D # napalm can: where it lands if you drop it now
+var _age := 0.0
 
 
 ## overrides: changes to the weapon's numbers for this one shot (a charged Napalm Cone).
@@ -50,6 +55,8 @@ static func spawn(parent: Node, id: String, from: Vector3, dir: Vector3, by: Veh
 		GameFeel.play("launch_" + id, from, parent, 0.0, 1.0, true)
 		if not small:
 			FxKit.puff(parent, from - p.direction * 0.6, 0.5 if big else 0.35)
+		if p.def.get("kind", "") == "cone": # the mortar coughs out a ball of flame with it
+			FxKit.explosion(parent, from + p.direction * 0.8, 0.5 + float(p.def.get("damage", 45.0)) / 150.0, Color(1.0, 0.5, 0.15), false)
 		if is_instance_valid(by):
 			var kick := 1.5 if big else (0.0 if small else 0.6)
 			if kick > 0.0:
@@ -77,10 +84,16 @@ func _build_visual() -> void:
 			# Each missile has its own look and trail (TM): fire = short orange, homing = purple,
 			# power = fat warhead with a long red trail, zoomy = thin with a long white trail.
 			var s := float(def.get("model_scale", 1.0))
+			var holder: Node3D = self
+			if def.get("small", false): # zoomy (round 9): a swarm that corkscrews, each on its own phase
+				_wig = Node3D.new()
+				add_child(_wig)
+				holder = _wig
+				_wig_phase = randf() * TAU
 			var body := MeshKit.mat(Color(0.26, 0.26, 0.28), 0.4, 0.6)
-			MeshKit.cylinder(self, 0.12 * s, 0.9 * s, Vector3.ZERO, body, Vector3(90, 0, 0), 8)
-			MeshKit.cylinder(self, 0.12 * s, 0.3 * s, Vector3(0, 0, -0.6 * s), MeshKit.emissive(color, 3.0), Vector3(-90, 0, 0), 8, 0.0)
-			MeshKit.sphere(self, 0.13 * s, Vector3(0, 0, 0.5 * s), MeshKit.emissive(color.lerp(Color.WHITE, 0.4), 6.0), Vector3(1, 1, 1.4), 6)
+			MeshKit.cylinder(holder, 0.12 * s, 0.9 * s, Vector3.ZERO, body, Vector3(90, 0, 0), 8)
+			MeshKit.cylinder(holder, 0.12 * s, 0.3 * s, Vector3(0, 0, -0.6 * s), MeshKit.emissive(color, 3.0), Vector3(-90, 0, 0), 8, 0.0)
+			MeshKit.sphere(holder, 0.13 * s, Vector3(0, 0, 0.5 * s), MeshKit.emissive(color.lerp(Color.WHITE, 0.4), 6.0), Vector3(1, 1, 1.4), 6)
 			if not def.get("small", false):
 				_add_light(color, 2.0, 5.0)
 		"freeze":
@@ -111,6 +124,7 @@ func _build_visual() -> void:
 			halo.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			var h := MeshKit.sphere(self, 0.85 * big, Vector3(0, 0, 0.2 * big), halo, Vector3(1, 1, 1.3), 10)
 			h.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			_halo = h
 			_add_trail(FxKit.fire(1.2 * big, int(30 * big)))
 			_add_light(color, 3.0 * big, 8.0)
 		"gas":
@@ -121,6 +135,17 @@ func _build_visual() -> void:
 			MeshKit.cylinder(self, 0.06, 0.25, Vector3(0.18, 0.48, 0), MeshKit.mat(Color(0.2, 0.2, 0.2), 0.5, 0.6), Vector3(0, 0, -30), 6)
 			_add_trail(FxKit.fire(0.7, 22))
 			_add_light(color, 2.0, 6.0)
+			# Tell (round 9): a faint orange ring on the ground under the can, where its fire would spread
+			# if you dropped it now.
+			var mark := StandardMaterial3D.new()
+			mark.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mark.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			mark.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			mark.albedo_color = Color(1.0, 0.45, 0.08, 0.45)
+			var pr := float(def.get("pool_radius", 4.5))
+			_drop_mark = MeshKit.torus(self, pr - 0.18, pr, Vector3.ZERO, mark)
+			_drop_mark.top_level = true
+			_drop_mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		"skull":
 			_skull_visual(color)
 		"ghost":
@@ -155,7 +180,7 @@ func _skull_visual(color: Color) -> void:
 
 func _add_streak() -> void:
 	if def.has("trail"):
-		Streak.attach(self, def["trail"], float(def.get("trail_len", 0.4)), float(def.get("trail_w", 0.5)))
+		Streak.attach(_wig if _wig else self, def["trail"], float(def.get("trail_len", 0.4)), float(def.get("trail_w", 0.5)))
 
 
 func _add_trail(p: CPUParticles3D) -> void:
@@ -185,8 +210,20 @@ func _physics_process(delta: float) -> void:
 			_flyby = true
 			GameFeel.play("missile_flyby", global_position, get_parent(), -4.0)
 
+	_age += delta
 	if _body:
 		_body.rotate_object_local(Vector3.FORWARD, 14.0 * delta)
+	if _wig: # corkscrew, opening up after launch
+		var a := _wig_phase + _age * 22.0
+		_wig.position = Vector3(cos(a), sin(a), 0.0) * minf(0.45, _age * 2.0)
+	if _halo: # the fireball throbs
+		var k := 1.0 + 0.14 * sin(_age * 26.0)
+		_halo.scale = Vector3(k, k, k * 1.3)
+	if _drop_mark:
+		var g := Specials.ground_below(get_parent(), global_position)
+		_drop_mark.global_position = g + Vector3.UP * 0.15
+		_drop_mark.global_basis = Basis.IDENTITY.scaled(Vector3(1.0, 0.3, 1.0))
+		_drop_mark.visible = global_position.y - g.y > 1.5
 	var step: Vector3
 	if _thrown():
 		velocity.y -= LOB_GRAVITY * delta
@@ -256,6 +293,8 @@ func _orient() -> void:
 
 func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 	var world := get_parent()
+	if collider is Node and (collider as Node).has_meta("cover_of"): # caught by a palm's / lamp's cover
+		collider = (collider as Node).get_meta("cover_of")
 	var kind: String = def.get("kind", "bullet")
 	var dmg := float(def.get("damage", 1.0)) * WeaponData.DAMAGE_SCALE
 	if kind == "gas":
@@ -292,9 +331,27 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 		FxKit.shatter(world, pos, Vector3.ONE * 0.4, normal, 2.0, Color(0.7, 0.92, 1.0), true)
 		FxKit.puff(world, pos, 0.5)
 	elif kind == "cone":
+		# Round 9 (juice guide): a white-hot pop, a fireball that rolls up out of the hit a beat later,
+		# a ring of heat along the ground, embers, a scorch. The charged cone does it all bigger.
+		var big := 1.0 + dmg / 90.0
 		FxKit.explosion(world, pos, 1.2 + dmg / 60.0, Color(1.0, 0.5, 0.15))
+		GameFeel.flash(world, pos, 2.2 * big, Color(1.0, 0.8, 0.45), 0.1)
+		GameFeel.shockwave(world, pos - Vector3.UP * 0.8, 6.0 * big, Color(1.0, 0.55, 0.15))
+		for k in 3:
+			FxKit.spark(world, pos, (normal + Vector3(randf_range(-1, 1), 1.0, randf_range(-1, 1))).normalized())
+		GameFeel.scorch(world, pos, 2.0 * big)
+		var up := pos + Vector3.UP * 1.6 * big
+		world.get_tree().create_timer(0.07, false).timeout.connect(func() -> void:
+			if is_instance_valid(world) and world.is_inside_tree():
+				FxKit.explosion(world, up, 0.9 * big, Color(1.0, 0.38, 0.08), false))
 	elif kind != "gas":
-		FxKit.explosion(world, pos, (0.4 if def.get("small", false) else 0.8) + dmg / 40.0, def.get("color", Color(1, 0.5, 0.15)))
+		var small: bool = def.get("small", false)
+		FxKit.explosion(world, pos, (0.4 if small else 0.8) + dmg / 40.0, def.get("color", Color(1, 0.5, 0.15)))
+		if small: # zoomy: each of the ten pops white-hot with a spark, so the salvo crackles
+			GameFeel.flash(world, pos, 1.0, Color(1.0, 0.95, 0.7), 0.06)
+			FxKit.spark(world, pos, normal)
+	if _drop_mark:
+		_drop_mark.queue_free()
 	# Let the smoke trail finish instead of vanishing with the missile.
 	if _trail and is_instance_valid(_trail):
 		var keep := _trail.global_position

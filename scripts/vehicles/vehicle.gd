@@ -21,6 +21,14 @@ const TURBO_MULT := 1.28
 const TURBO_ACCEL := 1.35
 const TURBO_DRAIN := 20.0 # a full bar lasts 5 s (owner, session 6)
 const TURBO_AIR_THRUST := 18.0 # m/s^2: turbo in the air pushes the car on (jump + turbo onto a ledge)
+## Round 9 (owner: "the build-up is so slow"): the moment turbo kicks in it shoves the car on by
+## TURBO_KICK m/s, then pulls extra hard (TURBO_LAUNCH x the normal pick-up, fading over TURBO_LAUNCH_TIME).
+## Same shove backwards for reverse turbo.
+const TURBO_KICK := 7.0
+const TURBO_LAUNCH := 2.4
+const TURBO_LAUNCH_TIME := 0.6
+const TURBO_KICK_COST := 6.0 # of 100: tapping turbo again and again is no free speed
+const TURBO_KICK_REST := 0.35 # seconds off turbo before the next shove
 const TURBO_PUTS_OUT_FIRE := 0.5 # seconds of turbo blow out the flames
 const ENERGY_REGEN := 2.5
 const ENERGY_PAUSE := 1.5 # no regen for this long after spending energy
@@ -34,6 +42,8 @@ const SUSP_REST := SUSP_TOP + GRAVITY / SUSP_K
 const SUSP_DROOP := 0.25 # wheels still count as touching this far below rest
 const SUSP_DAMP := 0.9 # 2 x damping ratio
 const BODY_CLEARANCE := 0.3 # the collision box starts this high: wheels hold it, the box takes the hard knocks
+const SUSP_BUMP := 0.3 # compression where the bump stop starts (rest is GRAVITY / SUSP_K = 0.16)
+const SUSP_BUMP_STIFF := 7.0 # bump stop: this many times the spring rate on top
 const YAW_RESPONSE := 40.0 # rad/s^2: steering reaches its turn rate in a blink, a hit can still swing it
 const RECOVER_ROLL := 7.0 # rad/s roll when gas + left/right rights a flipped car
 const WALL_DAMAGE := 0.3 # per m/s of impact over 10: a 25 m/s square slam costs about 4.5
@@ -166,6 +176,8 @@ var _energy_mines: Array = []
 var _shield_fx: MeshInstance3D
 var _shield_hum: AudioStreamPlayer3D
 var _headlight_t := 0.0
+var _turbo_kick := false # this step is the shove at the start of a boost
+var _turbo_rest := 1.0 # seconds since the last boost ended
 var _air_t := 0.0 # time in the air this flight
 var _air_vy := 0.0 # fastest fall this flight (negative)
 var _invis_shown := -1.0 # last transparency written to the meshes
@@ -342,6 +354,7 @@ func protect(seconds := SPAWN_SHIELD) -> void:
 # ---------------------------------------------------------------- per frame
 
 func _physics_process(delta: float) -> void:
+	_sat_preview_step()
 	if is_dead:
 		_wreck_time += delta
 		if _wreck_time > WRECK_SOLID_TIME and collision_layer != 0:
@@ -356,6 +369,34 @@ func _physics_process(delta: float) -> void:
 	_tick(delta)
 	_combat(delta)
 	_animate(delta)
+
+
+## Owner, round 9: with SAT selected, its zone shows ahead of the car in dim yellow, for every car:
+## a threat the enemy can see, and a way to judge the distance before launching. Hidden while a
+## strike of this car is on its way, while invisible, and once the car is dead.
+var _sat_preview: SatMarker
+
+
+func _sat_preview_step() -> void:
+	var want := not is_dead and not is_hidden() and selected_weapon() == "sat" and not SatStrike.busy(self)
+	if not want:
+		if _sat_preview:
+			_sat_preview.queue_free()
+			_sat_preview = null
+		return
+	var d := WeaponData.get_def("sat")
+	if _sat_preview == null:
+		_sat_preview = SatMarker.make(get_parent(), float(d.get("radius", 7.5)))
+		_sat_preview.spin_speed = 0.3
+		_sat_preview.set_tint(SatMarker.YELLOW, 0.45, 0.0)
+		_sat_preview.global_position = SatStrike.zone_point(self, d)
+	_sat_preview.global_position = _sat_preview.global_position.lerp(SatStrike.zone_point(self, d), 0.35)
+
+
+func _exit_tree() -> void:
+	if _sat_preview:
+		_sat_preview.queue_free()
+		_sat_preview = null
 
 
 ## A car nobody controls just rolls to a stop (cutscenes, tests, game over).
@@ -465,7 +506,10 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 			if comp > 0.0:
 				var arm := from - xf.origin
 				var point_vel := v + state.angular_velocity.cross(arm)
-				var f := maxf(0.0, k * comp - c * point_vel.dot(up))
+				# Bump stop (round 9, owner: "struggles on the hill"): near full travel the spring
+				# stiffens hard, so the body doesn't drag its belly up a hill or a ramp at speed.
+				var bump := maxf(0.0, comp - SUSP_BUMP) * k * SUSP_BUMP_STIFF
+				var f := maxf(0.0, k * comp + bump - c * point_vel.dot(up))
 				state.apply_force(up * f, (hit.position as Vector3) - xf.origin)
 		_wheel_comp[i] = comp
 		i += 1
@@ -529,7 +573,11 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 	if boosting:
 		top *= TURBO_MULT
 	var sliding := clampf(absf(v_l) / 10.0, 0.0, 1.0) # tyres busy holding a slide brake less
-	var accel: float = stats.accel * (TURBO_ACCEL if boosting else 1.0)
+	var launch := 1.0 + (TURBO_LAUNCH - 1.0) * clampf(1.0 - _turbo_run / TURBO_LAUNCH_TIME, 0.0, 1.0)
+	var accel: float = stats.accel * (TURBO_ACCEL * launch if boosting else 1.0)
+	if _turbo_kick: # the first step of a boost: the shove
+		var rev_top := minf(float(stats.reverse) * 2.0, float(stats.max_speed) * TURBO_MULT)
+		v_f = clampf(v_f + TURBO_KICK * signf(throttle), -rev_top, top)
 	var braking := false
 	if throttle > 0.05:
 		if v_f < -0.5:
@@ -542,7 +590,8 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 			v_f = move_toward(v_f, 0.0, brake * (1.0 - 0.45 * sliding) * dt)
 			braking = true
 		else:
-			v_f = move_toward(v_f, -float(stats.reverse) * -throttle * (2.0 if boosting else 1.0), accel * 0.7 * dt)
+			var rev_top := minf(float(stats.reverse) * 2.0, float(stats.max_speed) * TURBO_MULT) if boosting else float(stats.reverse)
+			v_f = move_toward(v_f, -rev_top * -throttle, accel * 0.7 * dt)
 	else:
 		v_f = move_toward(v_f, 0.0, COAST * dt)
 	if handbrake:
@@ -588,9 +637,12 @@ func _in_air(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 		_turbo_step(0.0, dt)
 		return v
 	if _turbo_step(dir, dt):
-		var air_top: float = float(stats.max_speed) * TURBO_MULT if dir > 0.0 else float(stats.reverse) * 2.0
+		var air_top: float = float(stats.max_speed) * TURBO_MULT if dir > 0.0 else minf(float(stats.reverse) * 2.0, float(stats.max_speed) * TURBO_MULT)
 		var along := hv.dot(forward)
-		var target := move_toward(along, air_top * dir, TURBO_AIR_THRUST * dt)
+		var thrust := TURBO_AIR_THRUST * (1.0 + (TURBO_LAUNCH - 1.0) * clampf(1.0 - _turbo_run / TURBO_LAUNCH_TIME, 0.0, 1.0))
+		if _turbo_kick:
+			along = clampf(along + TURBO_KICK * dir, -air_top, air_top) # the shove works in the air too
+		var target := move_toward(along, air_top * dir, thrust * dt)
 		hv += forward * (target - along)
 	hv -= Vector3(v.x, 0.0, v.z) - Vector3(v.x, 0.0, v.z) * exp(-0.05 * dt)
 	return Vector3(hv.x, v.y, hv.z)
@@ -600,9 +652,16 @@ func _in_air(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 func _turbo_step(dir: float, dt: float) -> bool:
 	var boosting := in_turbo and turbo > 0.0 and dir != 0.0 and frozen_time <= 0.0 and not flipped
 	_boosting = boosting
+	_turbo_kick = false
 	if boosting:
+		if _turbo_run == 0.0 and _turbo_rest >= TURBO_KICK_REST: # a fresh boost: the shove (costs a little)
+			_turbo_kick = true
+			turbo = maxf(0.0, turbo - TURBO_KICK_COST)
+			if is_player:
+				GameFeel.shake(global_position, 0.12)
 		turbo = maxf(0.0, turbo - TURBO_DRAIN * dt)
 		_turbo_run += dt
+		_turbo_rest = 0.0
 		if _turbo_run >= TURBO_PUTS_OUT_FIRE and burn_time > 0.0: # the rush of air blows the flames out
 			burn_time = 0.0
 			_burn_fx.emitting = false
@@ -610,6 +669,7 @@ func _turbo_step(dir: float, dt: float) -> bool:
 				notice.emit(self, "FIRE OUT")
 	else:
 		_turbo_run = 0.0
+		_turbo_rest += dt
 	return boosting
 
 

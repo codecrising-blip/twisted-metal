@@ -308,6 +308,33 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   **Landing:** thump, dust ring, body dip after a real flight. New sounds were generated with Higgsfield (Mirelo
   SFX, 0.5 credits each, owner's free plan) and trimmed so the hit is at 0; the environment allows its file host
   `d8j0ntlcm91z4.cloudfront.net`.
+- **Round 9, full text `docs/design/13-owner-round-9.md`:** **Driving:** suspension bump stop (`SUSP_BUMP` 0.3 m, then
+  x`SUSP_BUMP_STIFF` 7: the body scraped the hill at (-139, 1.8, -63) for ~10 frames, now 2-4); ramp feet are a 6 m
+  quadratic fillet (`RAMP_FILLET`, `ramp_profile()`; nose-up at the foot 29 -> 13 deg). **Turbo:** kick `TURBO_KICK` 7 m/s
+  + `TURBO_LAUNCH` 2.4x accel fading over 0.6 s, costs 6 turbo, only after a 0.35 s rest; reverse `Roster.REVERSE_SCALE`
+  1.6, reverse turbo gets the same kick (top = min(2 x reverse, turbo top)). **Obstacles:** wrecks are `Breakable` kind
+  "wreck" (explode); barrier rows are concrete **kicker ramps** (`la_props._kicker`, 0.9 m, slope 3); palms and street
+  lights carry a `Breakable.add_cover()` cylinder on `COVER_LAYER` 32 that stops missiles (`Projectile.HIT_MASK`, meta
+  `cover_of` -> the Breakable takes the hit). Every breakable has `Breakable.MG_HEALTH` 4.2 (MG kills it in 0.6 s).
+  **Items** by the owner's rule (road: missiles/turbo/napalm; corners: SAT/zoomy/remote; hilltops: health/power; middle:
+  mix), `LosAngelesArena.weapon_kinds` parallel to `weapon_points` (main.gd uses it; "" = shuffled), placed away from
+  walls/hills/ramp feet. Health = white cross on blue, mega = bigger on yellow, **full** = biggest on red (health and
+  energy to 100%): the HOLLYWOOD prize. **Taser** (`TaserLink`): drawn with `Bolt` (one ImmediateMesh, camera-facing
+  additive ribbons: midpoint-displaced path, white core in two blue glows, branches, afterimage, flicker, crawl arcs on
+  the target); line of sight = 3 rays at +0.5/2.5/4.5 m ignoring `Breakable`s and group `see_through` (cage fences),
+  broken only after 0.4 s fully blocked; no target = the arc spins 3 times round the car over the duration and locks onto
+  the first car in range (at least `LOCK_MIN` 1.2 s of damage). **SAT:** `SatMarker` (turning segmented ring, ticks, fill
+  disc; `heat()` yellow -> orange -> red), preview while SAT is selected (`Vehicle._sat_preview_step`, any car, hidden
+  when invisible or a strike is live: `SatStrike.busy`), soft billboard beams (`SatStrike._beam`, Y-billboard quad with
+  a gradient: no hard cylinder edges), falling rings, sky charge point, the owner's `sat_incoming` whistle now a child of
+  the zone (it was left behind in the world as the zone moved: "deleted"), eased in 2.3 s before, faded into the blast.
+  Impact: core + glow + halo, splash disc, blue burst then orange fireballs, 2 shockwaves, debris, dust, scorch, molten
+  ring, screen blink within 70 m. **Remote** = electronic mine (`def.electronic`: board, chips, chasing LEDs, antenna,
+  sensing ring when armed), clean hit (inside `core`) ignites 4 s; energy mine unchanged. **Zoomy** corkscrews (visual
+  `_wig` child, trail follows it), **napalm** shows a landing ring under the can, napalm and cone impacts layered
+  (flash, shockwave, fireball a beat later, sparks, scorch). Gotchas: `var s := {..}[id]` can't infer (type it);
+  `weapon_kinds` must be padded for points added before `_points()` (the cage); GameFeel.flash spheres larger than
+  ~radius look like an opaque dome at the impact frame; a vertical cylinder beam reads as a "pillar" (use soft quads).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -338,7 +365,7 @@ scripts/vehicles/           Vehicle (driving, wall rule, rams, states, combat), 
                             detours for pickups, weapon choice, ramps, max 2 on player)
 scripts/weapons/            WeaponData (all balance numbers), Projectile (missiles, cones, napalm can), Mine (Remote),
                             Pickup (shaped models, LOADED messages, turbo), Specials (fires every weapon; charged
-                            shots, salvos, blasts), SatStrike, TaserLink, ChainBomb, FirePool
+                            shots, salvos, blasts), SatStrike + SatMarker, TaserLink, ChainBomb, FirePool
 scripts/arena/los_angeles.gd  stage 1 / test stage (TM2 Quake Zone): heightmap (raised battleground, ramps, crater,
                             road hills), spline road, tunnels, cage, tower, sign; spot() = named places for tests
 scripts/arena/la_city.gd    BAKE ONLY: the 3D city rendered into the LA backdrop panorama (not built in the game)
@@ -353,7 +380,7 @@ scripts/arena/teleporter.gd teleport pad
 scripts/fx/                 FxKit (fire/smoke/explosions + debris, shatter, shard litter, dust ring, puff, smoke
                             column, crash burst), GameFeel (hit-stop, slow-mo, shake, flash, shockwave, scorch, sound
                             hooks, synced sounds), SoundPeaks (generated), Streak (missile trail ribbons),
-                            FlickerLight, Blinker, ZigLine (bolts, chains, cables)
+                            FlickerLight, Blinker, ZigLine (chains, cables), Bolt (lightning, one draw call)
 scripts/ui/hud.gd           HUD layout (target, feed, messages, help, countdown, pause) + grain/vignette shader
 scripts/ui/hud_status.gd    bottom-left panel: name, lives, segmented health (trail), turbo, energy, state chips
 scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, ammo), other weapons as chips

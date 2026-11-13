@@ -102,6 +102,18 @@ static func napalm_burst(world: Node, pos: Vector3, direct: Vehicle, shooter: Ve
 	if world == null or not world.is_inside_tree():
 		return
 	FxKit.explosion(world, pos, 2.2, Color(1.0, 0.5, 0.12))
+	# Round 9 (juice guide): the can bursts in a splash of burning fuel: a flash, a low ring of heat
+	# racing out, fuel fireballs thrown round the rim, embers, and the pool left burning.
+	GameFeel.flash(world, pos, 4.0, Color(1.0, 0.7, 0.3), 0.12)
+	GameFeel.shockwave(world, pos, float(def.get("radius", 6.0)) * 1.6, Color(1.0, 0.5, 0.1))
+	for k in 5:
+		var a := TAU * k / 5.0 + randf() * 0.7
+		var rim := pos + Vector3(cos(a), 0.0, sin(a)) * randf_range(2.0, 3.5)
+		FxKit.explosion(world, rim + Vector3.UP * 0.4, 0.7, Color(1.0, 0.45, 0.1), false)
+		FxKit.spark(world, rim, Vector3(cos(a), 1.2, sin(a)).normalized())
+	GameFeel.scorch(world, pos, float(def.get("pool_radius", 4.5)) * 1.2)
+	if is_instance_valid(shooter) and shooter.is_player or (direct and direct.is_player):
+		GameFeel.hitstop(world.get_tree(), 0.05, 0.05)
 	blast(world, pos, float(def.get("radius", 6.0)), float(def.get("damage", 30.0)), shooter, -1.0, 0.0,
 		float(def.get("burn", 5.0)), direct)
 	var ground := ground_below(world, pos)

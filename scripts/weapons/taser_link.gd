@@ -4,7 +4,8 @@ extends Node3D
 ## the nearest enemy in range in any direction and keeps hurting it while the link holds.
 ## Every press of the fire button during the link makes it stronger. The target can still drive:
 ## once it gets farther than break_range (or behind a wall) the connection is lost.
-## Firing with nobody in range zaps the air and still spends the charge.
+## Firing with nobody in range spins the arc round the car (3 turns over the duration) and locks on to
+## the first enemy that comes into range (owner, round 9).
 
 var owner_car: Vehicle
 var target: Vehicle
@@ -14,20 +15,22 @@ var mashes := 0
 
 var _time := 0.0
 var _pending := 0.0
-var _fizzle := 0.0
+var _searching := false # fired with nobody in range: the arc spins round the car looking (round 9)
+var _scan_t := 0.0
+var _blocked := 0.0 # how long the view has been fully blocked (a short grace before the link breaks)
 var _hum: AudioStreamPlayer3D
 var _spark := 0.0
-var _core: ZigLine # white-hot centre of the bolt
-var _glow: ZigLine # wide blue glow around it, same zigzag
-var _forks: Array[ZigLine] = [] # short side branches
-var _offsets: Array[Vector2] = [] # zigzag, re-rolled in short bursts so the bolt crackles
-var _fork_at: Array[int] = []
-var _fork_dirs: Array[Vector3] = []
+var _bolt: Bolt
+var _main: Array[Vector3] = [] # this flash's path, kept for the afterimage
+var _ghost: Array[Vector3] = [] # the previous flash, drawn faint
 var _refresh := 0.0
-var _dark := false # a flicker: the arc drops out for an instant
+var _dark := false # a flicker: the core drops out for an instant
 var _light: OmniLight3D
 
-const BOLT_SEGMENTS := 16
+const SEARCH_RADIUS := 9.0 # the spinning arc's reach while it looks for a target
+const SEARCH_TURNS := 3.0 # turns round the car over the whole duration (owner, round 9)
+const LOCK_MIN := 1.2 # a target caught late in the spin still gets at least this long
+const LOS_GRACE := 0.4 # seconds fully out of sight before the connection is lost
 
 
 static func start(v: Vehicle, d: Dictionary) -> TaserLink:
@@ -37,17 +40,15 @@ static func start(v: Vehicle, d: Dictionary) -> TaserLink:
 	link.dps = d.get("dps", 8.0)
 	link.target = find_victim(v, d.get("range", 25.0))
 	v.get_parent().add_child(link)
+	v.set_live_special(link)
+	GameFeel.play("special_outlaw", v.global_position + Vector3.UP, v.get_parent(), 0.0, 1.0, true)
+	link._hum = GameFeel.loop("taser_loop", v, -8.0, 14.0) # the arc crackles while it lives
+	if link._hum:
+		link._hum.play()
 	if link.target == null:
-		link._fizzle = 0.35
-		v.notice.emit(v, "NO TARGET IN RANGE")
+		link._searching = true # owner, round 9: no target? the arc spins round the car, hunting
 		if v.is_player:
-			GameFeel.ui("not_available", v.get_tree())
-	else:
-		v.set_live_special(link)
-		GameFeel.play("special_outlaw", v.global_position + Vector3.UP, v.get_parent())
-		link._hum = GameFeel.loop("taser_loop", v, -8.0, 14.0) # the link crackles while it holds
-		if link._hum:
-			link._hum.play()
+			v.notice.emit(v, "SEARCHING...")
 	return link
 
 
@@ -57,7 +58,7 @@ static func find_victim(v: Vehicle, reach: float) -> Vehicle:
 	var best_d := reach
 	for node in v.get_tree().get_nodes_in_group("vehicles"):
 		var o := node as Vehicle
-		if o == v or o.is_dead:
+		if o == v or o.is_dead or o.is_hidden():
 			continue
 		var d := v.global_position.distance_to(o.global_position)
 		if d <= best_d and _can_see(v, o):
@@ -66,97 +67,43 @@ static func find_victim(v: Vehicle, reach: float) -> Vehicle:
 	return best
 
 
+## Owner, round 9: only something that hides the whole car breaks the link (a real wall, a container,
+## a second floor), never a kerb-high kicker, a ramp's side, glass or a fence. Three sight lines at
+## different heights; any one getting through is enough. Glass, props, palms and fences don't count.
 static func _can_see(a: Vehicle, b: Vehicle) -> bool:
-	var q := PhysicsRayQueryParameters3D.create(a.aim_point() + Vector3.UP * 0.5, b.aim_point(), 1)
-	return a.get_world_3d().direct_space_state.intersect_ray(q).is_empty()
+	var space := a.get_world_3d().direct_space_state
+	for h: float in [0.5, 2.5, 4.5]:
+		if _clear(space, a.aim_point() + Vector3.UP * h, b.aim_point() + Vector3.UP * h, [a.get_rid(), b.get_rid()]):
+			return true
+	return false
+
+
+static func _clear(space: PhysicsDirectSpaceState3D, from: Vector3, to: Vector3, skip: Array) -> bool:
+	var exclude: Array[RID] = []
+	for r: RID in skip:
+		exclude.append(r)
+	for tries in 5:
+		var q := PhysicsRayQueryParameters3D.create(from, to, 1, exclude)
+		var hit := space.intersect_ray(q)
+		if hit.is_empty():
+			return true
+		var c: Object = hit.collider
+		if c is Breakable or (c is Node and (c as Node).is_in_group(&"see_through")):
+			exclude.append((c as CollisionObject3D).get_rid())
+			continue
+		return false
+	return true
 
 
 func _ready() -> void:
-	var core := MeshKit.emissive(Color(0.85, 0.95, 1.0), 9.0)
-	core.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	var glow := StandardMaterial3D.new()
-	glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	glow.albedo_color = Color(0.3, 0.55, 1.0, 0.45)
-	_core = ZigLine.new()
-	_core.material = core
-	_core.segments = BOLT_SEGMENTS
-	add_child(_core)
-	_glow = ZigLine.new()
-	_glow.material = glow
-	_glow.segments = BOLT_SEGMENTS
-	add_child(_glow)
-	for k in 3:
-		var f := ZigLine.new()
-		f.material = core
-		f.segments = 4
-		add_child(f)
-		_forks.append(f)
+	_bolt = Bolt.new()
+	_bolt.tint = Color(0.35, 0.62, 1.0)
+	add_child(_bolt)
 	_light = OmniLight3D.new()
 	_light.light_color = Color(0.5, 0.7, 1.0)
 	_light.light_energy = 3.0
 	_light.omni_range = 9.0
 	add_child(_light)
-	_reroll()
-
-
-## New zigzag: sharp alternating kinks across the line, plus where the side forks split off.
-func _reroll() -> void:
-	_offsets.clear()
-	for i in BOLT_SEGMENTS + 1:
-		var side := 1.0 if i % 2 == 0 else -1.0
-		_offsets.append(Vector2(side * randf_range(0.35, 1.0), randf_range(-0.7, 0.7)))
-	_fork_at.clear()
-	_fork_dirs.clear()
-	for k in _forks.size():
-		_fork_at.append(randi_range(3, BOLT_SEGMENTS - 3))
-		_fork_dirs.append(Vector3(randf_range(-1, 1), randf_range(-0.4, 1.0), randf_range(-1, 1)).normalized())
-	_dark = randf() < 0.12
-
-
-## Draws the arc from `from` to `to`; strength 0..1 makes it thicker and wilder.
-func _draw_bolt(from: Vector3, to: Vector3, strength: float, delta: float) -> void:
-	_refresh -= delta
-	if _refresh <= 0.0:
-		_refresh = 0.045
-		_reroll()
-	for z: ZigLine in [_core, _glow] + _forks:
-		z.visible = not _dark
-	if _dark:
-		_light.light_energy = 0.5
-		return
-	var axis := to - from
-	var length := axis.length()
-	if length < 0.05:
-		return
-	var dir := axis / length
-	var u := dir.cross(Vector3.UP)
-	if u.length() < 0.1:
-		u = dir.cross(Vector3.RIGHT)
-	u = u.normalized()
-	var w := dir.cross(u).normalized()
-	var amp := clampf(length * 0.06, 0.25, 1.4) * (0.8 + strength * 0.6)
-	var pts: Array[Vector3] = []
-	for i in BOLT_SEGMENTS + 1:
-		var t := float(i) / BOLT_SEGMENTS
-		var p := from.lerp(to, t)
-		if i > 0 and i < BOLT_SEGMENTS:
-			var o := _offsets[i]
-			p += (u * o.x + w * o.y) * amp * sqrt(sin(t * PI))
-		pts.append(p)
-	_core.draw_points(pts, 0.05 + strength * 0.05)
-	_glow.draw_points(pts, 0.3 + strength * 0.25)
-	for k in _forks.size():
-		var start := pts[_fork_at[k]]
-		var end := start + (_fork_dirs[k] + dir * 0.3).normalized() * randf_range(1.0, 2.6)
-		var fork_pts: Array[Vector3] = []
-		for j in 5:
-			var p := start.lerp(end, j / 4.0)
-			if j > 0 and j < 4:
-				p += Vector3(randf_range(-1, 1), randf_range(-1, 1), randf_range(-1, 1)) * 0.25
-			fork_pts.append(p)
-		_forks[k].draw_points(fork_pts, 0.035)
-	_light.light_energy = randf_range(2.0, 4.0) + strength * 4.0
 
 
 ## Called for each fire press while the link holds: mashing builds damage.
@@ -166,33 +113,64 @@ func fire_again() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if not is_instance_valid(owner_car):
-		queue_free()
+	if not is_instance_valid(owner_car) or owner_car.is_dead or owner_car.frozen_time > 0.0:
+		_end(false)
 		return
 	var from := owner_car.launch_point()
-	if _fizzle > 0.0:
-		_fizzle -= delta
-		var ahead := from + owner_car.flat_forward() * 8.0 + Vector3(randf_range(-2, 2), randf_range(-1, 1), randf_range(-2, 2))
-		_draw_bolt(from, ahead, 0.3, delta)
-		_light.global_position = ahead
-		if _fizzle <= 0.0:
-			queue_free()
+	_time += delta
+	var duration := float(def.get("duration", 3.0))
+	var strength := dps / float(def.get("max_dps", 20.0))
+	_refresh -= delta
+	var reroll := _refresh <= 0.0
+	if reroll:
+		_refresh = 0.05
+		_dark = randf() < 0.1
+	if _searching:
+		# The arc sweeps round the car, its end skipping along the ground, until someone is in range.
+		var a := _time / duration * SEARCH_TURNS * TAU
+		var fwd := owner_car.flat_forward()
+		var dir := fwd.rotated(Vector3.UP, a)
+		var tip := from + dir * SEARCH_RADIUS + Vector3.UP * 3.0
+		var g := Specials.ground_below(get_parent(), tip)
+		_draw(from, g + Vector3.UP * 0.1, 0.35, reroll, false)
+		_light.global_position = g + Vector3.UP
+		_spark -= delta
+		if _spark <= 0.0:
+			_spark = 0.12 if GraphicsSettings.high else 0.25
+			FxKit.spark(get_parent(), g, Vector3.UP)
+		_scan_t -= delta
+		if _scan_t <= 0.0:
+			_scan_t = 0.1
+			target = find_victim(owner_car, float(def.get("range", 25.0)))
+			if target:
+				_searching = false
+				_time = minf(_time, duration - LOCK_MIN)
+				GameFeel.play("special_outlaw", target.aim_point(), get_parent(), -2.0, 1.15, true)
+				if owner_car.is_player:
+					owner_car.notice.emit(owner_car, "LOCKED ON")
+		if _time >= duration:
+			_end(false)
 		return
-	if owner_car.is_dead or owner_car.frozen_time > 0.0 or not is_instance_valid(target) or target.is_dead:
+	if not is_instance_valid(target) or target.is_dead:
 		_end(false)
 		return
 	var d := owner_car.global_position.distance_to(target.global_position)
-	if d > float(def.get("break_range", 32.0)) or not _can_see(owner_car, target):
+	if d > float(def.get("break_range", 32.0)):
 		_end(true)
 		return
-	_time += delta
+	if _can_see(owner_car, target):
+		_blocked = 0.0
+	else:
+		_blocked += delta
+		if _blocked > LOS_GRACE:
+			_end(true)
+			return
 	_pending += dps * delta
 	if _pending >= 2.0:
 		target.take_damage(_pending * WeaponData.DAMAGE_SCALE, owner_car)
 		_pending = 0.0
 	var to := target.aim_point()
-	var strength := dps / float(def.get("max_dps", 20.0))
-	_draw_bolt(from, to, strength, delta)
+	_draw(from, to, strength, reroll, true)
 	_light.global_position = to
 	_spark -= delta
 	if _spark <= 0.0:
@@ -200,8 +178,42 @@ func _physics_process(delta: float) -> void:
 		FxKit.spark(get_parent(), to + Vector3(randf_range(-1, 1), randf_range(0, 1), randf_range(-1, 1)), Vector3.UP)
 		if GraphicsSettings.high:
 			FxKit.spark(get_parent(), from, Vector3.UP)
-	if _time >= float(def.get("duration", 3.0)):
+	if _time >= duration:
 		_end(false)
+
+
+## The arc this frame: a new jagged path every 50 ms (the old one lingers faintly), branches, a hot
+## star where it lands and, on a car, small arcs crawling over its body.
+func _draw(from: Vector3, to: Vector3, strength: float, reroll: bool, on_car: bool) -> void:
+	_bolt.begin()
+	if not _ghost.is_empty():
+		_bolt.strand(_ghost, 0.05, 0.02, 0.3)
+	if reroll or _main.is_empty():
+		_ghost = _main
+		_main = Bolt.jagged(from, to, 4, 0.2 + 0.08 * strength)
+	else: # keep the shape but follow the ends as both cars move
+		_main[0] = from
+		_main[_main.size() - 1] = to
+	if not _dark:
+		var w0 := 0.07 + 0.08 * strength
+		_bolt.strand(_main, w0, w0 * 0.4)
+		for k in 2 + int(strength * 2.0):
+			var i := randi_range(2, _main.size() - 4)
+			var off := ((_main[i + 1] - _main[i]).normalized() + Vector3(randf_range(-1, 1), randf_range(-0.5, 0.9), randf_range(-1, 1))).normalized()
+			_bolt.strand(Bolt.jagged(_main[i], _main[i] + off * randf_range(0.8, 2.2), 2, 0.3), w0 * 0.5, 0.004, 0.8)
+	# The hot star where it bites.
+	for k in 4:
+		var ray := Vector3(randf_range(-1, 1), randf_range(-0.3, 1), randf_range(-1, 1)).normalized() * randf_range(0.4, 0.9)
+		_bolt.strand(Bolt.jagged(to, to + ray, 1, 0.3), 0.06, 0.004, 0.9)
+	if on_car and is_instance_valid(target):
+		var size: Vector3 = target.stats.get("size", Vector3(2.2, 1.8, 5.0))
+		var xf := target.global_transform
+		for k in 3: # electricity crawling over the hit car
+			var p := xf * Vector3(randf_range(-0.5, 0.5) * size.x, randf_range(0.4, 1.0) * size.y, randf_range(-0.5, 0.5) * size.z)
+			var q := xf * Vector3(randf_range(-0.5, 0.5) * size.x, randf_range(0.4, 1.0) * size.y, randf_range(-0.5, 0.5) * size.z)
+			_bolt.strand(Bolt.jagged(p, q, 2, 0.35), 0.035, 0.01, 0.75)
+	_bolt.finish()
+	_light.light_energy = 0.5 if _dark else randf_range(2.0, 4.0) + strength * 4.0
 
 
 func _end(lost: bool) -> void:
@@ -212,7 +224,8 @@ func _end(lost: bool) -> void:
 		_hum.queue_free()
 	if is_instance_valid(owner_car):
 		GameFeel.play("taser_fizzle", owner_car.launch_point(), owner_car.get_parent(), -6.0)
-		owner_car.set_live_special(null)
+		if owner_car.live_special() == self:
+			owner_car.set_live_special(null)
 		if lost:
 			owner_car.notice.emit(owner_car, "CONNECTION LOST")
 	queue_free()

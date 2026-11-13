@@ -28,7 +28,16 @@ static func drop(v: Vehicle, d: Dictionary) -> Mine:
 	return m
 
 
+var _leds: Array[MeshInstance3D] = []
+var _sense: MeshInstance3D
+var _sense_mat: StandardMaterial3D
+
+
 func _ready() -> void:
+	if def.get("electronic", false):
+		_build_electronic()
+		return
+	# The energy-move mine (owner, round 9: stays as it is).
 	var dark := MeshKit.mat(Color(0.09, 0.09, 0.1), 0.6, 0.5)
 	var steel := MeshKit.mat(Color(0.3, 0.3, 0.31), 0.45, 0.7)
 	MeshKit.cylinder(self, 0.6, 0.2, Vector3(0, 0.1, 0), dark, Vector3.ZERO, 14)
@@ -40,6 +49,52 @@ func _ready() -> void:
 	_lamp = MeshKit.sphere(self, 0.08, Vector3(0, 0.33, 0), MeshKit.emissive(Color(1.0, 0.1, 0.05), 6.0), Vector3.ONE, 6)
 	for mi in find_children("*", "MeshInstance3D", false, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+## Remote (owner, round 9: "an electronic mine"): a squat armoured puck with a circuit board on top,
+## chips, a ring of LEDs that chase round (slow amber while arming, fast red when live), a whip antenna
+## with a blinking tip, and once armed a faint red ring on the ground showing where it triggers.
+func _build_electronic() -> void:
+	var body := MeshKit.mat(Color(0.07, 0.075, 0.08), 0.55, 0.6)
+	var steel := MeshKit.mat(Color(0.32, 0.32, 0.33), 0.4, 0.75)
+	var board := MeshKit.mat(Color(0.04, 0.26, 0.1), 0.6, 0.1)
+	var chip := MeshKit.mat(Color(0.02, 0.02, 0.02), 0.4, 0.2)
+	var copper := MeshKit.mat(Color(0.75, 0.45, 0.2), 0.35, 0.9)
+	MeshKit.cylinder(self, 0.62, 0.22, Vector3(0, 0.11, 0), body, Vector3.ZERO, 8) # armoured octagon
+	MeshKit.cylinder(self, 0.66, 0.06, Vector3(0, 0.03, 0), steel, Vector3.ZERO, 8) # skid plate
+	MeshKit.cylinder(self, 0.47, 0.04, Vector3(0, 0.24, 0), board, Vector3.ZERO, 16) # circuit board
+	MeshKit.box(self, Vector3(0.22, 0.05, 0.16), Vector3(-0.1, 0.28, 0.05), chip)
+	MeshKit.box(self, Vector3(0.1, 0.05, 0.1), Vector3(0.18, 0.28, -0.12), chip)
+	MeshKit.box(self, Vector3(0.3, 0.012, 0.03), Vector3(0.05, 0.265, -0.2), copper)
+	MeshKit.box(self, Vector3(0.03, 0.012, 0.28), Vector3(0.25, 0.265, 0.1), copper)
+	MeshKit.cylinder(self, 0.07, 0.12, Vector3(-0.2, 0.32, -0.15), steel, Vector3.ZERO, 8) # detonator cap
+	MeshKit.cylinder(self, 0.012, 0.7, Vector3(0.3, 0.6, 0.2), steel, Vector3.ZERO, 4) # whip antenna
+	_lamp = MeshKit.sphere(self, 0.045, Vector3(0.3, 0.96, 0.2), MeshKit.emissive(Color(1.0, 0.1, 0.05), 8.0), Vector3.ONE, 6)
+	var led := MeshKit.emissive(Color(1.0, 0.08, 0.03), 2.2)
+	for k in 8:
+		var a := TAU * k / 8.0
+		_leds.append(MeshKit.sphere(self, 0.045, Vector3(cos(a) * 0.55, 0.2, sin(a) * 0.55), led, Vector3.ONE, 6))
+	_sense_mat = StandardMaterial3D.new()
+	_sense_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_sense_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_sense_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	_sense_mat.albedo_color = Color(1.0, 0.1, 0.05, 0.0)
+	var r: float = def.get("trigger", 2.4)
+	_sense = MeshKit.torus(self, r - 0.08, r, Vector3.UP * 0.08, _sense_mat)
+	_sense.scale = Vector3(1.0, 0.3, 1.0)
+	_sense.visible = false
+	for mi in find_children("*", "MeshInstance3D", false, false):
+		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+func _animate_electronic() -> void:
+	var live := armed()
+	var lit := int(_t * (14.0 if live else 5.0)) % 8 # one LED chasing round, plus its trail
+	for k in _leds.size():
+		_leds[k].visible = k == lit or (live and k == (lit + 7) % 8)
+	if live:
+		_sense.visible = true
+		_sense_mat.albedo_color.a = 0.18 + 0.14 * sin(_t * 9.0)
 
 
 ## The owner's next fire press.
@@ -96,6 +151,8 @@ func armed() -> bool:
 func _physics_process(delta: float) -> void:
 	_t += delta
 	_lamp.visible = fmod(_t * (4.0 if armed() else 1.5), 1.0) < 0.5
+	if not _leds.is_empty():
+		_animate_electronic()
 	if _t >= float(def.get("life", 90.0)):
 		detonate()
 		return
@@ -143,6 +200,8 @@ func detonate() -> void:
 		away = away.normalized() if away.length() > 0.3 else o.flat_forward()
 		var heights: Dictionary = def.get("launch", {})
 		var h := float(heights.get(o.stats.get("class", "medium"), 8.4))
+		if def.has("burn") and flat < core: # a clean hit sets the car on fire (owner, round 9)
+			o.ignite(float(def["burn"]), owner_car)
 		if flat < 2.8: # right on top: thrown up a bit higher than its class height (owner, round 6), rolling
 			# Sometimes once round and back on its wheels, sometimes onto its roof.
 			o.blast_knock(Vector3.UP * sqrt(2.0 * Vehicle.GRAVITY * h * 1.25) + away * 3.0, 0.5 if randf() < 0.45 else 1.0, false)
@@ -154,6 +213,13 @@ func detonate() -> void:
 			var side := away * float(def.get("push", 24.0)) * (0.35 + 0.65 * k) * (h / 8.4)
 			o.blast_knock(side + Vector3.UP * up, 0.15 + 0.35 * k, false)
 	FxKit.explosion(world, global_position + Vector3.UP * 0.5, float(def.get("blast_size", 2.8)), Color(1.0, 0.45, 0.12))
+	if def.get("electronic", false): # the electronics go up: a blue-white spark burst and a ring of fire
+		GameFeel.flash(world, global_position + Vector3.UP * 0.6, 2.5, Color(0.6, 0.8, 1.0), 0.08)
+		for k in 5:
+			var a := TAU * k / 5.0 + randf() * 0.6
+			FxKit.spark(world, global_position + Vector3(cos(a), 0.4, sin(a)) * 0.8, Vector3(cos(a), 1.2, sin(a)).normalized())
+		GameFeel.shockwave(world, global_position, radius * 1.2, Color(1.0, 0.5, 0.15))
+		GameFeel.scorch(world, global_position + Vector3.UP * 0.3, 2.8)
 	var player_in := is_instance_valid(owner_car) and owner_car.is_player and global_position.distance_to(owner_car.global_position) < 40.0
 	for node in world.get_tree().get_nodes_in_group("vehicles"):
 		var o := node as Vehicle

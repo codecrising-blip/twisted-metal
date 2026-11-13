@@ -7,7 +7,7 @@ extends Area3D
 
 const MSG_TURBO := "TURBO REFILLED"
 
-var kind := "homing" # a weapon id, "turbo", "health" or "mega"
+var kind := "homing" # a weapon id, "turbo", "health", "mega" or "full" (health and energy to 100%)
 var random_weapon := true # re-roll the weapon each respawn
 var respawns := true
 var active := true
@@ -36,7 +36,7 @@ func _ready() -> void:
 	monitorable = false
 	var shape := CollisionShape3D.new()
 	var s := SphereShape3D.new()
-	s.radius = 2.0 if kind == "mega" else 1.8
+	s.radius = 2.3 if kind == "full" else (2.0 if kind == "mega" else 1.8)
 	shape.shape = s
 	shape.position = Vector3.UP * 1.0
 	add_child(shape)
@@ -47,7 +47,7 @@ func _ready() -> void:
 
 
 func is_health() -> bool:
-	return kind == "health" or kind == "mega"
+	return kind == "health" or kind == "mega" or kind == "full"
 
 
 func is_turbo() -> bool:
@@ -90,7 +90,13 @@ func _on_body_entered(body: Node3D) -> void:
 	var v := body as Vehicle
 	if v.is_dead:
 		return
-	if is_health():
+	if kind == "full":
+		if v.health >= v.max_health and v.energy >= 100.0:
+			return
+		v.heal(v.max_health) # everything back: health and energy (HOLLYWOOD prize, round 9)
+		v.energy = 100.0
+		v.notice.emit(v, "FULL HEALTH")
+	elif is_health():
 		if v.health >= v.max_health:
 			return
 		var mega := kind == "mega"
@@ -135,8 +141,8 @@ static func mesh_for(id: String) -> ArrayMesh:
 		return _meshes[id]
 	var mb := MeshBuilder.new()
 	var color: Color = WeaponData.get_def(id).get("color", Color.WHITE)
-	if id == "health" or id == "mega":
-		color = Color(0.95, 0.75, 0.2) if id == "mega" else Color(0.85, 0.12, 0.1)
+	if id == "health" or id == "mega" or id == "full":
+		color = {"health": Color(0.2, 0.45, 0.95), "mega": Color(0.95, 0.75, 0.2), "full": Color(0.85, 0.12, 0.1)}[id]
 	elif id == "turbo":
 		color = Color(0.2, 0.6, 1.0)
 	var metal := MatKit.flat(Color(0.32, 0.33, 0.35), 0.45, 0.6)
@@ -196,14 +202,19 @@ static func mesh_for(id: String) -> ArrayMesh:
 			mb.sphere(paint, 0.26, MeshBuilder.at(Vector3(-0.19, 0.41, 0), Vector3.ZERO, Vector3(1, 0.6, 1)), 14, 6)
 			mb.cylinder(metal, 0.08, 0.25, MeshBuilder.at(Vector3(-0.26, 0.58, 0), Vector3(0, 0, 25)), 8)
 			mb.cylinder(MatKit.lamp(Color(1.0, 0.55, 0.12), 0.9), 0.27, 0.12, MeshBuilder.at(Vector3(0.03, -0.06, 0), Vector3(0, 0, 25)), 14)
-		"health", "mega":
-			# White case with a red (gold for mega) cross.
-			var s := 1.4 if id == "mega" else 1.0
-			mb.box(MatKit.flat(Color(0.88, 0.88, 0.84), 0.5), Vector3(1.0, 1.0, 0.36) * s, MeshBuilder.at(Vector3.ZERO), 0.08)
-			mb.box(glow, Vector3(0.7, 0.2, 0.4) * s, MeshBuilder.at(Vector3.ZERO), 0.0)
-			mb.box(glow, Vector3(0.2, 0.7, 0.4) * s, MeshBuilder.at(Vector3.ZERO), 0.0)
-			if id == "mega":
-				mb.torus(glow, 1.0, 0.06, MeshBuilder.at(Vector3.ZERO, Vector3(90, 0, 0)), 24, 4)
+		"health", "mega", "full":
+			# Owner, round 9: a white cross on a coloured plate: blue (health), a bigger yellow one
+			# (mega), the biggest on red (full: health and energy). Dark steel rim, the cross raised
+			# on both faces so it reads from every side as it turns.
+			var s: float = {"health": 1.0, "mega": 1.3, "full": 1.6}[id]
+			var bg: Color = {"health": Color(0.1, 0.32, 0.8), "mega": Color(0.92, 0.7, 0.1), "full": Color(0.78, 0.08, 0.06)}[id]
+			var plate := MatKit.lamp(bg, 0.35) # a soft glow so it reads from afar, not a glare
+			var white := MatKit.lamp(Color(0.95, 0.95, 0.92), 0.6)
+			var rim := MatKit.steel(Color(0.22, 0.22, 0.24), 0.6, 0.6)
+			mb.box(rim, Vector3(1.08, 1.08, 0.26) * s, MeshBuilder.at(Vector3.ZERO), 0.06)
+			mb.box(plate, Vector3(0.96, 0.96, 0.3) * s, MeshBuilder.at(Vector3.ZERO), 0.04)
+			mb.box(white, Vector3(0.66, 0.2, 0.36) * s, MeshBuilder.at(Vector3.ZERO), 0.01)
+			mb.box(white, Vector3(0.2, 0.66, 0.36) * s, MeshBuilder.at(Vector3.ZERO), 0.01)
 		_:
 			_missile(mb, metal, paint, glow, 1.0)
 	var mesh := mb.build_mesh(0.0, 0.0, true) # body parts share one material: 2 draw calls a pickup

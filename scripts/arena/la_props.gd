@@ -133,7 +133,7 @@ func _street_lights() -> void:
 			continue
 		var lamp := Breakable.new()
 		lamp.style = Breakable.Style.TOPPLE
-		lamp.health = 10.0
+		lamp.health = Breakable.MG_HEALTH
 		lamp.debris_color = Color(0.3, 0.32, 0.3)
 		lamp.kind = "metal"
 		lamp.size_hint = Vector3(0.5, 8.0, 0.5)
@@ -142,6 +142,7 @@ func _street_lights() -> void:
 		lamp.basis = Basis.looking_at(toward_road, Vector3.UP) # arm (local -Z) reaches over the road
 		add_child(lamp)
 		lamp.add_box_shape(Vector3(0.5, 8.0, 0.5), Vector3(0, 4.0, 0))
+		lamp.add_cover(1.1, 6.0) # hide behind it from missiles (round 9)
 		_place(_lamp_mesh(), Vector3.ZERO, 0.0, lamp.visual)
 
 
@@ -188,18 +189,26 @@ func _wrecks() -> void:
 	for c in candidates:
 		if _free(c[0], 2.5):
 			spots.append(c)
+	# Round 9 (owner: "they stop my momentum for no reason"): a wreck bursts apart when you drive
+	# into it or shoot it, so it is cover for a moment, never a dead stop.
 	for i in spots.size():
 		var p: Vector3 = spots[i][0]
 		var yaw: float = spots[i][1]
-		var g := _ground_at(p.x, p.z)
-		_place(_wreck_mesh(i % 3), g, yaw)
-		_solid(Vector3(1.9, 1.3, 4.7), g + Vector3(0, 0.65, 0), yaw)
+		var b := Breakable.new()
+		b.kind = "wreck"
+		b.size_hint = Vector3(1.9, 1.3, 4.7)
+		b.debris_color = Color(0.16, 0.12, 0.1)
+		b.position = _ground_at(p.x, p.z)
+		b.rotation_degrees.y = yaw
+		add_child(b)
+		b.add_box_shape(Vector3(1.9, 1.3, 4.7), Vector3(0, 0.65, 0))
+		_place(_wreck_mesh(i % 3), Vector3.ZERO, 0.0, b.visual)
 		if i % 3 == 0:
 			var smoke := FxKit.smoke(0.9, 10)
-			smoke.position = g + Vector3(0, 1.3, 0)
+			smoke.position = Vector3(0, 1.3, 0)
 			smoke.color_ramp = null
 			smoke.color = Color(0.15, 0.14, 0.13, 0.35)
-			add_child(smoke)
+			b.visual.add_child(smoke)
 			smoke.emitting = true
 
 
@@ -343,12 +352,10 @@ func _barriers_and_bins() -> void:
 		var yaw: float = r[1]
 		var n: int = r[2]
 		var dir := Basis(Vector3.UP, deg_to_rad(yaw)) * Vector3(0, 0, 1)
-		for k in n:
-			var p := start + dir * (k * 3.05)
-			var g := _ground_at(p.x, p.z)
-			_place(_barrier_mesh(), g, yaw + _rng.randf_range(-4, 4))
+		# Round 9 (owner: "concrete lines stop my momentum, make them work like a ramp"): each row is a
+		# low concrete kicker, sloped on both sides, to drive over and jump with turbo.
 		var mid := start + dir * ((n - 1) * 3.05 * 0.5)
-		_solid(Vector3(0.75, 0.85, n * 3.05), _ground_at(mid.x, mid.z) + Vector3(0, 0.42, 0), yaw)
+		_kicker(_ground_at(mid.x, mid.z), yaw, n * 3.05)
 	var h := LosAngelesArena.HALF
 	for spot in [[Vector3(-84, 0, h - 5.0), 0.0], [Vector3(52, 0, h - 5.0), 5.0], [Vector3(h - 5.0, 0, 84), -90.0],
 			[Vector3(-h + 5.0, 0, 70), 90.0], [Vector3(-h + 5.0, 0, -50), 90.0], [Vector3(84, 0, -h + 5.0), 180.0]]:
@@ -357,6 +364,44 @@ func _barriers_and_bins() -> void:
 		var g := _ground_at(spot[0].x, spot[0].z)
 		_place(_dumpster_mesh(), g, spot[1])
 		_solid(Vector3(1.9, 1.5, 1.3), g + Vector3(0, 0.75, 0), spot[1])
+
+
+const KICKER_H := 0.9 # height of the concrete kickers
+const KICKER_SLOPE := 3.0 # run of each slope (about 17 degrees)
+
+
+## A concrete kicker ramp `length` long, its ridge along local z (rotated by yaw), sloped both ways,
+## with yellow hazard stripes on the slopes. One collider (a convex prism) on the shared body.
+func _kicker(base: Vector3, yaw: float, length: float) -> void:
+	var hw := KICKER_SLOPE + 0.4
+	var ht := 0.4
+	var hl := length * 0.5
+	var conc := _concrete()
+	var yellow := MatKit.flat(Color(0.75, 0.6, 0.12), 0.8)
+	var mb := MeshBuilder.new()
+	var p := [Vector3(-hw, 0, -hl), Vector3(-ht, KICKER_H, -hl), Vector3(ht, KICKER_H, -hl), Vector3(hw, 0, -hl)]
+	var q := [Vector3(-hw, 0, hl), Vector3(-ht, KICKER_H, hl), Vector3(ht, KICKER_H, hl), Vector3(hw, 0, hl)]
+	mb.quad(conc, p[0], p[1], q[1], q[0], Vector3(-KICKER_H, KICKER_SLOPE, 0).normalized())
+	mb.quad(conc, p[1], p[2], q[2], q[1], Vector3.UP)
+	mb.quad(conc, p[2], p[3], q[3], q[2], Vector3(KICKER_H, KICKER_SLOPE, 0).normalized())
+	mb.quad(conc, p[0], p[1], p[2], p[3], Vector3.BACK * -1.0)
+	mb.quad(conc, q[0], q[1], q[2], q[3], Vector3.BACK)
+	# Hazard stripes across both slopes, every 1.6 m.
+	var n_str := int(length / 1.6)
+	for k in n_str:
+		var z := -hl + (k + 0.5) * length / n_str
+		for sx: float in [-1.0, 1.0]:
+			var lift := Vector3(sx * KICKER_H, KICKER_SLOPE, 0).normalized() * 0.015
+			mb.quad(yellow, Vector3(sx * hw * 0.92, 0.08, z - 0.25) + lift, Vector3(sx * ht, KICKER_H, z - 0.25) + lift,
+				Vector3(sx * ht, KICKER_H, z + 0.25) + lift, Vector3(sx * hw * 0.92, 0.08, z + 0.25) + lift, Vector3(sx * KICKER_H, KICKER_SLOPE, 0).normalized())
+	var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(yaw)), base)
+	_arena.batch_builder(mb, true, 0.6, transform * xf)
+	var shape := CollisionShape3D.new()
+	var hull := ConvexPolygonShape3D.new()
+	hull.points = PackedVector3Array(p + q)
+	shape.shape = hull
+	shape.transform = xf
+	_body.add_child(shape)
 
 
 func _container_stack() -> void:
@@ -532,7 +577,7 @@ func _street_bits() -> void:
 		if not _free(pos, 0.4, -1.6) or LosAngelesArena.road_distance(pos.x, pos.z) < LosAngelesArena.ROAD_W * 0.5 + 0.9:
 			continue
 		var b := Breakable.new()
-		b.health = 6.0
+		b.health = Breakable.MG_HEALTH
 		b.kind = "prop"
 		b.size_hint = Vector3(0.6, 1.0, 0.6)
 		b.debris_color = [Color(0.55, 0.1, 0.07), Color(0.16, 0.24, 0.18), Color(0.75, 0.3, 0.06), Color(0.75, 0.3, 0.06)][kind]

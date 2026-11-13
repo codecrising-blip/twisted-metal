@@ -67,9 +67,9 @@ func _draw() -> void:
 		if p.length() > r - 4.0:
 			continue
 		p += c
-		if pk.kind == "health" or pk.kind == "mega":
-			var s := 4.5 if pk.kind == "mega" else 3.0
-			var col := Color(0.45, 1.0, 0.45) if pk.kind == "mega" else Color(0.3, 0.85, 0.35)
+		if pk.is_health():
+			var s := 4.5 if pk.kind != "health" else 3.0
+			var col := Color(0.45, 1.0, 0.45) if pk.kind != "health" else Color(0.3, 0.85, 0.35)
 			draw_rect(Rect2(p - Vector2(s, s * 0.35), Vector2(s * 2, s * 0.7)), col)
 			draw_rect(Rect2(p - Vector2(s * 0.35, s), Vector2(s * 0.7, s * 2)), col)
 		elif pk.kind == "turbo":

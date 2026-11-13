@@ -117,7 +117,10 @@ func _spawn_pickups() -> void:
 				var tmp = kinds[k]
 				kinds[k] = kinds[j]
 				kinds[j] = tmp
-		var pk := Pickup.create(self, kinds[i % kinds.size()], arena.weapon_points[i])
+		var kind: String = kinds[i % kinds.size()]
+		if "weapon_kinds" in arena and i < arena.weapon_kinds.size() and arena.weapon_kinds[i] != "":
+			kind = arena.weapon_kinds[i] # the stage says what goes where (LA, round 9)
+		var pk := Pickup.create(self, kind, arena.weapon_points[i])
 		pk.random_weapon = false
 	for p in arena.health_points:
 		Pickup.create(self, "health", p)

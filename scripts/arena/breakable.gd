@@ -9,7 +9,13 @@ signal broken(prop: Breakable, by: Vehicle)
 
 enum Style { SHATTER, TOPPLE }
 
-var health := 12.0
+## Owner, round 9: every breakable goes down to ~0.6 s of machine-gun fire (0.55 x 12.5 rounds/s = 6.9 a second).
+const MG_HEALTH := 4.2
+## Round 9 (owner: hide behind palms and street lights from long-range fire): a wider column around
+## the prop that only shots hit (physics layer 6). Cars still only meet the thin trunk or pole.
+const COVER_LAYER := 32
+var _cover: StaticBody3D
+var health := MG_HEALTH
 var smash_on_contact := true # a car driving into it breaks it at once
 var ram_damage_mult := 0.0 # otherwise: ram damage = car speed * this
 var style := Style.SHATTER
@@ -44,6 +50,23 @@ func add_box_shape(size: Vector3, center: Vector3) -> void:
 	add_child(shape)
 
 
+## Missile cover: a column of `radius` and `height` that catches shots aimed past this prop.
+func add_cover(radius: float, height: float) -> void:
+	_cover = StaticBody3D.new()
+	_cover.name = "Cover"
+	_cover.collision_layer = COVER_LAYER
+	_cover.collision_mask = 0
+	_cover.set_meta("cover_of", self)
+	add_child(_cover)
+	var shape := CollisionShape3D.new()
+	var c := CylinderShape3D.new()
+	c.radius = radius
+	c.height = height
+	shape.shape = c
+	shape.position = Vector3(0, height * 0.5, 0)
+	_cover.add_child(shape)
+
+
 ## Called by Vehicle when it drives into this. Returns true if the car went through.
 func vehicle_contact(v: Vehicle, before: Vector3) -> bool:
 	if is_broken:
@@ -69,6 +92,8 @@ func break_apart(by: Vehicle) -> void:
 		return
 	is_broken = true
 	collision_layer = 0
+	if _cover:
+		_cover.collision_layer = 0
 	_break_feel(by)
 	if style == Style.TOPPLE:
 		_topple(by)
@@ -140,6 +165,13 @@ func _break_feel(by: Vehicle) -> void:
 			GameFeel.play("metal_fall", center, world, 0.0, 1.1, true)
 			FxKit.crash_burst(world, global_position + Vector3.UP * 1.0, dir if dir != Vector3.UP else Vector3.FORWARD, 0.5)
 			_debris()
+		"wreck": # a burnt shell bursts: what fuel was left goes up, panels fly
+			FxKit.explosion(world, center, 1.3, Color(1.0, 0.5, 0.15))
+			GameFeel.play("metal_fall", center, world, 0.0, 0.9, true)
+			FxKit.crash_burst(world, center, dir if dir != Vector3.UP else Vector3.FORWARD, 0.8)
+			FxKit.shatter(world, center, global_basis * (size_hint * 0.5), dir, speed, debris_color, false)
+			if you:
+				GameFeel.hitstop(get_tree(), 0.05, 0.1)
 		"prop":
 			GameFeel.play("crash", center, world, -10.0, 1.35, true)
 			_debris()

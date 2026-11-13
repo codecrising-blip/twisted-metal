@@ -28,6 +28,7 @@ const PLAT_A := 100.0 # battleground half size in x (superellipse)
 const PLAT_B := 92.0 # ... in z
 const RAMP_L := 22.0
 const RAMP_W := 14.0
+const RAMP_FILLET := 6.0 # the curve where a ramp meets the road (round 9)
 const RAMP_ANGLES := [12.0, 105.0, 192.0, 322.0] # degrees around the battleground (0 = east, 90 = south)
 const ROAD_W := 18.0
 const HILL_H := 3.0
@@ -67,6 +68,7 @@ var weapon_points: Array[Vector3] = []
 var health_points: Array[Vector3] = []
 var mega_points: Array[Vector3] = []
 var turbo_points: Array[Vector3] = [] # five spots (owner, session 6)
+var weapon_kinds: Array[String] = [] # the weapon each weapon point always gives ("" = from the mix)
 var ramps: Array[Dictionary] = [] # {foot, top}: the AI drives to the foot, then up
 var center := Vector3(0, PLAT_H, 0)
 var wander_half := 130.0
@@ -241,7 +243,21 @@ static func ramp_list() -> Array:
 ## Height of a ramp's driving surface (a plane from the battleground edge down to the foot).
 static func ramp_y(rp: Dictionary, x: float, z: float) -> float:
 	var along: float = (Vector3(x, 0, z) - Vector3(rp.top.x, 0, rp.top.z)).dot(rp.dir)
-	return PLAT_H * (1.0 - clampf(along / RAMP_L, 0.0, 1.0))
+	return ramp_profile(along)
+
+
+## Ramp height `along` metres out from its top edge. Round 9 (owner: drive smoothly onto the ramps):
+## the foot curves into the road over RAMP_FILLET metres instead of a sharp kink that bounced the
+## car's nose up and scraped its belly.
+static func ramp_profile(along: float) -> float:
+	var m := PLAT_H / RAMP_L
+	var half := RAMP_FILLET * 0.5
+	if along <= RAMP_L - half:
+		return PLAT_H * (1.0 - clampf(along / RAMP_L, 0.0, 1.0))
+	if along >= RAMP_L + half:
+		return 0.0
+	var d := RAMP_L + half - along
+	return m / (2.0 * RAMP_FILLET) * d * d
 
 
 ## Signed distance (m, approx.) from the battleground edge: > 0 inside.
@@ -273,8 +289,8 @@ static func height_at(x: float, z: float) -> float:
 		var rel := Vector3(x, 0, z) - Vector3(rp.top.x, 0, rp.top.z)
 		var along: float = rel.dot(rp.dir)
 		var across: float = absf(rel.dot(rp.side))
-		if along > -1.0 and along < RAMP_L and across < RAMP_W * 0.5:
-			h = maxf(h, PLAT_H * (1.0 - clampf(along / RAMP_L, 0.0, 1.0)))
+		if along > -1.0 and along < RAMP_L + RAMP_FILLET * 0.5 and across < RAMP_W * 0.5:
+			h = maxf(h, ramp_profile(along))
 	if h < 0.5:
 		for hill: Dictionary in hills():
 			var rel := Vector2(x, z) - (hill.p as Vector2)
@@ -755,8 +771,8 @@ func _ramps_build() -> void:
 	for rp: Dictionary in ramp_list():
 		var pts := PackedVector3Array()
 		var base := Vector3(rp.top.x, 0, rp.top.z) - (rp.dir as Vector3) * 2.0
-		for k in 14:
-			pts.append(base + (rp.dir as Vector3) * ((RAMP_L + 2.0) * k / 13.0))
+		for k in 16:
+			pts.append(base + (rp.dir as Vector3) * ((RAMP_L + 2.0 + RAMP_FILLET * 0.5) * k / 15.0))
 		var plane := func(x: float, z: float) -> float: return ramp_y(rp, x, z)
 		_drape(pts, RAMP_W - 0.1, 0.05, _m.asphalt, false, 0.0, plane)
 		for s: float in [-1.0, 1.0]:
@@ -1030,7 +1046,7 @@ func _tunnel_lamp() -> StandardMaterial3D:
 
 func _glass_panel(at: Vector3, thick: float) -> void:
 	var b := Breakable.new()
-	b.health = 8.0
+	b.health = Breakable.MG_HEALTH
 	b.kind = "glass"
 	b.size_hint = Vector3(6.6, ROOF_Y - 1.4, 0.3)
 	b.debris_color = Color(0.7, 0.9, 1.0)
@@ -1068,7 +1084,7 @@ func _overpass_and_cage() -> void:
 		var mid := (a + b) * 0.5
 		var along_x := absf(b.x - a.x) > 0.1
 		var size := Vector3(a.distance_to(b), fence_h, 0.12) if along_x else Vector3(0.12, fence_h, a.distance_to(b))
-		MeshKit.solid_box(self, size, mid + Vector3.UP * y, _m.chainlink)
+		MeshKit.solid_box(self, size, mid + Vector3.UP * y, _m.chainlink).add_to_group(&"see_through") # the taser sees through fences
 		var posts := int(a.distance_to(b) / 5.0) + 1
 		for k in posts:
 			var p := a.lerp(b, float(k) / maxf(1.0, posts - 1))
@@ -1219,7 +1235,7 @@ func _power_tower() -> void:
 	for k in corners:
 		var s: Vector3 = k
 		var leg := Breakable.new()
-		leg.health = 40.0
+		leg.health = Breakable.MG_HEALTH
 		leg.smash_on_contact = false
 		leg.ram_damage_mult = 1.0
 		leg.debris_color = Color(0.45, 0.46, 0.48)
@@ -1322,7 +1338,7 @@ func _hot_dog_stands() -> void:
 ## Stand with a giant hot dog on the roof. Breaks into a weapon. All stands share one mesh.
 func _hot_dog_stand(pos: Vector3, yaw: float) -> void:
 	var b := Breakable.new()
-	b.health = 12.0
+	b.health = Breakable.MG_HEALTH
 	b.kind = "wood"
 	b.size_hint = Vector3(4.2, 3.0, 3.0)
 	b.loot = "weapon"
@@ -1406,7 +1422,7 @@ func _palms() -> void:
 func _palm(pos: Vector3, fan := false) -> void:
 	var b := Breakable.new()
 	b.style = Breakable.Style.TOPPLE
-	b.health = 15.0
+	b.health = Breakable.MG_HEALTH
 	b.kind = "palm"
 	b.size_hint = Vector3(1.0, 6.0, 1.0)
 	b.topple_height = 7.0
@@ -1415,6 +1431,7 @@ func _palm(pos: Vector3, fan := false) -> void:
 	b.rotation.y = _rng.randf() * TAU
 	add_child(b)
 	b.add_box_shape(Vector3(1.0, 5.0, 1.0), Vector3(0, 2.5, 0))
+	b.add_cover(1.5, 6.5) # hide behind it from missiles (round 9)
 	var mi := MeshInstance3D.new()
 	mi.mesh = _fan_palm_mesh(_rng.randi() % 2) if fan else _palm_mesh(_rng.randi() % 3)
 	var s := _rng.randf_range(0.85, 1.15)
@@ -1631,7 +1648,7 @@ func _hollywood_sign() -> void:
 		var letter := Breakable.new()
 		letter.style = Breakable.Style.TOPPLE
 		letter.smash_on_contact = false
-		letter.health = 20.0
+		letter.health = Breakable.MG_HEALTH
 		letter.debris_color = Color(0.92, 0.92, 0.88)
 		letter.kind = "metal"
 		letter.size_hint = Vector3(5.0 * u, 7.5 * u, 1.0)
@@ -1659,9 +1676,9 @@ func _on_letter_broken(_letter: Breakable, _by: Vehicle) -> void:
 	_letters_left -= 1
 	if _letters_left > 0:
 		return
-	easter_egg.emit("HOLLYWOOD IS DEAD", "Calypso: \"I never liked that sign. Take these, with my compliments.\"")
-	for k in 3:
-		Pickup.create(self, "power", Vector3(-10.0 + k * 10.0, ROOF_Y, (TUNNEL_Z0 + TUNNEL_Z1) * 0.5 + 6.0), true)
+	easter_egg.emit("HOLLYWOOD IS DEAD", "Calypso: \"I never liked that sign. Take this, with my compliments.\"")
+	# Owner, round 9: the prize is a FULL HEALTH (health and energy to 100%), up on the tunnel roof.
+	Pickup.create(self, "full", Vector3(0, ROOF_Y, (TUNNEL_Z0 + TUNNEL_Z1) * 0.5 + 6.0), true)
 
 
 ## For the HUD radar: the outer wall, the road, the battleground edge and the tunnels.
@@ -1722,36 +1739,89 @@ func _points() -> void:
 	for f: float in [0.05, 0.25, 0.42, 0.7, 0.8, 0.92]:
 		respawn_points.append(_road_spot(f))
 	respawn_points.append_array([_spot(0, 60, 0), _spot(-60, -60, 180), _spot(70, 30, 90)])
-	# Weapons along the road (not on the hills or by the ramp feet), on the battleground, on the roof.
-	for k in 14:
-		var f := (k + 0.5) / 14.0
-		var r := road_at(f)
-		var p: Vector3 = r.p
-		var near_hill := false
-		for hill: Dictionary in hills():
-			if Vector2(p.x, p.z).distance_to(hill.p) < 20.0:
-				near_hill = true
-		if not near_hill:
-			weapon_points.append(ground(p.x, p.z))
-	for p: Vector3 in [Vector3(-35, 0, 20), Vector3(35, 0, -15), Vector3(0, 0, -40), Vector3(-60, 0, 60), Vector3(20, 0, 68), Vector3(-70, 0, -10)]:
-		weapon_points.append(ground(p.x, p.z))
-	weapon_points.append_array([Vector3(-20, ROOF_Y, TUNNEL_Z1 - 8.0), Vector3(10, ROOF_Y, TUNNEL_Z0 + 10.0), Vector3(24, ROOF_Y, TUNNEL_Z0 + 10.0)])
-	health_points = [
-		ground(-TUNNEL_X - 14.0, ROAD_NORTH_Z + 14.0), # by the tunnels
+	# Item placement (owner, round 9): missiles, napalm and turbo on the road; SAT, Zoomy and Remote in
+	# the corners; health and power missiles on the hilltops; a mix in the middle. Every spot always
+	# gives the same thing (`weapon_kinds`, parallel to `weapon_points`).
+	while weapon_kinds.size() < weapon_points.size(): # spots added earlier (the cage) take from the mix
+		weapon_kinds.append("")
+	var road_kinds := ["homing", "fire", "napalm", "fire", "homing", "napalm"]
+	var n := 0
+	for k in 16:
+		var p := _road_item_point((k + 0.5) / 16.0)
+		if p == Vector3.INF:
+			continue
+		weapon_points.append(p)
+		weapon_kinds.append(road_kinds[n % road_kinds.size()])
+		n += 1
+	var corner_kinds := {Vector2(1, -1): "sat", Vector2(-1, -1): "zoomy", Vector2(1, 1): "remote", Vector2(-1, 1): "zoomy"}
+	for c: Vector2 in corner_kinds:
+		weapon_points.append(_corner_point(c))
+		weapon_kinds.append(corner_kinds[c])
+	var hill_list := hills()
+	for i in hill_list.size():
+		var top: Vector2 = (hill_list[i] as Dictionary).p
+		var at := Vector3(top.x, height_at(top.x, top.y) + 1.4, top.y) # on the crest: grab it as you fly over
+		if i == 0:
+			weapon_points.append(at)
+			weapon_kinds.append("power")
+		else:
+			health_points.append(at + (Vector3.UP * 1.2 if i == 1 else Vector3.ZERO)) # the middle hill's floats: jump for it
+	var middle := {Vector3(-35, 0, 20): "power", Vector3(35, 0, -15): "homing", Vector3(0, 0, -40): "remote",
+		Vector3(-60, 0, 60): "fire", Vector3(20, 0, 68): "zoomy", Vector3(-70, 0, -10): "napalm", Vector3(-20, 0, -70): "sat"}
+	for m: Vector3 in middle:
+		weapon_points.append(ground(m.x, m.z))
+		weapon_kinds.append(middle[m])
+	for r: Array in [[Vector3(-20, ROOF_Y, TUNNEL_Z1 - 8.0), "homing"], [Vector3(10, ROOF_Y, TUNNEL_Z0 + 10.0), "power"], [Vector3(24, ROOF_Y, TUNNEL_Z0 + 10.0), "fire"]]:
+		weapon_points.append(r[0])
+		weapon_kinds.append(r[1])
+	health_points.append_array([
 		ground(26, 22), # by the pit of fire
 		ground(BURNT_AT.x + 16.0, BURNT_AT.z), # by the burnt building
-		ground(-100, 30),
-	]
-	var hill: Dictionary = hills()[1]
-	var top: Vector2 = hill.p
-	health_points.append(Vector3(top.x, HILL_H + 2.6, top.y)) # floating over a hill: jump for it
-	# Turbo (owner, session 6): only five spots: three around the road loop, one on the battleground,
-	# one up on the tunnel roof.
-	for f: float in [0.08, 0.42, 0.75]:
-		var p: Vector3 = road_at(f).p
-		turbo_points.append(ground(p.x, p.z))
+		ground(-75, 32), # west side of the battleground (was on the edge wall)
+	])
+	# Turbo (owner, round 4: five spots): three on the road, one in the middle, one on the tunnel roof.
+	for f: float in [0.2, 0.5, 0.8]:
+		var p := Vector3.INF
+		var ff := f
+		while p == Vector3.INF and ff < f + 0.1:
+			p = _road_item_point(ff)
+			ff += 0.01
+		turbo_points.append(p)
 	turbo_points.append(ground(40, 15))
 	turbo_points.append(Vector3(-4, ROOF_Y, (TUNNEL_Z0 + TUNNEL_Z1) * 0.5))
+
+
+## A spot on the road for an item at `frac` around the loop, or Vector3.INF when it would sit on a
+## hill, by a ramp foot or against a tunnel's divider (round 9: items merged into walls). By the
+## tunnels it moves into a lane.
+func _road_item_point(frac: float) -> Vector3:
+	var p: Vector3 = road_at(frac).p
+	for hill: Dictionary in hills():
+		if Vector2(p.x, p.z).distance_to(hill.p) < 24.0:
+			return Vector3.INF
+	for rp: Dictionary in ramp_list():
+		if Vector2(p.x, p.z).distance_to(Vector2(rp.foot.x, rp.foot.z)) < 16.0:
+			return Vector3.INF
+	if absf(p.z - ROAD_NORTH_Z) < 12.0 and absf(p.x) < TUNNEL_X + 14.0:
+		if absf(p.x) > TUNNEL_X - 6.0:
+			return Vector3.INF # the tunnel mouths and their divider noses
+		p.z = ROAD_NORTH_Z + 7.0 # inside, in the south tube's lane
+	return ground(p.x, p.z)
+
+
+## A clear spot in a corner of the low ground (between the road and the outer wall's corner).
+func _corner_point(sign: Vector2) -> Vector3:
+	var best := Vector3.ZERO
+	for t in range(132, 95, -2):
+		var x := sign.x * t
+		var z := sign.y * t
+		if absf(x) + absf(z) > HALF * 2.0 - WALL_CHAMFER - 14.0:
+			continue
+		if road_distance(x, z) < ROAD_W * 0.5 + 5.0 or edge_distance(x, z) > -8.0:
+			continue
+		best = ground(x, z)
+		break
+	return best
 
 
 func _spot(x: float, z: float, yaw_deg: float) -> Transform3D:

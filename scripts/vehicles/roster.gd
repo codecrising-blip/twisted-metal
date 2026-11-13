@@ -20,6 +20,7 @@ const HEALTH_SCALE := 1.0
 ## reverse) and handbrake drifts 1.2x stronger (sharper drift turn, looser drift grip), same for every class.
 const SPEED_SCALE := 1.4
 const DRIFT_SCALE := 1.2
+const REVERSE_SCALE := 1.6 # round 9 (owner): reverse 1.6x faster
 
 const MASS := {"light": 1.0, "medium": 1.4, "heavy": 2.0, "super": 2.8}
 ## How hard a car is pushed by hits, per mass class.
@@ -83,7 +84,7 @@ static func get_car(id: String) -> Dictionary:
 	var cls: String = c.get("class", "medium")
 	c["max_speed"] = (21.3 + 1.1 * spd) * SPEED_SCALE
 	c["accel"] = (10.2 + 0.85 * spd) * float(CLASS_ACCEL.get(cls, 1.0)) * SPEED_SCALE
-	c["reverse"] = 10.0 * SPEED_SCALE
+	c["reverse"] = 10.0 * SPEED_SCALE * REVERSE_SCALE
 	c["max_health"] = (200.0 + 16.0 * arm) * HEALTH_SCALE
 	c["handling"] = 1.5 + 0.12 * hnd
 	c["grip"] = 5.0 + 0.325 * hnd

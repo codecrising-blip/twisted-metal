@@ -120,6 +120,64 @@ func _run() -> void:
 					Projectile.spawn(main, ids[i], from, Vector3(1, 0, 0.05), e, null)
 				await _frames(16)
 				_place(cam, base + Vector3(-12, 8, 17), base + Vector3(1, 1, -7), 64.0)
+			"sat", "sat_preview": # SAT zone N frames after launch (arg 3), or the preview with SAT selected
+				Engine.max_physics_steps_per_frame = 1
+				var e: Vehicle = main.enemies[0]
+				var base := LosAngelesArena.ground(-40, 40)
+				player.global_transform = Transform3D(Basis.IDENTITY, base + Vector3(0, 0.05, 0))
+				e.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(90)), base + Vector3(2, 0.05, -24))
+				await _frames(5)
+				var n := 10
+				if shot == "sat":
+					SatStrike.start(player, "sat", WeaponData.get_def("sat"))
+					var a := OS.get_cmdline_user_args()
+					n = int(a[2]) if a.size() > 2 else 60
+				else:
+					player.add_ammo("sat", 1)
+					player.selected = player.weapon_order.find("sat")
+				await _frames(n)
+				_place(cam, base + Vector3(-17, 12, 6), base + Vector3(0, 3, -22), 62.0)
+				await _frames(1)
+				await RenderingServer.frame_post_draw
+				root.get_viewport().get_texture().get_image().save_png(out)
+				quit()
+				return
+			"mine": # the Remote (electronic) next to an energy mine, close up, armed
+				Engine.max_physics_steps_per_frame = 1
+				var base := LosAngelesArena.ground(-40, 40)
+				player.global_transform = Transform3D(Basis.IDENTITY, base + Vector3(0, 0.05, 0))
+				for e2: Vehicle in main.enemies:
+					e2.global_position = Vector3(0, -200, 0)
+				await _frames(5)
+				var m1 := Mine.drop(player, WeaponData.get_def("remote"))
+				var m2 := Mine.drop_energy(player)
+				m2.global_position = m1.global_position + Vector3(1.6, 0, 0)
+				player.global_position = Vector3(0, -200, 0)
+				await _frames(70)
+				_place(cam, m1.global_position + Vector3(-1.2, 1.6, 2.6), m1.global_position + Vector3(0.6, 0.2, 0), 50.0)
+				await _frames(1)
+				await RenderingServer.frame_post_draw
+				root.get_viewport().get_texture().get_image().save_png(out)
+				quit()
+				return
+			"taser", "taser_spin": # Outlaw's arc on a car, or spinning round her with nobody in range
+				Engine.max_physics_steps_per_frame = 1
+				var e: Vehicle = main.enemies[0]
+				var base := LosAngelesArena.ground(-40, 40)
+				e.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(90)), base + Vector3(0, 0.05, 0))
+				if shot == "taser":
+					player.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(-90)), base + Vector3(11, 0.05, -2))
+				else:
+					player.global_position = Vector3(0, -200, 0)
+				await _frames(5)
+				TaserLink.start(e, WeaponData.get_def("omni_taser"))
+				await _frames(40)
+				_place(cam, base + Vector3(4, 6.5, 14), base + Vector3(4, 1.2, -1), 60.0)
+				await _frames(3)
+				await RenderingServer.frame_post_draw
+				root.get_viewport().get_texture().get_image().save_png(out)
+				quit()
+				return
 			"impact": # a power missile hitting Outlaw: flash, shockwave, debris, jolt
 				var e: Vehicle = main.enemies[0]
 				var base := LosAngelesArena.ground(-40, 40)

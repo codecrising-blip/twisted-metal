@@ -381,7 +381,25 @@ func _run() -> void:
 	outlaw._weapon_cooldowns.clear()
 	outlaw._fire_selected()
 	await _frames(3)
-	_check(outlaw.ammo["omni_taser"] == 1 and not outlaw.has_live_special(), "firing the taser with nobody in range wastes the charge")
+	_check(outlaw.ammo["omni_taser"] == 1 and outlaw.has_live_special(), "taser with nobody in range spends the charge and spins round the car searching (round 9)")
+	await _frames(45)
+	_check(outlaw.has_live_special(), "the search lasts the attack's duration, not 0.3 s")
+	_place(dog, 0, 28, 0)
+	var dog_hp := dog.health
+	await _frames(12)
+	var link := outlaw.live_special() as TaserLink
+	_check(link != null and link.target == dog, "the spinning arc locks onto a car the moment it comes into range")
+	await _frames(150)
+	_check(not outlaw.has_live_special() and dog.health < dog_hp, "a late lock still deals damage, then the link ends (%.1f)" % (dog_hp - dog.health))
+	# Line of sight (round 9): fences, glass and props don't break the link; a real wall does.
+	var mid := (outlaw.aim_point() + dog.aim_point()) * 0.5
+	var fence := MeshKit.solid_box(main, Vector3(8, 9, 0.3), mid, MatKit.plain(MeshKit.mat(Color.GRAY)))
+	fence.add_to_group(&"see_through")
+	await _frames(2)
+	_check(TaserLink._can_see(outlaw, dog), "the taser sees through a fence")
+	fence.remove_from_group(&"see_through")
+	_check(not TaserLink._can_see(outlaw, dog), "a solid wall as tall as the cars hides the target")
+	fence.queue_free()
 	outlaw.ammo["omni_taser"] = charges
 
 	# Junkyard Dog's chain bomb: hook a car, detonate by hand.
@@ -563,6 +581,8 @@ func _run() -> void:
 	n_hp = outlaw.health
 	player.add_ammo("sat", 1)
 	player.selected = player.weapon_order.find("sat")
+	await _frames(3)
+	_check(player._sat_preview != null, "with SAT selected its zone shows ahead of the car (round 9)")
 	player._weapon_cooldowns.clear()
 	player._fire_selected()
 	await _frames(60)
@@ -571,6 +591,24 @@ func _run() -> void:
 	_check(is_equal_approx(n_hp, outlaw.health), "SAT: nothing happens before the 4 s are up")
 	await _frames(60)
 	_check(absf((n_hp - outlaw.health) - 112.0) < 0.5, "SAT zone moves with you and hits for 112 (%.1f)" % (n_hp - outlaw.health))
+	_check(player._sat_preview == null, "the preview is gone once the SAT is spent")
+	# Remote (round 9): an electronic mine; a clean hit sets the car burning.
+	outlaw.burn_time = 0.0
+	var clean := Mine.new()
+	clean.owner_car = player
+	clean.def = WeaponData.get_def("remote")
+	main.add_child(clean)
+	clean.global_position = outlaw.global_position
+	clean.detonate()
+	_check(outlaw.burn_time > 0.0, "a clean Remote hit sets the car on fire")
+	outlaw.burn_time = 0.0
+	# Full health (round 9, the HOLLYWOOD prize): health and energy back to 100%.
+	_place(player, 40, 60, 0)
+	player.health = 20.0
+	player.energy = 0.0
+	Pickup.create(main, "full", player.global_position)
+	await _frames(4)
+	_check(is_equal_approx(player.health, player.max_health) and is_equal_approx(player.energy, 100.0), "full health restores health and energy to 100%")
 	player.auto_target = true
 
 	# Pickups say what you got; turbo never refills by itself, a turbo pickup fills it.
