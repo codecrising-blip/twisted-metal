@@ -506,6 +506,88 @@ def cross_image(bg, fg=(0.9, 0.9, 0.86), px=256, arm=0.2, reach=0.34):
     return im
 
 
+def holes_image(n=14, seed=1, size=(512, 256), r=(4, 9)):
+    """Bullet strikes: a dark hole, a ring of bare metal, a few paint flakes round it."""
+    rng = np.random.default_rng(seed)
+    im = Image.new("RGBA", size, (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for _ in range(n):
+        x, y = rng.uniform(20, size[0] - 20), rng.uniform(20, size[1] - 20)
+        rr = rng.uniform(*r)
+        for k in range(6):
+            a = rng.uniform(0, 6.283)
+            q = rr * rng.uniform(1.3, 2.4)
+            fr = rr * rng.uniform(0.25, 0.6)
+            d.ellipse([x + math.cos(a) * q - fr, y + math.sin(a) * q - fr, x + math.cos(a) * q + fr, y + math.sin(a) * q + fr], fill=(118, 112, 106, 230))
+        d.ellipse([x - rr * 1.5, y - rr * 1.5, x + rr * 1.5, y + rr * 1.5], fill=(128, 122, 116, 255))
+        d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=(8, 7, 7, 255))
+    return im
+
+
+def splatter_image(color=(0.11, 0.012, 0.01), n=60, seed=1, size=(256, 256)):
+    """Dried spatter (blood, oil): one heavy patch thrown out into drops and runs."""
+    rng = np.random.default_rng(seed)
+    a = np.zeros((size[1], size[0]), dtype=np.float32)
+    im = Image.new("L", size, 0)
+    d = ImageDraw.Draw(im)
+    cx, cy = size[0] * 0.5, size[1] * 0.42
+    for _ in range(n):
+        ang = rng.uniform(0, 6.283)
+        dist = abs(rng.normal(0, size[0] * 0.2))
+        x, y = cx + math.cos(ang) * dist, cy + math.sin(ang) * dist * 0.8
+        rr = max(1.5, rng.uniform(2, 16) * (1.0 - dist / size[0] * 1.6))
+        d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=int(rng.uniform(150, 255)))
+        if rng.uniform() < 0.25:  # a run down
+            d.line([x, y, x + rng.uniform(-2, 2), y + rng.uniform(15, 70)], fill=200, width=max(1, int(rr * 0.5)))
+    im = im.filter(ImageFilter.GaussianBlur(1.2))
+    rgb = _to_srgb(np.array(color, dtype=np.float32))
+    out = np.zeros((size[1], size[0], 4), dtype=np.uint8)
+    out[..., :3] = (rgb * 255).astype(np.uint8)
+    out[..., 3] = np.asarray(im)
+    return Image.fromarray(out, "RGBA")
+
+
+def dots_image(color, n=18, seed=1, size=(512, 256), r=(14, 24), alpha=0.8):
+    """Scattered painted dots (Sweet Tooth's polka dots, faded)."""
+    rng = np.random.default_rng(seed)
+    im = Image.new("L", size, 0)
+    d = ImageDraw.Draw(im)
+    placed = []
+    tries = 0
+    while len(placed) < n and tries < 2000:
+        tries += 1
+        x, y, rr = rng.uniform(30, size[0] - 30), rng.uniform(30, size[1] - 30), rng.uniform(*r)
+        if all((x - px) ** 2 + (y - py) ** 2 > (rr + pr + 14) ** 2 for px, py, pr in placed):
+            placed.append((x, y, rr))
+            d.ellipse([x - rr, y - rr, x + rr, y + rr], fill=int(255 * alpha))
+    rgb = _to_srgb(np.array(color, dtype=np.float32))
+    out = np.zeros((size[1], size[0], 4), dtype=np.uint8)
+    out[..., :3] = (rgb * 255).astype(np.uint8)
+    out[..., 3] = np.asarray(im)
+    return Image.fromarray(out, "RGBA")
+
+
+def lines_image(segments, size=(512, 512), width=3, color=(0.015, 0.015, 0.015), alpha=0.9):
+    """Panel seams and door gaps: segments = [(x0, y0, x1, y1)] in 0..1 picture space."""
+    im = Image.new("L", size, 0)
+    d = ImageDraw.Draw(im)
+    for (x0, y0, x1, y1) in segments:
+        d.line([x0 * size[0], y0 * size[1], x1 * size[0], y1 * size[1]], fill=int(255 * alpha), width=width)
+    rgb = _to_srgb(np.array(color, dtype=np.float32))
+    out = np.zeros((size[1], size[0], 4), dtype=np.uint8)
+    out[..., :3] = (rgb * 255).astype(np.uint8)
+    out[..., 3] = np.asarray(im)
+    return Image.fromarray(out, "RGBA")
+
+
+def marker(name, loc):
+    """An empty: exported as a named node, read by the game (wheel positions, muzzles, ...)."""
+    ob = bpy.data.objects.new(name, None)
+    ob.location = loc
+    _link(ob)
+    return ob
+
+
 # ------------------------------------------------------------------ noise (numpy)
 
 def _hash3(ix, iy, iz, seed):
@@ -784,8 +866,22 @@ def weather(g, decals=(), seed=1, dust_from=0.0, dust_to=1.2, soot=None, ao_stre
     ao = _blur(g["ao"], 0.8).reshape(-1)
     edge = _blur(g["edge"], 0.6).reshape(-1)
     nk = len(_kinds)
-    idx = np.clip(idx, 0, max(nk - 1, 0))
+    idx = np.clip(idx, 0, max(nk - 1, 0)).copy()
     kind_names = [k["kind"] for k in _kinds]
+    # painted regions: (fn(P, N) -> mask 0..1, linear colour, kinds[, material]). Bands round a
+    # missile, colour blocks; with a material the surface there changes kind too (glass on a body).
+    for reg in regions:
+        fn, rcolor, rkinds = reg[0], reg[1], reg[2]
+        ids = [i for i, n in enumerate(kind_names) if n in rkinds]
+        mk = np.clip(fn(P, N), 0, 1) * np.isin(np.array([kind_names.index(k["kind"]) for k in _kinds])[idx], ids)
+        if not mk.any():
+            continue
+        if len(reg) > 3 and reg[3] is not None:
+            hit = mk > 0.5
+            idx[hit] = reg[3]["tm_idx"]
+            base[hit] = np.array(_kinds[reg[3]["tm_idx"]]["color"], dtype=np.float32)
+        else:
+            base = base * (1 - mk[:, None]) + np.array(rcolor, dtype=np.float32)[None, :] * mk[:, None]
     kind_of = np.array([kind_names.index(k["kind"]) for k in _kinds])[idx] if nk else idx
     def per(key, default=0.5):
         return np.array([(k[key] if k[key] is not None else default) for k in _kinds], dtype=np.float32)[idx]
@@ -796,11 +892,6 @@ def weather(g, decals=(), seed=1, dust_from=0.0, dust_to=1.2, soot=None, ao_stre
         ids = [i for i, n in enumerate(kind_names) if n in names]
         return np.isin(kind_of, ids)
 
-    # painted regions: (fn(P, N) -> mask 0..1, linear colour, kinds). Bands round a missile, colour blocks.
-    for fn, rcolor, rkinds in regions:
-        mk = np.clip(fn(P, N), 0, 1) * is_kind(*rkinds)
-        if mk.any():
-            base = base * (1 - mk[:, None]) + np.array(rcolor, dtype=np.float32)[None, :] * mk[:, None]
     # decals go on the clean paint, so they chip and stain with it
     for d in decals:
         rel = P - d.center
@@ -892,6 +983,17 @@ def weather(g, decals=(), seed=1, dust_from=0.0, dust_to=1.2, soot=None, ao_stre
         rough[m] = (0.3 + 0.25 * n_mid + rmask * 0.4)[m]
         metal[m] = (1 - rmask)[m]
 
+    # ---- glass painted onto a body (car windows): dark, a film of dust, wiped streaks
+    m = is_kind("glassy")
+    if m.any():
+        c = base * (0.8 + 0.5 * n_big)[:, None]
+        film = sstep(0.35, 0.8, n_big2 * 0.7 + cav * 0.9 + rain * 0.5) * (0.3 + 0.7 * dirt)
+        c = _lerp(c, DUST * 0.55, (film * 0.5)[:, None])
+        col[m] = c[m]
+        rough[m] = (0.12 + film * 0.55)[m]
+        metal[m] = 0.35
+        height[m] = 0.0
+
     # ---- rubber: black, dusty and scuffed
     m = is_kind("rubber")
     if m.any():
@@ -965,7 +1067,7 @@ def weather(g, decals=(), seed=1, dust_from=0.0, dust_to=1.2, soot=None, ao_stre
 
     # ---- everything: road dust low down and on what faces up, grime in the corners, scorch marks
     dustm = np.clip(low * 0.75 + up * 0.35 + cav * 0.6 + (n_big - 0.5) * 0.5, 0, 1) * dirt
-    dustm = sstep(0.25, 0.9, dustm)
+    dustm = sstep(0.25, 0.9, dustm) * np.where(is_kind("glassy"), 0.35, 1.0)
     dcol = DUST * (0.75 + 0.5 * n_mid)[:, None]
     col = _lerp(col, dcol, (dustm * 0.7)[:, None])
     rough = _lerp(rough, 0.95, dustm * 0.8)
@@ -1067,11 +1169,11 @@ def _finish_materials(objs, atlas_name="atlas"):
         me.update()
 
 
-def export_glb(name, objs, atlas_name="atlas"):
+def export_glb(name, objs, atlas_name="atlas", markers=()):
     """Write assets/models/<name>.glb with these objects (their names become node names)."""
     os.makedirs(OUT, exist_ok=True)
     _finish_materials(objs, atlas_name)
-    _activate(objs[0], objs)
+    _activate(objs[0], list(objs) + list(markers))
     path = os.path.join(OUT, name + ".glb")
     bpy.ops.export_scene.gltf(filepath=path, export_format="GLB", use_selection=True, export_apply=True,
         export_materials="EXPORT", export_normals=True, export_texcoords=True, export_tangents=False,

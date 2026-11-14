@@ -1,0 +1,95 @@
+class_name BlenderCars
+## Cars modelled in Blender (round 10: "serious, not cartoonish"). Puts the nodes of
+## assets/models/<id>.glb together into the model the game expects, with the same metadata as the
+## old GDScript models (wheels, steer, guns, gun_spinners, launcher, exhaust, top).
+## The .glb holds: body, wheel_f, wheel_r (axle along X, outer face at +X), spinner (optional), and
+## markers m_wheel_fr/fl/rr/rl, m_gun_*, m_spin_*, m_launcher, m_exh_*, m_top, m_head, m_cone.
+## Built by tools/blender/build_<id>.py.
+
+const EXHAUST_DIR := {"sweet_tooth": Vector3.UP}
+const SHADOW := {"sweet_tooth": Vector2(3.2, 7.4), "outlaw": Vector2(2.7, 5.6)}
+
+
+static func has(id: String) -> bool:
+	return ModelLib.has(id)
+
+
+static func build(id: String) -> Node3D:
+	var marks := ModelLib.marks(id)
+	var m := Node3D.new()
+	m.name = "Model"
+	m.add_child(ModelLib.instance(id, "body"))
+	var wheels: Array = []
+	var steer: Array = []
+	var radius := 0.5
+	for key: String in ["fr", "fl", "rr", "rl"]:
+		var mk := "m_wheel_" + key
+		if not marks.has(mk):
+			continue
+		var pos: Vector3 = (marks[mk] as Transform3D).origin
+		radius = pos.y
+		var pivot := Node3D.new()
+		pivot.position = pos
+		m.add_child(pivot)
+		var spin := Node3D.new()
+		pivot.add_child(spin)
+		var mi := ModelLib.instance(id, "wheel_f" if key.begins_with("f") else "wheel_r")
+		if pos.x < 0.0:
+			mi.rotation.y = PI # the same wheel, outer face to the left
+		spin.add_child(mi)
+		wheels.append(spin)
+		if key.begins_with("f"):
+			steer.append(pivot)
+	m.set_meta("wheels", wheels)
+	m.set_meta("steer", steer)
+	m.set_meta("wheel_radius", radius)
+	var guns: Array = []
+	var spinners: Array = []
+	var exhaust: Array = []
+	var names: Array = marks.keys()
+	names.sort()
+	for mk: String in names:
+		var at: Vector3 = (marks[mk] as Transform3D).origin
+		if mk.begins_with("m_gun"):
+			guns.append(at)
+		elif mk.begins_with("m_exh"):
+			exhaust.append(at)
+		elif mk.begins_with("m_spin"):
+			var s := Node3D.new()
+			s.position = at
+			m.add_child(s)
+			s.add_child(ModelLib.instance(id, "spinner"))
+			spinners.append(s)
+	m.set_meta("guns", guns)
+	if not spinners.is_empty():
+		m.set_meta("gun_spinners", spinners)
+	m.set_meta("exhaust", exhaust)
+	m.set_meta("exhaust_dir", EXHAUST_DIR.get(id, Vector3.BACK))
+	if marks.has("m_launcher"):
+		m.set_meta("launcher", (marks["m_launcher"] as Transform3D).origin)
+	if marks.has("m_top"):
+		m.set_meta("top", (marks["m_top"] as Transform3D).origin)
+	if marks.has("m_head"):
+		HeroModels._headlight_beam(m, (marks["m_head"] as Transform3D).origin)
+	if marks.has("m_cone"):
+		_cone_fire(m, (marks["m_cone"] as Transform3D).origin)
+	HeroModels._ground_shadow(m, SHADOW.get(id, Vector2(2.8, 5.8)))
+	return m
+
+
+## Sweet Tooth's roof sign still burns inside: a low flame and smoke out of the hole.
+static func _cone_fire(m: Node3D, at: Vector3) -> void:
+	var fire := FxKit.fire(0.34, 10)
+	fire.position = at
+	fire.emission_sphere_radius = 0.13
+	fire.color_ramp = FxKit._ramp([Color(0.9, 0.45, 0.12, 0.5), Color(0.8, 0.22, 0.04, 0.38), Color(0.3, 0.07, 0.02, 0.2), Color(0.08, 0.05, 0.05, 0.0)])
+	m.add_child(fire)
+	fire.emitting = true
+	var glow := FlickerLight.new()
+	glow.light_color = Color(1.0, 0.45, 0.12)
+	glow.base_energy = 0.8
+	glow.omni_range = 4.0
+	glow.position = at + Vector3(0, 0.3, 0)
+	glow.add_to_group(GraphicsSettings.EXTRA_LIGHT_GROUP)
+	glow.visible = GraphicsSettings.high
+	m.add_child(glow)

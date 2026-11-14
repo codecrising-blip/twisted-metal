@@ -17,7 +17,7 @@ The owner designs and play-tests; Claude writes the code, models and levels.
 | Music | Twisted Metal 4 style — **owner supplies the tracks** |
 | Story telling, tone, gameplay feel | Twisted Metal: Black (dark, grim, character stories) |
 | Visual style | **TM2-style bright, readable lighting** (owner, session 3: "forget the Black darkness"). Stages are **big like the main series**, with space and texture. |
-| Art technique | All models and levels are built **procedurally in GDScript** from primitives (low-poly PS2-era look). No imported art yet. |
+| Art technique | **Round 10: models are made in Blender** (scripts in `tools/blender/`, run headless) with baked weathering, exported as `.glb` + texture atlas and loaded by `ModelLib`. The stage layout (terrain, roads, collision) is still built in GDScript. Look: **a real battleground, serious, never cartoonish** (owner, in capitals). |
 | Backdrops | What lies **outside** a stage is a pre-rendered **panorama image** on the sky (owner, session 5: "the background should be minimal, even a photo"), never 3D. All modeling effort goes into the playable stage. |
 
 ## Run, test, look
@@ -335,6 +335,35 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   (flash, shockwave, fireball a beat later, sparks, scorch). Gotchas: `var s := {..}[id]` can't infer (type it);
   `weapon_kinds` must be padded for points added before `_points()` (the cage); GameFeel.flash spheres larger than
   ~radius look like an opaque dome at the impact frame; a vertical cylinder beam reads as a "pillar" (use soft quads).
+- **Round 10 (owner: latest build "so much better than all the last ones"), full text `docs/design/15-owner-round-10.md`:**
+  **Gameplay:** TOPPLE breakables (palms, street lights, HOLLYWOOD letters) snap off as a `RigidBody3D`
+  (`Breakable._topple`: swatted forward and aside by a car, thrown away from a blast, world collision only so cars
+  lose no momentum), land with thud/dust/shake, are cleared after `FALL_GONE` 4.5 s (burning 6.5 s); palms hit by
+  an explosive or fire weapon burn (`weapon_hit(damage, by, from, burns)`; bullets and freeze don't ignite). Blasts
+  hit props: `Specials.blast_props` (SAT, napalm, mines). Tower sign hangs from the upper body and falls with it.
+  Kickers have sloped ends (`KICKER_END`). `Roster.REVERSE_SCALE` 1.84, `REVERSE_ACCEL` 1.12 x accel. Outlaw: siren
+  loops for the whole link, `TaserLink._connect_jolt` hops the victim 1.3 m off balance when the arc connects.
+  Napalm Cone: steady rising hum past full charge; held `meltdown` 3 s in all = no shot, no ammo lost, weapon locked
+  `meltdown_lock` 3 s (`Vehicle._meltdown`, `locked_left()`, HUD ban sign `HudWeapons._ban`).
+  **Blender pipeline:** `tools/blender/tmlib.py` (read its header): geometry helpers, `M(kind, colour, wear, rust,
+  dirt)`, `gbuffer()` bakes base/position/normal/AO/edge/bevel-normal with Cycles, `weather()` composites the look in
+  numpy (chips on edges, rust, streaks, dust, baked AO; `regions` = painted areas, `Decal` = projected stencils,
+  bullet holes, blood), `export_glb()`. Install: `python3.13 -m venv /tmp/bpy3.13 && /tmp/bpy3.13/bin/pip install
+  bpy==5.3.0 pillow` (blender.org is blocked here, PyPI is not). Each `build_*.py` takes `--shape out.png` (quick look,
+  no bake) and `--nobake` (geometry only). After a build run `godot --headless --import`.
+  **ModelLib** (`scripts/core/model_lib.gd`): `.glb` meshes by node name, surfaces by material name: `atlas` (baked set;
+  LOW = albedo only, HIGH = + normal + ORM), `glass`, `glow` (vertex colours). `marks()` = marker empties.
+  **Remade so far:** pickups (`pickups.glb`: real ordnance + medical cases on a steel pad whose lamps carry the kind's
+  colour), Sweet Tooth and Outlaw (`BlenderCars.build`: body + wheel_f/wheel_r + spinner + `m_*` markers; ~11-12k
+  triangles a car, was ~36k), LA backdrop (`build_la_backdrop.py`: Cycles panorama of the city burning; replaces the
+  GL bake), mood (smoke-brown, no violet). **Not remade yet:** stage props, buildings, ground textures, missiles and
+  effects, the other three cars. **Texts:** `docs/design/14-texts-los-angeles.md` (people blame City Hall and thank
+  Calypso; THE ONE WHO KNOWS writes real quotes in ochre yellow; riddle for the HOLLYWOOD secret). "Quake Zone Rumble"
+  is gone (it was TM2's real stage name; the owner's new direction replaces it with "Relief Zone One").
+  Gotchas: `import bpy` before `bmesh`/`mathutils`; glTF `export_materials="PLACEHOLDER"` drops material names (use
+  EXPORT); after removing objects iterate `scene.objects`, not `view_layer.objects`; the launcher marker must stay on
+  the car's centre line or the HOLLYWOOD shot misses; Cycles equirect puts the view direction in the middle of the
+  image, Godot wants north at u = 0 (roll by half the width); long turns hit the owner's usage limit: commit in stages.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -354,6 +383,10 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 ```
 scenes/main.tscn            single scene; everything is spawned from scripts/main.gd
 scripts/main.gd             match flow (spawn, lives + 6 s respawn, win/lose, restart, fall-out rescue), music
+tools/blender/              Blender asset pipeline (round 10): tmlib.py + build_pickups / build_sweet_tooth /
+                            build_outlaw / build_la_backdrop; output in assets/models/ (.glb + _albedo/_normal/_orm)
+scripts/core/model_lib.gd   loads the Blender models and their baked materials
+scripts/vehicles/blender_cars.gd  assembles a Blender car (body, wheels, spinners, markers) with the usual metadata
 scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (simple primitives),
                             MeshBuilder (detailed models merged per material: chamfered boxes, lofts, lathes),
                             MatKit (generated paint/rust/chrome/rubber textures; world-mapped ground: pavement,

@@ -300,7 +300,7 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 		hud.game_over = true
 		_respawn_timer = -1.0
 		hud.set_countdown(-1)
-		hud.show_message("%s WINS" % player.display_name.to_upper(), "%s is quiet again.\nENTER / CREATE to play again" % arena.title.capitalize())
+		hud.show_message("%s WINS" % player.display_name.to_upper(), "%s burns a little quieter.\nThe crowd chants his name, not yours.\nENTER / CREATE to play again" % arena.title.capitalize())
 
 
 func _restart() -> void:

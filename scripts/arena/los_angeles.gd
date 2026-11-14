@@ -61,7 +61,7 @@ const ROAD_CTRL := [
 
 var title := "LOS ANGELES"
 var music := "los_angeles" # audio/music/los_angeles.mp3
-var subtitle := "Quake Zone Rumble"
+var subtitle := "Relief Zone One"
 var spawn_points: Array[Transform3D] = []
 var respawn_points: Array[Transform3D] = []
 var weapon_points: Array[Vector3] = []
@@ -469,8 +469,8 @@ func _environment() -> void:
 		sky.sky_material = LosAngelesArena.sky_material()
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.62, 0.56, 0.66) # dusk: violet sky light
-	env.ambient_light_energy = 0.55
+	env.ambient_light_color = Color(0.62, 0.52, 0.44) # round 10: light through smoke, brown-amber (no violet)
+	env.ambient_light_energy = 0.8 # kept readable (owner: TM2-bright, not Black-dark)
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
 	env.tonemap_exposure = 1.0
 	env.glow_enabled = true
@@ -478,21 +478,21 @@ func _environment() -> void:
 	env.glow_bloom = 0.02
 	env.glow_hdr_threshold = 1.5
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.66, 0.55, 0.56) # LA smog at dusk
-	env.fog_density = 0.0006
+	env.fog_light_color = Color(0.5, 0.36, 0.26) # smoke from the burning city
+	env.fog_density = 0.0011
 	env.fog_sky_affect = 0.0 # the backdrop already has its haze
 	if RenderingServer.get_rendering_device() != null: # Forward+ / Mobile only
 		env.ssao_enabled = true
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 0.95 # gritty, not candy (owner, session 5: "serious")
-	env.adjustment_contrast = 1.12
+	env.adjustment_saturation = 0.84 # gritty, not candy (owner: "serious"; round 10: a war zone)
+	env.adjustment_contrast = 1.14
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
-	sun.light_color = Color(1.0, 0.76, 0.54) # golden hour
-	sun.light_energy = 1.3
+	sun.light_color = Color(1.0, 0.68, 0.44) # a low sun through smoke
+	sun.light_energy = 1.4
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 180.0
 	sun.rotation_degrees = SUN_ROTATION
@@ -505,11 +505,11 @@ const SUN_ROTATION := Vector3(-26, -62, 0) # low evening sun in the west-south-w
 ## The sky the backdrop is baked with (and the fallback when the backdrop image is missing).
 static func sky_material() -> ProceduralSkyMaterial:
 	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.3, 0.27, 0.46) # dusk: dusty violet above
-	sky_mat.sky_horizon_color = Color(0.9, 0.58, 0.5) # pink-orange smog on the horizon
+	sky_mat.sky_top_color = Color(0.2, 0.17, 0.15) # smoke overhead
+	sky_mat.sky_horizon_color = Color(0.62, 0.36, 0.2) # fire glow on the horizon
 	sky_mat.sky_curve = 0.12
-	sky_mat.ground_horizon_color = Color(0.62, 0.48, 0.46)
-	sky_mat.ground_bottom_color = Color(0.24, 0.21, 0.23)
+	sky_mat.ground_horizon_color = Color(0.45, 0.3, 0.2)
+	sky_mat.ground_bottom_color = Color(0.16, 0.12, 0.1)
 	sky_mat.sun_angle_max = 8.0
 	return sky_mat
 
@@ -945,17 +945,29 @@ func _outer_wall() -> void:
 	fence_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(fence_mi)
 	batch_builder(mb, true, 0.8)
-	# Graffiti, Calypso's tournament everywhere (painted on the steel).
+	# Writing on the walls (owner, round 10). Two voices:
+	#  - the people, in white, red and blue: they blame City Hall and thank Calypso, who "stayed";
+	#  - THE ONE WHO KNOWS, always in the same ochre yellow: real sayings about crowds, circuses and
+	#    who profits (sources in docs/design/14-texts-los-angeles.md), and a riddle for the stage's secret.
+	# Every spot is clear of the buildings on the walls (one used to hide behind the donut shop).
+	var people_w := Color(0.84, 0.84, 0.8)
+	var people_r := Color(0.78, 0.18, 0.16)
+	var people_b := Color(0.3, 0.5, 0.85)
+	var knows := Color(0.92, 0.76, 0.22)
 	var tags := [
-		["QUAKE ZONE", Vector3(-30, 1.5, HALF - 0.85), 0.0, Color(0.85, 0.2, 0.22)],
-		["CALYPSO LIES", Vector3(HALF - 0.85, 1.5, -40), 90.0, Color(0.25, 0.55, 0.9)],
-		["SWEET TOOTH WAS HERE", Vector3(-HALF + 0.85, 1.5, 85), -90.0, Color(0.9, 0.5, 0.7)],
-		["NO WISH IS FREE", Vector3(80, 1.5, -HALF + 0.85), 180.0, Color(0.9, 0.82, 0.25)],
+		["CALYPSO WILL SAVE US", Vector3(-35, 1.5, HALF - 0.85), 0.0, people_w, 220],
+		["BREAD AND CIRCUSES\n- JUVENAL", Vector3(95, 2.0, HALF - 0.85), 0.0, knows, 170],
+		["CITY HALL DID THIS", Vector3(HALF - 0.85, 1.5, -90), 90.0, people_r, 220],
+		["WHOEVER CAN SUPPLY THEM WITH ILLUSIONS\nIS EASILY THEIR MASTER  - LE BON, 1895", Vector3(HALF - 0.85, 2.0, 35), 90.0, knows, 130],
+		["THEY MAKE A DESERT\nAND CALL IT PEACE  - TACITUS", Vector3(-HALF + 0.85, 2.0, -20), -90.0, knows, 160],
+		["THANK YOU CALYPSO", Vector3(-HALF + 0.85, 1.5, 110), -90.0, people_b, 220],
+		["CUI BONO?  WHO PROFITS?", Vector3(-70, 1.5, -HALF + 0.85), 180.0, knows, 200],
+		["IT SOLD A HILL IN 1923.\nBRING IT DOWN AND SEE WHAT HE GIVES.", Vector3(30, 2.0, -HALF + 0.85), 180.0, knows, 130],
 	]
 	for t in tags:
 		var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(t[2] + 180.0)), t[1])
-		batch_text(t[0], xf * Transform3D(Basis.IDENTITY, Vector3(0.05, -0.05, -0.02)), 220, 0.007, Color(0.05, 0.05, 0.05)) # drop shadow
-		batch_text(t[0], xf, 220, 0.007, t[3])
+		batch_text(t[0], xf * Transform3D(Basis.IDENTITY, Vector3(0.05, -0.05, -0.02)), t[4], 0.007, Color(0.05, 0.05, 0.05)) # drop shadow
+		batch_text(t[0], xf, t[4], 0.007, t[3])
 
 
 ## Twin tunnels on the north straight: the road runs through them along x, a divider between the
@@ -1092,8 +1104,8 @@ func _overpass_and_cage() -> void:
 		cage.box(_m.steel, size + Vector3(0.1, -fence_h + 0.12, 0.1), MeshBuilder.at(mid + Vector3.UP * (DECK_Y + fence_h)), 0.0)
 	batch_builder(cage)
 	var warn_xf := Transform3D(Basis.IDENTITY, c + Vector3(-11, DECK_Y + 3.0, 15.15))
-	batch_text("CALYPSO PROPERTY\nKEEP OUT", warn_xf * Transform3D(Basis.IDENTITY, Vector3(0.05, -0.05, -0.02)), 120, 0.012, Color(0.05, 0.05, 0.05))
-	batch_text("CALYPSO PROPERTY\nKEEP OUT", warn_xf, 120, 0.012, Color(0.95, 0.2, 0.15))
+	batch_text("CALYPSO RELIEF\nDEPOT 7", warn_xf * Transform3D(Basis.IDENTITY, Vector3(0.05, -0.05, -0.02)), 120, 0.012, Color(0.05, 0.05, 0.05))
+	batch_text("CALYPSO RELIEF\nDEPOT 7", warn_xf, 120, 0.012, Color(0.95, 0.2, 0.15))
 	mega_points.append(c + Vector3(0, DECK_Y, -2))
 	weapon_points.append(c + Vector3(-9, DECK_Y, -9))
 	weapon_points.append(c + Vector3(9, DECK_Y, -9))
@@ -1704,7 +1716,9 @@ func _on_letter_broken(_letter: Breakable, _by: Vehicle) -> void:
 	_letters_left -= 1
 	if _letters_left > 0:
 		return
-	easter_egg.emit("HOLLYWOOD IS DEAD", "Calypso: \"I never liked that sign. Take this, with my compliments.\"")
+	# The sign went up in 1923 as an advertisement for a housing estate ("HOLLYWOODLAND"): a true
+	# story, and the answer to the riddle painted on the north wall.
+	easter_egg.emit("HOLLYWOODLAND, 1923", "Calypso: \"A sign to sell a hill. I only sell wishes...\nTake this. You are doing so well.\"")
 	# Owner, round 9: the prize is a FULL HEALTH (health and energy to 100%), up on the tunnel roof.
 	Pickup.create(self, "full", Vector3(0, ROOF_Y, (TUNNEL_Z0 + TUNNEL_Z1) * 0.5 + 6.0), true)
 

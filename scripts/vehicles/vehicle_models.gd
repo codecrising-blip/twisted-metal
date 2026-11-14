@@ -14,6 +14,8 @@ extends RefCounted
 
 
 static func build(id: String) -> Node3D:
+	if BlenderCars.has(id): # round 10: the cars remade in Blender
+		return BlenderCars.build(id)
 	match id:
 		"sweet_tooth":
 			return HeroModels.sweet_tooth()

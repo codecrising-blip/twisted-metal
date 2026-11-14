@@ -218,9 +218,10 @@ func _wrecks() -> void:
 
 func _billboards() -> void:
 	var boards := [
-		[Vector3(-60, 0, LosAngelesArena.HALF - 5.0), 0.0, "CALYPSO'S CONTEST", "WIN ONE WISH. ANY WISH.", Color(0.65, 0.12, 0.1)],
-		[Vector3(LosAngelesArena.HALF - 5.0, 0, -62), 90.0, "LAST ONE DRIVING", "GETS EVERYTHING", Color(0.75, 0.58, 0.12)],
-		[Vector3(-LosAngelesArena.HALF + 5.0, 0, -78), -90.0, "QUAKE ZONE", "NO ENTRY  -  BY ORDER OF THE CITY", Color(0.15, 0.32, 0.55)],
+		# Round 10 texts: what the city believes. Calypso the benefactor, City Hall the culprit.
+		[Vector3(-60, 0, LosAngelesArena.HALF - 5.0), 0.0, "CALYPSO CARES", "FOOD. WATER. HOPE.  RELIEF ZONE 1", Color(0.5, 0.1, 0.08)],
+		[Vector3(LosAngelesArena.HALF - 5.0, 0, -62), 90.0, "THEY FAILED YOU", "CITY HALL RAN.  CALYPSO STAYED.", Color(0.6, 0.46, 0.1)],
+		[Vector3(-LosAngelesArena.HALF + 5.0, 0, -78), -90.0, "VOTE HALE", "ORDER WILL RETURN TO LOS ANGELES", Color(0.12, 0.26, 0.45)],
 	]
 	var steel := _steel()
 	var dark := _dark()

@@ -237,7 +237,7 @@ func _motel() -> void:
 		_box(_m.bulb, Vector3(0.14, 0.14, 0.05), Vector3(px - 2.6 + k * 0.47, 11.25, z - 2.38))
 	_text("MOTEL", Vector3(px, 10.0, z - 2.4), 240, Color(1.0, 0.35, 0.5))
 	_box(_m.dark, Vector3(3.2, 0.8, 0.3), Vector3(px, 8.2, z - 2.0))
-	_text("NO VACANCY", Vector3(px, 8.2, z - 2.2), 80, Color(1.0, 0.25, 0.2), 0.009)
+	_text("SHELTER FULL", Vector3(px, 8.2, z - 2.2), 80, Color(1.0, 0.25, 0.2), 0.009)
 
 
 func _liquor() -> void:
@@ -298,7 +298,7 @@ func _theater() -> void:
 		for k in 30:
 			_box(_m.bulb, Vector3(0.14, 0.14, 0.05), Vector3(-7.6 + k * 0.525, row, z - 3.22))
 	_box(MatKit.flat(Color(0.88, 0.86, 0.78), 0.7), Vector3(14.5, 1.3, 0.05), Vector3(0, 5.2, z - 3.2))
-	_text("NOW SHOWING\nQUAKE ZONE", Vector3(0, 5.2, z - 3.26), 110, Color(0.1, 0.08, 0.08), 0.009, false)
+	_text("LIVE TONIGHT\nTHE CONTEST", Vector3(0, 5.2, z - 3.26), 110, Color(0.1, 0.08, 0.08), 0.009, false)
 	# Vertical blade sign.
 	_box(_m.dark, Vector3(0.6, 7.0, 2.4), Vector3(0, 9.8, z - 1.2), Vector3.ZERO, 0.08)
 	for s: float in [-1.0, 1.0]:
