@@ -47,7 +47,11 @@ func _draw() -> void:
 		draw_string(font, Vector2(144, 71), "SPECIAL", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, SPECIAL_GREEN)
 	var count: int = player.ammo.get(current, 0)
 	draw_string(font, Vector2(W - 140, 98), "x%d" % count, HORIZONTAL_ALIGNMENT_RIGHT, 120, 46, color.lightened(0.15))
-	if player.selected_is_live():
+	var locked := player.locked_left(current)
+	if locked > 0.0:
+		_ban(box, locked, true)
+		draw_string(font, Vector2(144, 96), "MELTDOWN  %.1f" % locked, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.35, 0.25))
+	elif player.selected_is_live():
 		# It is out in the world: the next press sets it off.
 		var verb := "DETONATE"
 		if current == "napalm":
@@ -80,6 +84,8 @@ func _draw() -> void:
 		var chip := Rect2(x, 112, 58, 34)
 		if d.get("special", false):
 			_special_chip(chip, sel, int(player.ammo.get(id, 0)))
+			if player.locked_left(id) > 0.0:
+				_ban(chip, player.locked_left(id), false)
 			x += 64.0
 			continue
 		draw_rect(chip, Color(c.r, c.g, c.b, 0.3 if sel else 0.1))
@@ -88,6 +94,20 @@ func _draw() -> void:
 		var count_color := Color(0.92, 0.9, 0.85) if sel else Color(0.6, 0.58, 0.55)
 		draw_string(font, chip.position + Vector2(30, 24), str(player.ammo.get(id, 0)), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, count_color)
 		x += 64.0
+
+
+## Meltdown (owner, round 10): a see-through red ban sign over the slot, the weapon still showing
+## under it, and a thin bar that runs down with the seconds left.
+func _ban(r: Rect2, left: float, big: bool) -> void:
+	var c := r.get_center()
+	var rad := minf(r.size.x, r.size.y) * (0.42 if big else 0.4)
+	var red := Color(1.0, 0.16, 0.1, 0.72)
+	draw_rect(r, Color(0.25, 0.0, 0.0, 0.3))
+	draw_arc(c, rad, 0.0, TAU, 28, red, 5.0 if big else 2.5)
+	var d := Vector2(cos(PI * 0.25), sin(PI * 0.25)) * rad
+	draw_line(c - d, c + d, red, 5.0 if big else 2.5)
+	var share := clampf(left / 3.0, 0.0, 1.0)
+	draw_rect(Rect2(r.position.x, r.end.y - 3.0, r.size.x * share, 3.0), Color(1.0, 0.3, 0.2, 0.9))
 
 
 ## The special in the chip row (owner, round 7: it read as two boxes on top of each other): one

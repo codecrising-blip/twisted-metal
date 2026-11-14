@@ -138,6 +138,8 @@ func _street_lights() -> void:
 		lamp.kind = "metal"
 		lamp.size_hint = Vector3(0.5, 8.0, 0.5)
 		lamp.topple_height = 8.0
+		lamp.fall_mass = 180.0
+		lamp.stump_radius = 0.2
 		lamp.position = _ground_at(pos.x, pos.z)
 		lamp.basis = Basis.looking_at(toward_road, Vector3.UP) # arm (local -Z) reaches over the road
 		add_child(lamp)
@@ -368,6 +370,7 @@ func _barriers_and_bins() -> void:
 
 const KICKER_H := 0.9 # height of the concrete kickers
 const KICKER_SLOPE := 3.0 # run of each slope (about 17 degrees)
+const KICKER_END := 3.0 # run of the sloped ends
 
 
 ## A concrete kicker ramp `length` long, its ridge along local z (rotated by yaw), sloped both ways,
@@ -376,20 +379,24 @@ func _kicker(base: Vector3, yaw: float, length: float) -> void:
 	var hw := KICKER_SLOPE + 0.4
 	var ht := 0.4
 	var hl := length * 0.5
+	# Round 10 (owner: "the narrow side acts like a wall"): the ends are sloped too (a hipped ridge),
+	# so a car meeting it end-on rides up and over like on the long sides. Same footprint as before.
+	var he := maxf(hl - KICKER_END, 0.3) # half length of the ridge
 	var conc := _concrete()
 	var yellow := MatKit.flat(Color(0.75, 0.6, 0.12), 0.8)
 	var mb := MeshBuilder.new()
-	var p := [Vector3(-hw, 0, -hl), Vector3(-ht, KICKER_H, -hl), Vector3(ht, KICKER_H, -hl), Vector3(hw, 0, -hl)]
-	var q := [Vector3(-hw, 0, hl), Vector3(-ht, KICKER_H, hl), Vector3(ht, KICKER_H, hl), Vector3(hw, 0, hl)]
+	var p := [Vector3(-hw, 0, -hl), Vector3(-ht, KICKER_H, -he), Vector3(ht, KICKER_H, -he), Vector3(hw, 0, -hl)]
+	var q := [Vector3(-hw, 0, hl), Vector3(-ht, KICKER_H, he), Vector3(ht, KICKER_H, he), Vector3(hw, 0, hl)]
+	var end_n := Vector3(0, hl - he, KICKER_H).normalized()
 	mb.quad(conc, p[0], p[1], q[1], q[0], Vector3(-KICKER_H, KICKER_SLOPE, 0).normalized())
 	mb.quad(conc, p[1], p[2], q[2], q[1], Vector3.UP)
 	mb.quad(conc, p[2], p[3], q[3], q[2], Vector3(KICKER_H, KICKER_SLOPE, 0).normalized())
-	mb.quad(conc, p[0], p[1], p[2], p[3], Vector3.BACK * -1.0)
-	mb.quad(conc, q[0], q[1], q[2], q[3], Vector3.BACK)
-	# Hazard stripes across both slopes, every 1.6 m.
-	var n_str := int(length / 1.6)
+	mb.quad(conc, p[0], p[1], p[2], p[3], Vector3(0, end_n.y, -end_n.z))
+	mb.quad(conc, q[0], q[1], q[2], q[3], end_n)
+	# Hazard stripes across both slopes, every 1.6 m (only along the ridge).
+	var n_str := maxi(1, int(he * 2.0 / 1.6))
 	for k in n_str:
-		var z := -hl + (k + 0.5) * length / n_str
+		var z := -he + (k + 0.5) * he * 2.0 / n_str
 		for sx: float in [-1.0, 1.0]:
 			var lift := Vector3(sx * KICKER_H, KICKER_SLOPE, 0).normalized() * 0.015
 			mb.quad(yellow, Vector3(sx * hw * 0.92, 0.08, z - 0.25) + lift, Vector3(sx * ht, KICKER_H, z - 0.25) + lift,

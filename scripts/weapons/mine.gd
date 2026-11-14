@@ -212,6 +212,7 @@ func detonate() -> void:
 			var up := sqrt(2.0 * Vehicle.GRAVITY * h * (0.25 + 0.5 * k) * k)
 			var side := away * float(def.get("push", 24.0)) * (0.35 + 0.65 * k) * (h / 8.4)
 			o.blast_knock(side + Vector3.UP * up, 0.15 + 0.35 * k, false)
+	Specials.blast_props(world, global_position, radius, full, owner_car)
 	FxKit.explosion(world, global_position + Vector3.UP * 0.5, float(def.get("blast_size", 2.8)), Color(1.0, 0.45, 0.12))
 	if def.get("electronic", false): # the electronics go up: a blue-white spark burst and a ring of fire
 		GameFeel.flash(world, global_position + Vector3.UP * 0.6, 2.5, Color(0.6, 0.8, 1.0), 0.08)

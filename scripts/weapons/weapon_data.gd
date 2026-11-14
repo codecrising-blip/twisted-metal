@@ -116,6 +116,8 @@ const DEFS := {
 		"speed": 60.0, "damage": 45.0, "homing": 2.4, "life": 3.0, "burn": 4.0, "push": 6.0,
 		"squish": 0.06, "shake": 0.45, "trail": Color(1.0, 0.32, 0.05), "trail_len": 0.3, "trail_w": 1.1,
 		"charge_time": 2.0, "charged_damage": 90.0, "charged_speed": 64.0,
+		# Round 10 (owner): held 3 s in all (1 s past full) it melts down: no shot, locked 3 s.
+		"meltdown": 3.0, "meltdown_lock": 3.0,
 		"cooldown": 0.8, "charges": 2, "recharge": 16.0,
 	},
 	# Outlaw (Jamie Roberts): Crazy 8-style taser. Fired by the player; grows with link time and

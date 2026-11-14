@@ -20,7 +20,8 @@ const HEALTH_SCALE := 1.0
 ## reverse) and handbrake drifts 1.2x stronger (sharper drift turn, looser drift grip), same for every class.
 const SPEED_SCALE := 1.4
 const DRIFT_SCALE := 1.2
-const REVERSE_SCALE := 1.6 # round 9 (owner): reverse 1.6x faster
+const REVERSE_SCALE := 1.84 # owner: x1.6 (round 9), then x1.15 on top (round 10)
+const REVERSE_ACCEL := 1.12 # share of forward acceleration in reverse: 0.7 x 1.6 (round 10: quick out of a wall slam)
 
 const MASS := {"light": 1.0, "medium": 1.4, "heavy": 2.0, "super": 2.8}
 ## How hard a car is pushed by hits, per mass class.

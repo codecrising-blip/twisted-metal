@@ -95,6 +95,20 @@ static func blast(world: Node, pos: Vector3, radius: float, damage: float, shoot
 		o.hit_react(o.global_position - pos, hit)
 		if burn > 0.0:
 			o.ignite(burn, shooter)
+	blast_props(world, pos, radius, damage, shooter)
+
+
+## Stage props caught in a blast (owner, round 10): trees, street lights, stands, glass, wrecks.
+## They take the hit as a weapon hit from the blast's centre, so trees go down burning, away from it.
+static func blast_props(world: Node, pos: Vector3, radius: float, damage: float, shooter: Vehicle) -> void:
+	for node in world.get_tree().get_nodes_in_group(&"breakables"):
+		var b := node as Breakable
+		if b == null or b.is_broken:
+			continue
+		var rel := b.global_position - pos
+		if Vector2(rel.x, rel.z).length() > radius + 0.5 or rel.y > radius + 1.0 or rel.y < -(radius + b.topple_height):
+			continue
+		b.weapon_hit(damage * WeaponData.DAMAGE_SCALE, shooter, pos, true)
 
 
 ## Where a napalm can bursts: a fireball, everything near takes the hit and burns, a pool of fire stays.

@@ -29,6 +29,21 @@ var is_broken := false
 var kind := ""
 var size_hint := Vector3(2.0, 2.0, 0.3) # rough extent of the visible part, for where the debris comes from
 var topple_height := 5.0 # how tall it is when it falls over (where it lands)
+var fall_mass := 220.0 # kg of the piece that falls (TOPPLE)
+var stump_radius := 0.0 # > 0: a short broken stump stays where it stood
+## Set by weapon_hit(): where the shot or blast came from, and whether it sets wood on fire.
+var hit_from := Vector3.INF
+var hit_burns := false
+
+var _fall_body: RigidBody3D
+var _fall_t := 0.0
+var _fall_landed := false
+var _fall_fires: Array[CPUParticles3D] = []
+var _fall_sound: AudioStreamPlayer3D
+
+const FALL_GONE := 4.5 # seconds a fallen trunk or pole lies there before it is cleared away
+const FALL_BURN_GONE := 6.5 # a burning one lasts a little longer
+static var _char_mat: StandardMaterial3D
 
 static var _debris_mesh: BoxMesh
 
@@ -39,6 +54,11 @@ func _init() -> void:
 	visual = Node3D.new()
 	visual.name = "Visual"
 	add_child(visual)
+
+
+func _ready() -> void:
+	add_to_group(&"breakables") # blasts look these up (Specials.blast)
+	set_physics_process(false)
 
 
 func add_box_shape(size: Vector3, center: Vector3) -> void:
@@ -87,6 +107,16 @@ func projectile_hit(damage: float, by: Vehicle) -> void:
 		break_apart(by)
 
 
+## A weapon's hit (owner, round 10): `from` is where the shot or the blast came from (it falls away
+## from there), `burns` = an explosive or fire weapon (wood catches fire as it goes down).
+func weapon_hit(damage: float, by: Vehicle, from: Vector3, burns: bool) -> void:
+	if is_broken:
+		return
+	hit_from = from
+	hit_burns = burns
+	projectile_hit(damage, by)
+
+
 func break_apart(by: Vehicle) -> void:
 	if is_broken:
 		return
@@ -105,26 +135,153 @@ func break_apart(by: Vehicle) -> void:
 	broken.emit(self, by)
 
 
+## Owner, round 10 ("the knock-down is funny, make it devastating"): the trunk or pole snaps at the
+## base and becomes a real rigid body. A car swats it forward and aside at its own speed, a blast
+## throws it away from the blast; it spins, slams down, bounces and slides to rest. Wood hit by an
+## explosive or fire weapon burns as it falls and lies there charred. Then it is cleared away.
+## The falling piece only touches the world (cars drive through it: no lost momentum).
 func _topple(by: Vehicle) -> void:
-	var away := Vector3(randf_range(-1, 1), 0, randf_range(-1, 1))
-	if is_instance_valid(by):
-		away = global_position - by.global_position
-	away.y = 0.0
-	if away.length() < 0.01:
-		away = Vector3.FORWARD
-	away = away.normalized()
-	var axis := Vector3.UP.cross(away).normalized()
-	var start := visual.global_basis
-	var tw := create_tween()
-	tw.tween_method(func(t: float):
-		visual.global_basis = Basis(axis, t * deg_to_rad(84.0) * t) * start, 0.0, 1.0, 0.9)
-	# Aftermath: it hits the ground with a thud and a ring of dust where its top lands.
-	tw.tween_callback(func():
-		var top := global_position + away * topple_height * 0.95
-		var thud := "metal_fall" if kind == "metal" else "land_thud"
-		GameFeel.play(thud, top, get_parent(), -4.0, 0.7 if kind != "metal" else 0.85, true)
-		FxKit.dust_ring(get_parent(), Specials.ground_below(get_parent(), top + Vector3.UP * 3.0), 1.2)
-		GameFeel.shake(top, 0.2, 35.0))
+	var world := get_parent()
+	var by_weapon := hit_from != Vector3.INF
+	var body := RigidBody3D.new()
+	body.collision_layer = 0
+	body.collision_mask = 1
+	body.mass = fall_mass
+	body.gravity_scale = Vehicle.GRAVITY / 9.8
+	body.angular_damp = 0.4
+	var pm := PhysicsMaterial.new()
+	pm.friction = 0.9
+	pm.bounce = 0.12
+	body.physics_material_override = pm
+	world.add_child(body)
+	body.global_transform = Transform3D(global_basis.orthonormalized(), global_position + Vector3.UP * 0.25)
+	var shape := CollisionShape3D.new()
+	var box := BoxShape3D.new()
+	var thick := clampf(minf(size_hint.x, size_hint.z), 0.3, 1.2)
+	box.size = Vector3(maxf(size_hint.x * 0.6, thick), topple_height * 0.92, thick)
+	shape.shape = box
+	shape.position = Vector3(0, topple_height * 0.5, 0)
+	body.add_child(shape)
+	visual.reparent(body, true)
+	_fall_body = body
+	# Which way, how hard.
+	var dir := Vector3(randf_range(-1, 1), 0, randf_range(-1, 1))
+	var speed := 9.0
+	if by_weapon:
+		dir = global_position - hit_from
+	elif is_instance_valid(by):
+		var cv := by.linear_velocity
+		cv.y = 0.0
+		var off := global_position - by.global_position
+		off.y = 0.0
+		if cv.length() > 3.0:
+			var fwd := cv.normalized()
+			var side := off - fwd * off.dot(fwd) # which side of the car's path it stood on
+			dir = fwd * 0.8 + (side.normalized() if side.length() > 0.05 else Vector3(-fwd.z, 0, fwd.x)) * 0.6
+			speed = clampf(cv.length(), 8.0, 42.0)
+		else:
+			dir = off
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
+	var tip := Vector3.UP.cross(dir).normalized() # turning about this drops the top along dir
+	if by_weapon:
+		body.linear_velocity = dir * 7.5 + Vector3.UP * 6.0
+		body.angular_velocity = tip * randf_range(3.0, 4.2) + Vector3.UP * randf_range(-2.0, 2.0)
+	else:
+		body.linear_velocity = dir * speed * 0.45 + Vector3.UP * (1.5 + speed * 0.06)
+		body.angular_velocity = tip * (1.4 + speed * 0.09) + Vector3.UP * randf_range(-1.6, 1.6)
+	# Lamps go dark the moment they snap.
+	for node in visual.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var m := mi.mesh.surface_get_material(i) as BaseMaterial3D
+			if m and (m.emission_enabled or m.shading_mode == BaseMaterial3D.SHADING_MODE_UNSHADED):
+				mi.set_surface_override_material(i, _charred())
+	if kind == "metal":
+		for k in 3:
+			FxKit.spark(world, global_position + Vector3.UP * (0.4 + k * 0.5), (dir + Vector3.UP).normalized())
+	if hit_burns and kind == "palm":
+		_set_alight(body)
+	if stump_radius > 0.0:
+		var stump := MeshKit.cylinder(self, stump_radius, 0.55, Vector3(0, 0.27, 0), _charred() if hit_burns else MeshKit.mat(debris_color * 0.8, 0.9), Vector3(randf_range(-6, 6), 0, randf_range(-6, 6)), 7, stump_radius * 0.8)
+		stump.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_fall_t = 0.0
+	_fall_landed = false
+	set_physics_process(true)
+
+
+static func _charred() -> StandardMaterial3D:
+	if _char_mat == null:
+		_char_mat = StandardMaterial3D.new()
+		_char_mat.albedo_color = Color(0.035, 0.03, 0.028)
+		_char_mat.roughness = 1.0
+	return _char_mat
+
+
+## Wood on fire: flames along the trunk and in the crown, the whole thing scorched black.
+func _set_alight(body: RigidBody3D) -> void:
+	var soot := StandardMaterial3D.new()
+	soot.albedo_color = Color(0.02, 0.015, 0.01, 0.72)
+	soot.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	soot.roughness = 1.0
+	for node in visual.find_children("*", "MeshInstance3D", true, false):
+		(node as MeshInstance3D).material_overlay = soot
+	for h: float in [0.3, 0.62, 0.92]:
+		var f := FxKit.fire(1.5 if h > 0.8 else 1.0, 16 if h > 0.8 else 10)
+		f.position = Vector3(0, topple_height * h, 0)
+		f.emission_sphere_radius = 0.9 if h > 0.8 else 0.35
+		body.add_child(f)
+		f.emitting = true
+		_fall_fires.append(f)
+	var smoke := FxKit.smoke(1.3, 10)
+	smoke.position = Vector3(0, topple_height * 0.8, 0)
+	body.add_child(smoke)
+	smoke.emitting = true
+	_fall_fires.append(smoke)
+	_fall_sound = GameFeel.loop("fire_loop", body, -9.0, 7.0)
+	if _fall_sound:
+		_fall_sound.play()
+
+
+func _physics_process(delta: float) -> void:
+	if not is_instance_valid(_fall_body):
+		set_physics_process(false)
+		return
+	_fall_t += delta
+	var world := get_parent()
+	if not _fall_landed and _fall_t > 0.12:
+		var top := _fall_body.to_global(Vector3(0, topple_height, 0))
+		var g := Specials.ground_below(world, top + Vector3.UP * 2.0)
+		if top.y - g.y < 0.9 or _fall_t > 2.5:
+			_fall_landed = true
+			var heavy := clampf(fall_mass / 250.0, 0.6, 1.6)
+			GameFeel.play("metal_fall" if kind == "metal" else "land_thud", top, world, -2.0, 0.85 if kind == "metal" else 0.7, true)
+			FxKit.dust_ring(world, g, 1.3 * heavy)
+			FxKit.puff(world, g + Vector3.UP * 0.4, 0.8 * heavy)
+			GameFeel.shake(top, 0.3 * heavy, 45.0)
+			if kind == "metal":
+				FxKit.spark(world, g + Vector3.UP * 0.2, Vector3.UP)
+			elif hit_burns:
+				FxKit.spark(world, g + Vector3.UP * 0.2, Vector3.UP) # a burst of embers where the crown lands
+	var gone := FALL_BURN_GONE if hit_burns and kind == "palm" else FALL_GONE
+	if _fall_t > gone - 1.2:
+		for f in _fall_fires:
+			f.emitting = false
+		if is_instance_valid(_fall_sound):
+			_fall_sound.volume_db -= 30.0 * delta
+	if _fall_t > gone:
+		# Cleared away: it sinks out of sight in a breath of dust (ash if it burned), never pops.
+		set_physics_process(false)
+		var body := _fall_body
+		_fall_body = null
+		body.freeze = true
+		body.collision_mask = 0
+		FxKit.puff(world, body.to_global(Vector3(0, topple_height * 0.5, 0)), 0.9)
+		var tw := body.create_tween()
+		tw.tween_property(body, "global_position:y", body.global_position.y - 1.6, 0.9).set_ease(Tween.EASE_IN)
+		tw.tween_callback(body.queue_free)
 
 
 ## The break itself, by kind: the sound (peak on this frame), what flies off and where to (along the

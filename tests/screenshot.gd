@@ -142,6 +142,33 @@ func _run() -> void:
 				root.get_viewport().get_texture().get_image().save_png(out)
 				quit()
 				return
+			"fall": # a palm set alight by a blast and a street light swatted by a car, N frames in (arg 3)
+				Engine.max_physics_steps_per_frame = 1
+				for v2: Vehicle in [player] + main.enemies:
+					v2.global_position = Vector3(0, -200, 0)
+				var all: Array = get_nodes_in_group("breakables")
+				var palms: Array = all.filter(func(n: Node) -> bool: return (n as Breakable).kind == "palm")
+				var lamps: Array = all.filter(func(n: Node) -> bool: return (n as Breakable).kind == "metal" and (n as Breakable).topple_height > 7.9)
+				var palm := palms[0] as Breakable
+				var best := 1e9
+				var lamp: Breakable = null
+				for l: Breakable in lamps:
+					var d := l.global_position.distance_to(palm.global_position)
+					if d < best:
+						best = d
+						lamp = l
+				var mid := (palm.global_position + lamp.global_position) * 0.5
+				_place(cam, mid + Vector3(0, 6, 0) + (mid - LosAngelesArena.ground(0, 0)).normalized().rotated(Vector3.UP, 1.2) * maxf(18.0, best * 0.9), mid + Vector3(0, 3, 0), 62.0)
+				await _frames(20)
+				palm.weapon_hit(50.0, null, palm.global_position + Vector3(3, 0, 2), true)
+				lamp.hit_from = Vector3.INF
+				lamp.weapon_hit(50.0, null, lamp.global_position + Vector3(-3, 0, 1), false)
+				var a2 := OS.get_cmdline_user_args()
+				await _frames(int(a2[2]) if a2.size() > 2 else 20)
+				await RenderingServer.frame_post_draw
+				root.get_viewport().get_texture().get_image().save_png(out)
+				quit()
+				return
 			"mine": # the Remote (electronic) next to an energy mine, close up, armed
 				Engine.max_physics_steps_per_frame = 1
 				var base := LosAngelesArena.ground(-40, 40)

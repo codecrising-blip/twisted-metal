@@ -1266,7 +1266,36 @@ func _power_tower() -> void:
 		for x: float in [-arm + 0.5, arm - 0.5]:
 			for k in 3:
 				tb.cylinder(_insulator(), 0.22, 0.25, MeshBuilder.at(Vector3(x, y - 0.6 - k * 0.3, 0)), 8)
+	# Round 10 (owner: "how is the sign pinned to the tower, and why does it float when the tower is
+	# down?"): a ring of beams joins the leg tops, the warning sign hangs from the front beam on two
+	# steel hangers, and sign, hangers and lettering are all part of the upper body, so they come
+	# down with it.
+	for f in 4:
+		var ra := Vector3(-3.6, 9.0, -3.6).rotated(Vector3.UP, f * PI * 0.5)
+		var rb := Vector3(-3.6, 9.0, -3.6).rotated(Vector3.UP, (f + 1) * PI * 0.5)
+		_beam(tb, _m.steel, ra, rb, 0.3)
+	var sign_c := Vector3(0, 6.9, 3.6)
+	for hx: float in [-1.9, 1.9]:
+		_beam(tb, _m.steel, Vector3(hx, 9.0, 3.6), Vector3(hx, sign_c.y + 0.9, 3.6), 0.12)
+		tb.box(_m.steel, Vector3(0.3, 0.3, 0.22), MeshBuilder.at(Vector3(hx, sign_c.y + 0.9, 3.6)), 0.02) # clamp
+	_beam(tb, _m.steel, Vector3(-2.4, sign_c.y + 1.25, 3.6), Vector3(2.4, sign_c.y + 1.25, 3.6), 0.14) # top rail
+	tb.box(MatKit.paint(Color(0.7, 0.55, 0.08), 0.6, 0.6, 0.6, 2.0, 0.7, 120), Vector3(4.6, 2.4, 0.08), MeshBuilder.at(sign_c), 0.0)
 	tb.commit(_tower_upper)
+	for face: float in [1.0, -1.0]:
+		var tm := TextMesh.new()
+		tm.text = "DANGER\nHIGH VOLTAGE"
+		tm.font_size = 90
+		tm.pixel_size = 0.009
+		tm.depth = 0.0
+		var label := MeshInstance3D.new()
+		label.mesh = tm
+		var ink := StandardMaterial3D.new()
+		ink.albedo_color = Color(0.05, 0.04, 0.03)
+		ink.roughness = 0.8
+		label.material_override = ink
+		label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		label.transform = Transform3D(Basis(Vector3.UP, 0.0 if face > 0.0 else PI), sign_c + Vector3(0, 0, 0.05 * face))
+		_tower_upper.add_child(label)
 	# Power lines running off over the wall toward the city (merged into the static stage).
 	var wires := MeshBuilder.new()
 	var wire_mat := MatKit.flat(Color(0.08, 0.08, 0.08), 0.6)
@@ -1281,9 +1310,6 @@ func _power_tower() -> void:
 			wires.cylinder(wire_mat, 0.05, prev.distance_to(p), MeshBuilder.along((prev + p) * 0.5, p - prev), 4, -1.0, false)
 			prev = p
 	batch_builder(wires, false)
-	MeshKit.box(self, Vector3(4.6, 2.4, 0.08), at + Vector3(0, 6.0, 4.0), MatKit.plain(MatKit.paint(Color(0.7, 0.55, 0.08), 0.6, 0.6, 0.6, 2.0, 0.7, 120)))
-	for face: float in [1.0, -1.0]:
-		batch_text("DANGER\nHIGH VOLTAGE", Transform3D(Basis(Vector3.UP, 0.0 if face > 0.0 else PI), at + Vector3(0, 6.0, 4.0 + 0.05 * face)), 90, 0.009, Color(0.05, 0.04, 0.03))
 
 
 var _insulator_mat: StandardMaterial3D
@@ -1426,6 +1452,8 @@ func _palm(pos: Vector3, fan := false) -> void:
 	b.kind = "palm"
 	b.size_hint = Vector3(1.0, 6.0, 1.0)
 	b.topple_height = 7.0
+	b.fall_mass = 320.0
+	b.stump_radius = 0.24
 	b.debris_color = Color(0.45, 0.36, 0.24)
 	b.position = pos
 	b.rotation.y = _rng.randf() * TAU

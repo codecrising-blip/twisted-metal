@@ -19,6 +19,7 @@ var _searching := false # fired with nobody in range: the arc spins round the ca
 var _scan_t := 0.0
 var _blocked := 0.0 # how long the view has been fully blocked (a short grace before the link breaks)
 var _hum: AudioStreamPlayer3D
+var _siren: AudioStreamPlayer3D
 var _spark := 0.0
 var _bolt: Bolt
 var _main: Array[Vector3] = [] # this flash's path, kept for the afterimage
@@ -31,6 +32,26 @@ const SEARCH_RADIUS := 9.0 # the spinning arc's reach while it looks for a targe
 const SEARCH_TURNS := 3.0 # turns round the car over the whole duration (owner, round 9)
 const LOCK_MIN := 1.2 # a target caught late in the spin still gets at least this long
 const LOS_GRACE := 0.4 # seconds fully out of sight before the connection is lost
+const JOLT_HEIGHT := 1.3 # m the victim is thrown up when the arc first bites
+
+
+## Owner, round 10: the moment the arc connects, the shock throws the victim into a hop that upsets
+## it (wheels off the ground, a twist, the steering twitching as it lands), so it cannot just turbo
+## away, and Outlaw gets her chance to mash. Once per connection, never while the link holds.
+func _connect_jolt() -> void:
+	if not is_instance_valid(target) or target.is_dead:
+		return
+	var up := sqrt(2.0 * Vehicle.GRAVITY * JOLT_HEIGHT)
+	target.blast_knock(Vector3.UP * up - target.linear_velocity * Vector3(0.35, 0.0, 0.35), 0.0, false)
+	var b := target.global_basis
+	target.angular_velocity += b.z * randf_range(1.6, 2.4) * (1.0 if randf() < 0.5 else -1.0) + b.x * randf_range(-1.0, 1.0) + Vector3.UP * randf_range(-1.4, 1.4)
+	target.wobble(1.0)
+	target.hit_react(target.global_position - owner_car.global_position, 12.0)
+	FxKit.spark(get_parent(), target.aim_point(), Vector3.UP)
+	GameFeel.flash(get_parent(), target.aim_point(), 2.2, Color(0.6, 0.8, 1.0), 0.08)
+	if target.is_player or owner_car.is_player:
+		GameFeel.hitstop(get_tree(), 0.04, 0.05)
+		GameFeel.shake(target.global_position, 0.25)
 
 
 static func start(v: Vehicle, d: Dictionary) -> TaserLink:
@@ -41,10 +62,16 @@ static func start(v: Vehicle, d: Dictionary) -> TaserLink:
 	link.target = find_victim(v, d.get("range", 25.0))
 	v.get_parent().add_child(link)
 	v.set_live_special(link)
-	GameFeel.play("special_outlaw", v.global_position + Vector3.UP, v.get_parent(), 0.0, 1.0, true)
+	# Owner, round 10: the siren wails for as long as the attack is on (it used to play once, 1.8 s,
+	# and die before the 3 s were up). The crackle runs under it.
+	link._siren = GameFeel.loop("special_outlaw", v, 0.0, 18.0)
+	if link._siren:
+		link._siren.play()
 	link._hum = GameFeel.loop("taser_loop", v, -8.0, 14.0) # the arc crackles while it lives
 	if link._hum:
 		link._hum.play()
+	if link.target:
+		link._connect_jolt()
 	if link.target == null:
 		link._searching = true # owner, round 9: no target? the arc spins round the car, hunting
 		if v.is_player:
@@ -145,7 +172,7 @@ func _physics_process(delta: float) -> void:
 			if target:
 				_searching = false
 				_time = minf(_time, duration - LOCK_MIN)
-				GameFeel.play("special_outlaw", target.aim_point(), get_parent(), -2.0, 1.15, true)
+				_connect_jolt()
 				if owner_car.is_player:
 					owner_car.notice.emit(owner_car, "LOCKED ON")
 		if _time >= duration:
@@ -222,6 +249,12 @@ func _end(lost: bool) -> void:
 	_pending = 0.0
 	if is_instance_valid(_hum):
 		_hum.queue_free()
+	if is_instance_valid(_siren): # the wail winds down instead of cutting off
+		var siren := _siren
+		var tw := siren.create_tween().set_parallel(true)
+		tw.tween_property(siren, "volume_db", -40.0, 0.35)
+		tw.tween_property(siren, "pitch_scale", 0.6, 0.35)
+		tw.chain().tween_callback(siren.queue_free)
 	if is_instance_valid(owner_car):
 		GameFeel.play("taser_fizzle", owner_car.launch_point(), owner_car.get_parent(), -6.0)
 		if owner_car.live_special() == self:

@@ -361,8 +361,17 @@ func _run() -> void:
 	_place(dog, 0, 28, 0)
 	await _frames(5)
 	var d_hp := dog.health
+	var dog_y := dog.global_position.y
 	Specials.fire(outlaw, "omni_taser")
 	_check(outlaw.has_live_special(), "taser links to a car in range")
+	var jolt_link := outlaw.live_special() as TaserLink
+	_check(jolt_link != null and jolt_link._siren != null and jolt_link._siren.playing and jolt_link._siren.stream.loop,
+		"the siren loops for as long as the taser is on (round 10)")
+	var dog_peak := dog_y
+	for k in 14:
+		await _frames(1)
+		dog_peak = maxf(dog_peak, dog.global_position.y)
+	_check(dog_peak - dog_y > 0.5, "the arc connecting throws the victim into a hop (%.2f m)" % (dog_peak - dog_y))
 	# Parked cars have no controller, so press "fire" for them directly: mashing.
 	for k in 10:
 		if outlaw.has_live_special():
@@ -472,6 +481,31 @@ func _run() -> void:
 	await _frames(45)
 	_check(n_hp - outlaw.health >= 89.5, "charged Napalm Cone hits for 90 (%.1f)" % (n_hp - outlaw.health))
 	_check(outlaw.burn_time > 0.0, "...and burns")
+	# Meltdown (owner, round 10): held 3 s the charge is lost, no ammo spent, weapon locked 3 s.
+	player.ammo["napalm_cone"] = 2
+	player._weapon_cooldowns.clear()
+	var said: Array[String] = []
+	var hear := func(_v: Vehicle, text: String) -> void: said.append(text)
+	player.notice.connect(hear)
+	await _frames(2)
+	var melt_shots := Projectile.spawned_total
+	Input.action_press("fire_weapon")
+	await _frames(150)
+	_check(player.charging_id == "napalm_cone", "a full charge can still be held for a moment (2.5 s)")
+	await _frames(40)
+	_check(player.charging_id == "" and player.locked_left("napalm_cone") > 2.0 and player.ammo["napalm_cone"] == 2 and Projectile.spawned_total == melt_shots,
+		"held 3 s the Napalm Cone melts down: no shot, no ammo lost, locked (%.1f s)" % player.locked_left("napalm_cone"))
+	_check(said.has("NAPALM CONE MELTDOWN"), "...and the HUD says so")
+	Input.action_release("fire_weapon")
+	await _frames(2)
+	Input.action_press("fire_weapon")
+	await _frames(3)
+	Input.action_release("fire_weapon")
+	await _frames(3)
+	_check(Projectile.spawned_total == melt_shots, "a melted-down weapon will not fire while locked")
+	player.notice.disconnect(hear)
+	player._locked.clear()
+	player._weapon_cooldowns.clear()
 
 	# Napalm (gas can): thrown up and ahead, dropped on the car with a second press.
 	_place(outlaw, 20, 70, 90)
@@ -915,6 +949,39 @@ func _run() -> void:
 	main.player.toggle_headlights()
 	_check(not (fake[0] as Node3D).visible, "headlights off hides the painted beam")
 	GraphicsSettings.high = was_high
+
+	# Round 10: trees go down as real bodies, burning when a weapon did it, then are cleared away.
+	var palms: Array = get_nodes_in_group("breakables").filter(func(n: Node): return (n as Breakable).kind == "palm" and not (n as Breakable).is_broken)
+	var palm := palms[0] as Breakable
+	palm.weapon_hit(50.0, main.player, palm.global_position + Vector3(4, 0, 0), true)
+	await _frames(3)
+	_check(palm.is_broken and is_instance_valid(palm._fall_body) and palm._fall_fires.size() >= 3, "a palm hit by a weapon falls as a rigid body, on fire")
+	var fallen: RigidBody3D = palm._fall_body
+	await _frames(70)
+	_check(fallen.to_global(Vector3(0, palm.topple_height, 0)).y - palm.global_position.y < 2.5, "...and comes down flat")
+	palm._fall_t = 100.0
+	await _frames(70)
+	_check(not is_instance_valid(fallen), "a fallen tree is cleared away after a few seconds")
+	var lamps: Array = get_nodes_in_group("breakables").filter(func(n: Node): return (n as Breakable).kind == "metal" and (n as Breakable).style == Breakable.Style.TOPPLE and not (n as Breakable).is_broken and (n as Breakable).topple_height > 7.9)
+	var lamp := lamps[0] as Breakable
+	Specials.blast_props(main, lamp.global_position + Vector3(3, 0, 0), 8.0, 50.0, main.player)
+	_check(lamp.is_broken and lamp._fall_fires.is_empty(), "a blast knocks down a street light (metal does not burn)")
+	_check(is_equal_approx(float(Roster.get_car("sweet_tooth").reverse), 10.0 * Roster.SPEED_SCALE * 1.6 * 1.15), "reverse speed is 1.15x round 9's")
+	# Kicker ends are ramps too: a car meeting a kicker end-on rides over it, no wall slam.
+	var kick_slams := [0]
+	var on_kick_slam := func(_a: Variant = null, _b: Variant = null) -> void: kick_slams[0] += 1
+	main.player.wall_slammed.connect(on_kick_slam)
+	main.player.health = main.player.max_health
+	_place(main.player, -46, -22, 180)
+	await _frames(20)
+	main.player.speed = 24.0
+	var kick_top: float = main.player.global_position.y
+	for k in 70:
+		await _frames(1)
+		kick_top = maxf(kick_top, main.player.global_position.y)
+	_check(kick_slams[0] == 0 and main.player.global_position.z > -2.0 and kick_top > LosAngelesArena.PLAT_H + 0.5,
+		"a kicker met end-on is a ramp, not a wall (z %.1f, rose %.2f m, slams %d)" % [main.player.global_position.z, kick_top - LosAngelesArena.PLAT_H, kick_slams[0]])
+	main.player.wall_slammed.disconnect(on_kick_slam)
 
 	print("")
 	if _failures.is_empty():

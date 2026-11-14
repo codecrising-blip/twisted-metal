@@ -182,6 +182,8 @@ var _air_t := 0.0 # time in the air this flight
 var _air_vy := 0.0 # fastest fall this flight (negative)
 var _invis_shown := -1.0 # last transparency written to the meshes
 var _charge_beeps := 0
+var _charge_hold := 0.0 # seconds the fire button has been held on this charge
+var _locked := {} # weapon id -> seconds left of a meltdown lock
 var _charge_hum: AudioStreamPlayer3D
 var _charge_hum_t := 0.0
 var _knock := 0.0 # seconds left of "thrown": tyres barely grip, so blasts carry the car sideways
@@ -419,6 +421,10 @@ func _tick(delta: float) -> void:
 		_weapon_cooldowns[id] -= delta
 		if _weapon_cooldowns[id] <= 0.0:
 			_weapon_cooldowns.erase(id)
+	for id in _locked.keys():
+		_locked[id] -= delta
+		if _locked[id] <= 0.0:
+			_locked.erase(id)
 	if _energy_pause > 0.0:
 		_energy_pause -= delta
 	else:
@@ -591,7 +597,7 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 			braking = true
 		else:
 			var rev_top := minf(float(stats.reverse) * 2.0, float(stats.max_speed) * TURBO_MULT) if boosting else float(stats.reverse)
-			v_f = move_toward(v_f, -rev_top * -throttle, accel * 0.7 * dt)
+			v_f = move_toward(v_f, -rev_top * -throttle, accel * Roster.REVERSE_ACCEL * dt)
 	else:
 		v_f = move_toward(v_f, 0.0, COAST * dt)
 	if handbrake:
@@ -1025,6 +1031,7 @@ func _combat(delta: float) -> void:
 		elif _can_charge():
 			charging_id = selected_weapon() # fires when the button is let go
 			charge_time = 0.0
+			_charge_hold = 0.0
 			_charge_beeps = 0
 		else:
 			_fire_selected()
@@ -1033,7 +1040,11 @@ func _combat(delta: float) -> void:
 			_cancel_charge()
 		elif in_fire_weapon:
 			charge_time = minf(charge_time + delta, charge_full(charging_id))
+			_charge_hold += delta
 			_charge_sound(delta)
+			var melt := float(WeaponData.get_def(charging_id).get("meltdown", 0.0))
+			if melt > 0.0 and _charge_hold >= melt:
+				_meltdown(charging_id)
 		else:
 			var full := charge_time >= charge_full(charging_id)
 			_cancel_charge()
@@ -1221,9 +1232,37 @@ func charge_ratio() -> float:
 	return clampf(charge_time / charge_full(charging_id), 0.0, 1.0) if charging_id != "" else 0.0
 
 
+## Owner, round 10: a charge held too long melts down. No shot, no ammo lost, but the weapon is
+## locked for `meltdown_lock` seconds (the HUD shows a ban sign over its slot). A charged cone is
+## for the short window you made (a freeze), not something to carry around all day.
+func _meltdown(id: String) -> void:
+	var d := WeaponData.get_def(id)
+	_cancel_charge()
+	var lock := float(d.get("meltdown_lock", 3.0))
+	_weapon_cooldowns[id] = lock
+	_locked[id] = lock
+	notice.emit(self, "%s MELTDOWN" % String(d.get("label", id)).to_upper())
+	var at := launch_point()
+	GameFeel.play("taser_fizzle", at, self, 0.0, 0.8)
+	FxKit.puff(get_parent(), at, 0.7)
+	for k in 3:
+		FxKit.spark(get_parent(), at, (Vector3.UP + Vector3(randf_range(-1, 1), 0, randf_range(-1, 1))).normalized())
+	GameFeel.flash(get_parent(), at, 1.2, Color(1.0, 0.6, 0.2), 0.1)
+	if is_player:
+		GameFeel.ui("not_available", get_tree())
+		GameFeel.shake(at, 0.15)
+	weapons_changed.emit(self)
+
+
+## Seconds this weapon is still locked after a meltdown (0 = usable). For the HUD.
+func locked_left(id: String) -> float:
+	return float(_locked.get(id, 0.0))
+
+
 func _cancel_charge() -> void:
 	charging_id = ""
 	charge_time = 0.0
+	_charge_hold = 0.0
 	_charge_beeps = 0
 	if is_instance_valid(_charge_hum):
 		_charge_hum.queue_free()
@@ -1231,8 +1270,8 @@ func _cancel_charge() -> void:
 
 
 ## Charging sound (owner, round 6): a tap makes no sound. Held, five beeps climb in pitch
-## ("pew, Pew, PEw, PEW, PEW") until the shot is full; held past full, a humming buzz that settles
-## down until you let go.
+## ("pew, Pew, PEw, PEW, PEW") until the shot is full; held past full, a humming buzz that keeps
+## going and climbs until you let go or it melts down.
 func _charge_sound(delta: float) -> void:
 	if not is_player:
 		return
@@ -1243,16 +1282,17 @@ func _charge_sound(delta: float) -> void:
 		GameFeel.play("charge_up", launch_point(), self, -6.0 + _charge_beeps * 1.0, 1.0 + 0.16 * _charge_beeps)
 		_charge_beeps += 1
 	if charge_time >= full:
+		# Owner, round 10: the full charge keeps humming for as long as it is held (it used to fade to
+		# silence), climbing in pitch as the meltdown nears.
+		var melt := float(WeaponData.get_def(charging_id).get("meltdown", full + 1.0))
+		var near := clampf((_charge_hold - full) / maxf(melt - full, 0.1), 0.0, 1.0)
 		if _charge_hum == null:
-			_charge_hum = GameFeel.loop("taser_loop", self, -4.0, 10.0)
+			_charge_hum = GameFeel.loop("taser_loop", self, -3.0, 10.0)
 			if _charge_hum:
-				_charge_hum.pitch_scale = 1.6
 				_charge_hum.play()
-				_charge_hum_t = 0.0
-		elif is_instance_valid(_charge_hum):
-			_charge_hum_t += delta
-			_charge_hum.volume_db = lerpf(-4.0, -20.0, clampf(_charge_hum_t / 2.0, 0.0, 1.0))
-			_charge_hum.pitch_scale = lerpf(1.6, 1.1, clampf(_charge_hum_t / 2.0, 0.0, 1.0))
+		if is_instance_valid(_charge_hum):
+			_charge_hum.volume_db = lerpf(-4.0, 1.0, near)
+			_charge_hum.pitch_scale = lerpf(1.4, 2.3, near * near)
 
 
 ## The round shadow sits on the ground under the car, fading as the car rises.
