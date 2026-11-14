@@ -63,6 +63,7 @@ static func apply(tree: SceneTree) -> void:
 	if not _watching:
 		_watching = true
 		tree.node_added.connect(_on_node_added)
+	ModelLib.apply_quality() # Blender models: albedo only on LOW, normal + roughness maps on HIGH
 	var vp := tree.root
 	vp.msaa_3d = Viewport.MSAA_4X if high else Viewport.MSAA_DISABLED
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR

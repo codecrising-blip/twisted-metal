@@ -98,12 +98,13 @@ func _run() -> void:
 			"pickups": # every pickup kind in a row
 				for v: Vehicle in [player] + main.enemies:
 					v.global_position = Vector3(0, -200, 0)
-				var kinds := ["homing", "fire", "power", "napalm", "remote", "zoomy", "sat", "turbo", "health", "mega"]
+				var kinds := ["homing", "fire", "power", "napalm", "remote", "zoomy", "sat", "turbo", "health", "mega", "full"]
 				var base := LosAngelesArena.ground(-60, 72)
 				for i in kinds.size():
-					Pickup.create(main, kinds[i], base + Vector3(-13.5 + i * 3.0, 0, 0)).monitoring = false
-				await _frames(20)
-				_place(cam, base + Vector3(0, 5.0, 17), base + Vector3(0, 1.0, 0), 62.0)
+					Pickup.create(main, kinds[i], base + Vector3(-15.0 + i * 3.0, 0, 0)).monitoring = false
+				var pa := OS.get_cmdline_user_args()
+				await _frames(int(pa[2]) if pa.size() > 2 else 20)
+				_place(cam, base + Vector3(0, 4.2, 15.5), base + Vector3(0, 0.9, 0), 62.0)
 			"weapons": # trails of each missile, the taser arc, the SAT zone and a mine
 				Engine.max_physics_steps_per_frame = 1 # one physics step per frame: trails sample smoothly
 				var e: Vehicle = main.enemies[0]

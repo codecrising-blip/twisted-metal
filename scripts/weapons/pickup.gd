@@ -14,6 +14,7 @@ var active := true
 var bob := true
 
 var _visual: Node3D
+var _pad: MeshInstance3D
 var _respawn := 0.0
 var _t := 0.0
 
@@ -57,20 +58,68 @@ func is_turbo() -> bool:
 func _build() -> void:
 	if _visual:
 		_visual.queue_free()
+	if _pad:
+		_pad.queue_free()
+		_pad = null
 	_visual = Node3D.new()
-	_visual.position = Vector3.UP * 1.3
-	_visual.scale = Vector3.ONE * 1.25
 	add_child(_visual)
 	var mi := MeshInstance3D.new()
-	mi.mesh = mesh_for(kind)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.visibility_range_end = 130.0 # far ones still show on the radar
 	_visual.add_child(mi)
+	if ModelLib.has("pickups") and ModelLib.mesh("pickups", kind) != null:
+		# Round 10 (owner: "serious, not cartoonish"): real ordnance and supply cases made in Blender,
+		# turning slowly over a steel drop plate whose marker lamps carry the item's colour.
+		_blender = true
+		mi.mesh = ModelLib.mesh("pickups", kind)
+		_visual.position = Vector3.UP * HOVER
+		_visual.scale = Vector3.ONE * 1.2
+		_pad = MeshInstance3D.new()
+		_pad.mesh = ModelLib.mesh("pickups", "pad")
+		_pad.position = Vector3.UP * 0.02
+		_pad.rotation.y = randf() * TAU
+		_pad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_pad.visibility_range_end = 90.0
+		add_child(_pad)
+		_pad_lamps(true)
+	else:
+		_blender = false
+		mi.mesh = mesh_for(kind)
+		_visual.position = Vector3.UP * 1.3
+		_visual.scale = Vector3.ONE * 1.25
+
+
+const HOVER := 1.15 # metres above the plate
+var _blender := false
+
+
+## The colour that marks this pickup's kind (pad lamps, radar).
+func kind_color() -> Color:
+	if kind == "health" or kind == "mega" or kind == "full":
+		return {"health": Color(0.2, 0.45, 0.95), "mega": Color(0.95, 0.75, 0.2), "full": Color(0.9, 0.14, 0.1)}[kind]
+	if kind == "turbo":
+		return Color(0.2, 0.6, 1.0)
+	return WeaponData.get_def(kind).get("color", Color.WHITE)
+
+
+## The plate's marker lamps: lit in the item's colour, nearly dark while the item is gone.
+func _pad_lamps(on: bool) -> void:
+	if _pad == null:
+		return
+	var i := ModelLib.glow_surface(_pad.mesh)
+	if i >= 0:
+		var c := kind_color()
+		_pad.set_surface_override_material(i, ModelLib.glow_tint(c if on else Color(c.r * 0.12, c.g * 0.12, c.b * 0.12)))
 
 
 func _process(delta: float) -> void:
 	_t += delta
 	if active:
+		if _blender: # a slow, steady turn and the faintest drift: hardware, not a toy
+			_visual.rotation.y = _t * 0.9
+			if bob:
+				_visual.position.y = HOVER + sin(_t * 1.7) * 0.05
+			return
 		_visual.rotation.y = _t * 1.6
 		if bob:
 			_visual.position.y = 1.3 + sin(_t * 2.5) * 0.15
@@ -82,6 +131,7 @@ func _process(delta: float) -> void:
 			_build()
 		active = true
 		_visual.visible = true
+		_pad_lamps(true)
 
 
 func _on_body_entered(body: Node3D) -> void:
@@ -125,6 +175,7 @@ func _on_body_entered(body: Node3D) -> void:
 		_:
 			_respawn = WeaponData.WEAPON_RESPAWN
 	_visual.visible = false
+	_pad_lamps(false)
 
 
 ## "FIRE MISSILE LOADED", "SAT LOADED", ...
