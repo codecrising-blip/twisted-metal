@@ -364,6 +364,17 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   EXPORT); after removing objects iterate `scene.objects`, not `view_layer.objects`; the launcher marker must stay on
   the car's centre line or the HOLLYWOOD shot misses; Cycles equirect puts the view direction in the middle of the
   image, Godot wants north at u = 0 (roll by half the width); long turns hit the owner's usage limit: commit in stages.
+- **Round 11 (owner: Blender models "AMAZING", movement good), full text `docs/design/16-owner-round-11.md`:**
+  **U-turn slides ("tafheet")**, `Roster.UTURN` + `Vehicle._slide_step`: only at speed (`SLIDE_MIN_SPEED` 0.5 of top),
+  gas + handbrake + a direction; in the slide the steering authority comes from the speed the car carries (not its
+  forward part) and doesn't flip past sideways, so it swings round to its class limit (light and Outlaw 180, medium
+  160 + turbo to 180, heavy 140 + handbrake taps +25 deg for 15% speed each, super 120 + turbo to 180 at 0.55 turn
+  rate) and eases onto it (`sqrt(2 * YAW_RESPONSE * left)`). Normal drifts (< ~90 deg) are unchanged. Outlaw:
+  `"uturn": "light"`, `"turbo_tank": 1.4` (drain / tank). `SPEED_SCALE` 1.26 (-10%). Camera: speed above the car's
+  top counts a quarter (`ChaseCamera._cam_speed`), follows 1.8x tighter while boosting. Health energy:
+  `HEALTH_ENERGY_S` 5, `MEGA_HEALTH_ENERGY_S` 8 (x `ENERGY_REGEN`). Wall writing: `LosAngelesArena._wall_tags()` +
+  `_on_wall()` puts it on the plate face (`WALL_FACE` 0.2 m out of the corner line) and the ribs are left out behind
+  it (`_behind_writing`). Roadkill later: +8 energy per weapon pickup. PS5 pad issue: owner's side (no input changes).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

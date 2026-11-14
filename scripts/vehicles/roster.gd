@@ -18,7 +18,7 @@ extends RefCounted
 const HEALTH_SCALE := 1.0
 ## Round 7 (owner: "still slow, even Outlaw"): every car 1.4x the round-5 speed (top speed, pick-up,
 ## reverse) and handbrake drifts 1.2x stronger (sharper drift turn, looser drift grip), same for every class.
-const SPEED_SCALE := 1.4
+const SPEED_SCALE := 1.26 # round 7: 1.4; round 11 (owner): 10% slower
 const DRIFT_SCALE := 1.2
 const REVERSE_SCALE := 1.84 # owner: x1.6 (round 9), then x1.15 on top (round 10)
 const REVERSE_ACCEL := 1.12 # share of forward acceleration in reverse: 0.7 x 1.6 (round 10: quick out of a wall slam)
@@ -28,6 +28,26 @@ const MASS := {"light": 1.0, "medium": 1.4, "heavy": 2.0, "super": 2.8}
 const KNOCKBACK := {"light": 1.3, "medium": 1.0, "heavy": 0.7, "super": 0.5}
 ## Per class: acceleration factor, grip kept with the handbrake on, turn rate with the handbrake on.
 const CLASS_ACCEL := {"light": 1.1, "medium": 1.0, "heavy": 0.9, "super": 0.8}
+## U-turn slides (owner, round 11, "tafheet"): at speed, hold the handbrake and a direction and the
+## car swings round in one slide, as far as its class allows, then the tyres bite.
+##   max       degrees one hold can turn
+##   turbo_to  boosting during the slide lets it carry on this far (0 = turbo doesn't help)
+##   turbo_rate how fast it still turns while boosting (super heavy: slower, a wider arc)
+##   taps      re-pressing the handbrake (within SLIDE_TAP_WINDOW) buys more turn, at a cost in speed
+## Light cars (and Outlaw, "uturn": "light") turn a full 180 in one hold; mid cars 160 and need turbo
+## for the rest; heavy 140, turbo doesn't help, taps do (a curved, slower U); super heavy 120, turbo
+## finishes it in a wide arc.
+const UTURN := {
+	"light": {"max": 180.0, "turbo_to": 0.0, "turbo_rate": 1.0, "taps": false},
+	"medium": {"max": 160.0, "turbo_to": 180.0, "turbo_rate": 1.0, "taps": false},
+	"heavy": {"max": 140.0, "turbo_to": 0.0, "turbo_rate": 1.0, "taps": true},
+	"super": {"max": 120.0, "turbo_to": 180.0, "turbo_rate": 0.55, "taps": false},
+}
+
+
+## The U-turn profile of a car (its own "uturn" class if it has one, else its weight class).
+static func uturn(stats: Dictionary) -> Dictionary:
+	return UTURN.get(String(stats.get("uturn", stats.get("class", "medium"))), UTURN["medium"])
 const DRIFT_GRIP := {"light": 0.26, "medium": 0.3, "heavy": 0.36, "super": 0.41}
 const DRIFT_TURN := {"light": 1.62, "medium": 1.55, "heavy": 1.46, "super": 1.41}
 
@@ -43,6 +63,8 @@ const CARS := {
 		"name": "Outlaw", "ram": 5.0, "engine": "taxi", "driver": "Jamie Roberts", "female": true,
 		"spd": 7, "arm": 6, "hnd": 6, "spc": 5, "class": "medium",
 		"special": "omni_taser", "brake_mult": 1.3, # perk: Interceptor
+		# Round 11 (owner): she U-turns like a light car, and her turbo tank holds 1.4x (7 s instead of 5).
+		"uturn": "light", "turbo_tank": 1.4,
 		"size": Vector3(2.2, 1.6, 5.0),
 		"tagline": "She stopped telling them it was about justice.",
 	},

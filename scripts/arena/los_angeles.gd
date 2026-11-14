@@ -876,12 +876,70 @@ func _wall_corners() -> Array:
 	]
 
 
+## The writing on the outer wall: [text, spot near the wall, (unused), colour, font size].
+static func _wall_tags() -> Array:
+	var people_w := Color(0.84, 0.84, 0.8)
+	var people_r := Color(0.78, 0.18, 0.16)
+	var people_b := Color(0.3, 0.5, 0.85)
+	var knows := Color(0.92, 0.76, 0.22)
+	return [
+		["CALYPSO WILL SAVE US", Vector3(-35, 1.5, HALF - 0.85), 0.0, people_w, 220],
+		["BREAD AND CIRCUSES\n- JUVENAL", Vector3(95, 2.0, HALF - 0.85), 0.0, knows, 170],
+		["CITY HALL DID THIS", Vector3(HALF - 0.85, 1.5, -90), 90.0, people_r, 220],
+		["WHOEVER CAN SUPPLY THEM WITH ILLUSIONS\nIS EASILY THEIR MASTER  - LE BON, 1895", Vector3(HALF - 0.85, 2.0, 35), 90.0, knows, 130],
+		["THEY MAKE A DESERT\nAND CALL IT PEACE  - TACITUS", Vector3(-HALF + 0.85, 2.0, -20), -90.0, knows, 160],
+		["THANK YOU CALYPSO", Vector3(-HALF + 0.85, 1.5, 110), -90.0, people_b, 220],
+		["CUI BONO?  WHO PROFITS?", Vector3(-70, 1.5, -HALF + 0.85), 180.0, knows, 200],
+		["IT SOLD A HILL IN 1923.\nBRING IT DOWN AND SEE WHAT HE GIVES.", Vector3(30, 2.0, -HALF + 0.85), 180.0, knows, 130],
+	]
+
+
+static func _behind_writing(p: Vector3, writing: Array) -> bool:
+	for w: Array in writing:
+		var c: Vector3 = w[0]
+		if Vector2(p.x - c.x, p.z - c.z).length() < float(w[1]) + 1.2:
+			return true
+	return false
+
+
+## Where writing goes on the outer wall near `p`: on the steel plate's face (round 11, owner: the
+## writing floated a metre in front of the wall), facing into the arena. Same height as p.
+## The plate's inner face is WALL_FACE metres outside the line between the corners.
+const WALL_FACE := 0.2
+
+func _on_wall(p: Vector3) -> Transform3D:
+	var corners := _wall_corners()
+	var best := Transform3D(Basis.IDENTITY, p)
+	var best_d := INF
+	for i in corners.size():
+		var a: Vector3 = corners[i]
+		var b: Vector3 = corners[(i + 1) % corners.size()]
+		var flat := Vector3(p.x, 0.0, p.z)
+		var t := clampf((flat - a).dot(b - a) / (b - a).length_squared(), 0.0, 1.0)
+		var on := a.lerp(b, t)
+		var d := on.distance_to(flat)
+		if d < best_d:
+			best_d = d
+			var out := ((a + b) * 0.5).normalized()
+			# local +Z (the side the text reads from) points into the arena
+			best = Transform3D(Basis.looking_at(out, Vector3.UP), on + out * (WALL_FACE - 0.012) + Vector3.UP * p.y)
+	return best
+
+
 ## Outer wall: rusted steel plate (owner: "steel walls") with a chain-link fence on top, so the city
 ## below shows through. The collider is the full 8 m.
 func _outer_wall() -> void:
 	var h := 8.0
 	var barrier_h := 2.8
 	var corners := _wall_corners()
+	# Where the writing goes, and how wide it is (the ribs are left out behind it).
+	var writing: Array = []
+	for t: Array in _wall_tags():
+		var tm := TextMesh.new()
+		tm.text = t[0]
+		tm.font_size = t[4]
+		tm.pixel_size = 0.007
+		writing.append([_on_wall(t[1]).origin, tm.get_aabb().size.x * 0.5 + 0.5])
 	var mb := MeshBuilder.new()
 	# The chain-link: one flat sheet per side, all in one mesh (it was a thin box per side: two
 	# see-through layers to shade and a draw call each).
@@ -926,6 +984,8 @@ func _outer_wall() -> void:
 		var ribs := int(length / 3.0)
 		for k in ribs + 1:
 			var t := -length * 0.5 + k * length / ribs
+			if _behind_writing(mid + dir * t, writing):
+				continue # the plate stays flat where something is painted on it (round 11)
 			mb.box(_m.rib, Vector3(0.25, barrier_h, 1.8), Transform3D(basis, mid + dir * t + Vector3.UP * barrier_h * 0.5), 0.03)
 			if k % 2 == 0:
 				mb.box(_m.rib, Vector3(0.16, h - barrier_h, 0.16), Transform3D(basis, mid + dir * t + Vector3.UP * (barrier_h + (h - barrier_h) * 0.5)), 0.02)
@@ -950,23 +1010,10 @@ func _outer_wall() -> void:
 	#  - THE ONE WHO KNOWS, always in the same ochre yellow: real sayings about crowds, circuses and
 	#    who profits (sources in docs/design/14-texts-los-angeles.md), and a riddle for the stage's secret.
 	# Every spot is clear of the buildings on the walls (one used to hide behind the donut shop).
-	var people_w := Color(0.84, 0.84, 0.8)
-	var people_r := Color(0.78, 0.18, 0.16)
-	var people_b := Color(0.3, 0.5, 0.85)
-	var knows := Color(0.92, 0.76, 0.22)
-	var tags := [
-		["CALYPSO WILL SAVE US", Vector3(-35, 1.5, HALF - 0.85), 0.0, people_w, 220],
-		["BREAD AND CIRCUSES\n- JUVENAL", Vector3(95, 2.0, HALF - 0.85), 0.0, knows, 170],
-		["CITY HALL DID THIS", Vector3(HALF - 0.85, 1.5, -90), 90.0, people_r, 220],
-		["WHOEVER CAN SUPPLY THEM WITH ILLUSIONS\nIS EASILY THEIR MASTER  - LE BON, 1895", Vector3(HALF - 0.85, 2.0, 35), 90.0, knows, 130],
-		["THEY MAKE A DESERT\nAND CALL IT PEACE  - TACITUS", Vector3(-HALF + 0.85, 2.0, -20), -90.0, knows, 160],
-		["THANK YOU CALYPSO", Vector3(-HALF + 0.85, 1.5, 110), -90.0, people_b, 220],
-		["CUI BONO?  WHO PROFITS?", Vector3(-70, 1.5, -HALF + 0.85), 180.0, knows, 200],
-		["IT SOLD A HILL IN 1923.\nBRING IT DOWN AND SEE WHAT HE GIVES.", Vector3(30, 2.0, -HALF + 0.85), 180.0, knows, 130],
-	]
+	var tags := _wall_tags()
 	for t in tags:
-		var xf := Transform3D(Basis(Vector3.UP, deg_to_rad(t[2] + 180.0)), t[1])
-		batch_text(t[0], xf * Transform3D(Basis.IDENTITY, Vector3(0.05, -0.05, -0.02)), t[4], 0.007, Color(0.05, 0.05, 0.05)) # drop shadow
+		var xf := _on_wall(t[1])
+		batch_text(t[0], xf * Transform3D(Basis.IDENTITY, Vector3(0.05, -0.05, -0.006)), t[4], 0.007, Color(0.05, 0.05, 0.05)) # drop shadow
 		batch_text(t[0], xf, t[4], 0.007, t[3])
 
 
@@ -1104,6 +1151,14 @@ func _overpass_and_cage() -> void:
 		cage.box(_m.steel, size + Vector3(0.1, -fence_h + 0.12, 0.1), MeshBuilder.at(mid + Vector3.UP * (DECK_Y + fence_h)), 0.0)
 	batch_builder(cage)
 	var warn_xf := Transform3D(Basis.IDENTITY, c + Vector3(-11, DECK_Y + 3.0, 15.15))
+	# The sign is painted on a steel plate wired to the fence (round 11: on bare chain-link the
+	# lettering seemed to float).
+	var plate := MeshBuilder.new()
+	plate.box(_m.steel, Vector3(4.6, 1.9, 0.05), MeshBuilder.at(warn_xf.origin + Vector3(0, -0.05, -0.05)), 0.01)
+	for px: float in [-2.1, 2.1]:
+		for py: float in [-0.8, 0.7]:
+			plate.cylinder(_m.steel, 0.04, 0.08, MeshBuilder.at(warn_xf.origin + Vector3(px, py - 0.05, -0.02), Vector3(90, 0, 0)), 6)
+	batch_builder(plate)
 	batch_text("CALYPSO RELIEF\nDEPOT 7", warn_xf * Transform3D(Basis.IDENTITY, Vector3(0.05, -0.05, -0.02)), 120, 0.012, Color(0.05, 0.05, 0.05))
 	batch_text("CALYPSO RELIEF\nDEPOT 7", warn_xf, 120, 0.012, Color(0.95, 0.2, 0.15))
 	mega_points.append(c + Vector3(0, DECK_Y, -2))

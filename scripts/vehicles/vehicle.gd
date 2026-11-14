@@ -45,6 +45,11 @@ const BODY_CLEARANCE := 0.3 # the collision box starts this high: wheels hold it
 const SUSP_BUMP := 0.3 # compression where the bump stop starts (rest is GRAVITY / SUSP_K = 0.16)
 const SUSP_BUMP_STIFF := 7.0 # bump stop: this many times the spring rate on top
 const YAW_RESPONSE := 40.0 # rad/s^2: steering reaches its turn rate in a blink, a hit can still swing it
+# U-turn slides (round 11, profiles in Roster.UTURN).
+const SLIDE_MIN_SPEED := 0.5 # share of top speed needed to start one
+const SLIDE_TAP_WINDOW := 0.45 # s: a re-press of the handbrake this soon is a tap (heavy cars)
+const SLIDE_TAP_GAIN := 25.0 # degrees each tap buys
+const SLIDE_TAP_LOSS := 0.15 # share of speed each tap costs
 const RECOVER_ROLL := 7.0 # rad/s roll when gas + left/right rights a flipped car
 const WALL_DAMAGE := 0.3 # per m/s of impact over 10: a 25 m/s square slam costs about 4.5
 const CHARGE_SILENT := 0.25 # a tap shorter than this makes no charging sound
@@ -128,6 +133,12 @@ var model: Node3D
 var _visual: Node3D
 var _fx: VehicleFx
 var _boosting := false
+var _slide := false # a U-turn slide is on (Roster.UTURN)
+var _slide_turned := 0.0 # radians turned since it began
+var _slide_limit := 0.0
+var _slide_dir := 0.0
+var _slide_off := 0.0 # seconds since the handbrake was let go
+var _hb_was := false
 var _turbo_run := 0.0
 var _wheels: Array = []
 var _steer_pivots: Array = []
@@ -608,6 +619,11 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 		v_f = move_toward(v_f, top, 12.0 * dt)
 	if _wall_pin > 0.0 and forward.dot(-_last_wall_normal) > 0.3:
 		v_f = minf(v_f, 4.0) # nose against the wall: scraping out is slow
+	var slide_turn := _slide_step(handbrake, steer, (v - n * v_n).length(), boosting, dt)
+	if slide_turn and _slide_tapped:
+		_slide_tapped = false
+		v_f *= 1.0 - SLIDE_TAP_LOSS
+		v_l *= 1.0 - SLIDE_TAP_LOSS
 	var grip: float = stats.grip * (float(stats.drift_grip) if handbrake else 1.0)
 	if braking and absf(v_l) > 3.0:
 		grip *= 0.55
@@ -615,10 +631,23 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 		grip *= 0.08 # thrown by a blast: the tyres skate, the car goes where it was pushed
 	v_l *= exp(-grip * dt)
 	# Steering turns the car about the ground's normal; a hit can still knock it round for a moment.
-	var authority := clampf(absf(v_f) / 7.0, 0.0, 1.0)
+	# In a U-turn slide the car keeps turning past sideways (the speed it carries, not its forward
+	# part, gives the tyres their bite, and the steering doesn't flip when it faces backwards), up to
+	# its class limit; it eases onto the limit and holds the heading there.
+	var plane_speed := (v - n * v_n).length()
+	var authority := clampf((plane_speed if slide_turn else absf(v_f)) / 7.0, 0.0, 1.0)
 	var turn: float = stats.handling * (float(stats.drift_turn) if handbrake else 1.0)
 	turn *= lerpf(1.0, 0.78, clampf(absf(v_f) / float(stats.max_speed), 0.0, 1.0)) # wider turns when fast
-	var yaw := -steer * turn * authority * (1.0 if v_f >= 0.0 else -1.0)
+	var yaw := -steer * turn * authority * (1.0 if (v_f >= 0.0 or slide_turn) else -1.0)
+	var w_now := state.angular_velocity.dot(n)
+	if slide_turn:
+		var prof := Roster.uturn(stats)
+		if boosting:
+			yaw *= float(prof.turbo_rate)
+		var left := maxf(0.0, _slide_limit - _slide_turned)
+		var cap := sqrt(2.0 * YAW_RESPONSE * left) # slow down to land on the limit
+		yaw = clampf(yaw, -cap, cap)
+		_slide_turned += absf(w_now) * dt
 	if _wobble_t > 0.0: # a homing hit knocks the steering a little
 		_wobble_t -= dt
 		yaw += _wobble_dir * 1.3
@@ -630,6 +659,44 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 	var w_n := w.dot(n)
 	state.angular_velocity = w + n * (move_toward(w_n, yaw, YAW_RESPONSE * dt) - w_n)
 	return forward * v_f + right * v_l + n * v_n
+
+
+var _slide_tapped := false
+
+## U-turn slide bookkeeping (owner, round 11). True while the slide is turning the car this step.
+## Starts on a handbrake press at speed with a direction held; a quick re-press (heavy cars) buys
+## more turn for some speed; boosting extends it for the classes that allow it; it ends when the
+## handbrake stays off, the car slows right down, or the steering goes the other way.
+func _slide_step(handbrake: bool, steer: float, plane_speed: float, boosting: bool, dt: float) -> bool:
+	var prof := Roster.uturn(stats)
+	if handbrake and not _hb_was:
+		if _slide and _slide_off < SLIDE_TAP_WINDOW and bool(prof.taps) and plane_speed > 5.0:
+			_slide_limit = minf(_slide_limit + deg_to_rad(SLIDE_TAP_GAIN), PI)
+			_slide_tapped = true
+		elif plane_speed >= SLIDE_MIN_SPEED * float(stats.max_speed) and absf(steer) > 0.4:
+			_slide = true
+			_slide_turned = 0.0
+			_slide_limit = deg_to_rad(float(prof.max))
+			_slide_dir = signf(steer)
+	_hb_was = handbrake
+	if not _slide:
+		return false
+	if handbrake:
+		_slide_off = 0.0
+	else:
+		_slide_off += dt
+		if _slide_off >= SLIDE_TAP_WINDOW:
+			_slide = false
+	if plane_speed < 2.5 or (absf(steer) > 0.4 and signf(steer) != _slide_dir):
+		_slide = false
+	if _slide and boosting and float(prof.turbo_to) > 0.0:
+		_slide_limit = maxf(_slide_limit, deg_to_rad(float(prof.turbo_to)))
+	return _slide and handbrake
+
+
+## Degrees turned in the current U-turn slide (tests, HUD).
+func slide_degrees() -> float:
+	return rad_to_deg(_slide_turned) if _slide else 0.0
 
 
 ## Wheels off the ground: momentum carries on; turbo still pushes the nose's way (jump + turbo onto
@@ -662,10 +729,10 @@ func _turbo_step(dir: float, dt: float) -> bool:
 	if boosting:
 		if _turbo_run == 0.0 and _turbo_rest >= TURBO_KICK_REST: # a fresh boost: the shove (costs a little)
 			_turbo_kick = true
-			turbo = maxf(0.0, turbo - TURBO_KICK_COST)
+			turbo = maxf(0.0, turbo - TURBO_KICK_COST / float(stats.get("turbo_tank", 1.0)))
 			if is_player:
 				GameFeel.shake(global_position, 0.12)
-		turbo = maxf(0.0, turbo - TURBO_DRAIN * dt)
+		turbo = maxf(0.0, turbo - TURBO_DRAIN / float(stats.get("turbo_tank", 1.0)) * dt) # Outlaw's tank is bigger
 		_turbo_run += dt
 		_turbo_rest = 0.0
 		if _turbo_run >= TURBO_PUTS_OUT_FIRE and burn_time > 0.0: # the rush of air blows the flames out

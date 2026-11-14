@@ -67,12 +67,14 @@ func _physics_process(delta: float) -> void:
 		_looking_back = back
 		global_position = desired
 	else:
-		global_position = global_position.lerp(desired, 1.0 - exp(-smoothing * delta))
+		# Owner, round 11: turbo must not throw the camera far back. While boosting it follows
+		# tighter, so the sudden shove doesn't open a gap behind the car.
+		var follow := smoothing * (1.8 if target._boosting else 1.0)
+		global_position = global_position.lerp(desired, 1.0 - exp(-follow * delta))
 
 	var look := target.global_position + fwd * 4.0 + Vector3.UP * height * 0.45
 	look_at(look)
-	var spd := absf(target.speed)
-	fov = lerpf(fov, 70.0 + clampf(spd - 20.0, 0.0, 25.0) * 0.6, 4.0 * delta)
+	fov = lerpf(fov, 70.0 + clampf(_cam_speed() - 20.0, 0.0, 25.0) * 0.6, 4.0 * delta)
 	_apply_shake(delta)
 
 
@@ -102,8 +104,16 @@ func _target_forward() -> Vector3:
 	return f.normalized()
 
 
+## Speed as the camera feels it: up to the car's top speed in full, anything turbo adds on top
+## only a quarter (owner, round 11: "the camera change after turbo minimum, but not zero").
+func _cam_speed() -> float:
+	var s := absf(target.speed)
+	var top: float = float(target.stats.get("max_speed", 40.0))
+	return s if s <= top else top + (s - top) * 0.25
+
+
 func _desired_position(fwd: Vector3) -> Vector3:
-	var pull := clampf(absf(target.speed) * 0.06, 0.0, 3.0)
+	var pull := clampf(_cam_speed() * 0.06, 0.0, 3.0)
 	var far := 1.6 if mode == "far" else 1.0
 	return target.global_position - fwd * (distance * far + pull) + Vector3.UP * height * (1.4 if mode == "far" else 1.0)
 

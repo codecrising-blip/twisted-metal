@@ -151,6 +151,9 @@ func _on_body_entered(body: Node3D) -> void:
 			return
 		var mega := kind == "mega"
 		v.heal(v.max_health * (WeaponData.MEGA_HEALTH_RATIO if mega else WeaponData.HEALTH_PICKUP_RATIO))
+		# Round 11 (owner): health also refills energy, 5 s of regen (mega: 8 s).
+		var secs := WeaponData.MEGA_HEALTH_ENERGY_S if mega else WeaponData.HEALTH_ENERGY_S
+		v.energy = minf(100.0, v.energy + secs * Vehicle.ENERGY_REGEN)
 		v.notice.emit(v, "MEGA HEALTH" if mega else "HEALTH")
 	elif is_turbo():
 		if v.turbo >= 99.5:

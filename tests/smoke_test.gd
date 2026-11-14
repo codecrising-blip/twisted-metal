@@ -747,7 +747,7 @@ func _run() -> void:
 	await _frames(90)
 	_place(outlaw, 0, 70, 90)
 	var st_car := Roster.get_car("sweet_tooth")
-	_check(float(st_car.max_speed) < float(Roster.get_car("outlaw").max_speed) and float(st_car.max_speed) < 37.5 and float(st_car.max_speed) > 34.0, "Sweet Tooth is a heavy truck, 1.4x the round 5 speed (%.1f m/s)" % st_car.max_speed)
+	_check(float(st_car.max_speed) < float(Roster.get_car("outlaw").max_speed) and float(st_car.max_speed) < 34.0 and float(st_car.max_speed) > 31.0, "Sweet Tooth is a heavy truck, 1.26x the round 5 speed (round 11: 10%% slower) (%.1f m/s)" % st_car.max_speed)
 	# Remote side hit (owner, round 6): thrown sideways away from the blast, the near side lifted.
 	_place(outlaw, 0, 70, 90)
 	await _frames(10)
@@ -982,6 +982,60 @@ func _run() -> void:
 	_check(kick_slams[0] == 0 and main.player.global_position.z > -2.0 and kick_top > LosAngelesArena.PLAT_H + 0.5,
 		"a kicker met end-on is a ramp, not a wall (z %.1f, rose %.2f m, slams %d)" % [main.player.global_position.z, kick_top - LosAngelesArena.PLAT_H, kick_slams[0]])
 	main.player.wall_slammed.disconnect(on_kick_slam)
+
+	# Round 11: U-turn slides by class (owner): at speed, gas + handbrake + a direction held.
+	var ut: Vehicle = main.player
+	for e: Vehicle in main.enemies:
+		e.controller = null
+		e.global_position = Vector3(0, -300, 0)
+	var turned := {}
+	for run: Array in [["light", false], ["medium", false], ["medium", true], ["heavy", false], ["heavy", true]]:
+		ut.stats["uturn"] = run[0]
+		_place(ut, -40, 60, 0)
+		ut.turbo = 100.0
+		await _frames(10)
+		Input.action_press("accelerate")
+		await _frames(150)
+		var f0 := -ut.global_basis.z
+		Input.action_press("steer_right")
+		Input.action_press("handbrake")
+		if run[1]:
+			await _frames(45)
+			Input.action_press("turbo")
+			await _frames(60)
+			Input.action_release("turbo")
+		else:
+			await _frames(105)
+		var f1 := -ut.global_basis.z
+		turned["%s%s" % [run[0], "+turbo" if run[1] else ""]] = rad_to_deg(Vector2(f0.x, f0.z).angle_to(Vector2(f1.x, f1.z)))
+		for a: String in ["accelerate", "steer_right", "handbrake"]:
+			Input.action_release(a)
+		await _frames(5)
+	ut.stats.erase("uturn")
+	var deg := func(k: String) -> float: return absf(float(turned[k]))
+	_check(deg.call("light") > 165.0, "a light car U-turns about 180 degrees in one slide (%.0f)" % deg.call("light"))
+	_check(absf(deg.call("medium") - 160.0) < 12.0, "a mid car stops near 160 (%.0f)" % deg.call("medium"))
+	_check(deg.call("medium+turbo") > 168.0, "...and turbo carries it round to 180 (%.0f)" % deg.call("medium+turbo"))
+	_check(absf(deg.call("heavy") - 140.0) < 12.0 and absf(deg.call("heavy+turbo") - 140.0) < 12.0,
+		"a heavy car stops near 140 and turbo doesn't help (%.0f / %.0f)" % [deg.call("heavy"), deg.call("heavy+turbo")])
+	_check(Roster.uturn(Roster.get_car("outlaw")).max == 180.0 and Roster.uturn(Roster.get_car("spectre")).max == 180.0 and Roster.uturn(Roster.get_car("sweet_tooth")).max == 140.0,
+		"Outlaw and the light cars turn 180, Sweet Tooth (heavy) 140")
+	# Outlaw's turbo tank is 1.4x: a second of boost costs her 20/1.4 of the bar.
+	var ol: Vehicle = main.enemies.filter(func(e: Vehicle): return e.car_id == "outlaw")[0]
+	ol.turbo = 100.0
+	ol._turbo_rest = 0.0
+	ol.in_turbo = true
+	for k in 60:
+		ol._turbo_step(1.0, 1.0 / 60.0)
+	ol.in_turbo = false
+	_check(absf((100.0 - ol.turbo) - 20.0 / 1.4) < 0.5, "Outlaw's turbo tank lasts 1.4x longer (%.1f used in 1 s)" % (100.0 - ol.turbo))
+	# Health refills energy: 5 s of regen (mega 8 s).
+	_place(ut, 40, 60, 0)
+	ut.health = 50.0
+	ut.energy = 0.0
+	Pickup.create(main, "health", ut.global_position)
+	await _frames(4)
+	_check(absf(ut.energy - 5.0 * Vehicle.ENERGY_REGEN) < 1.0, "a health pickup gives 5 s of energy (%.1f)" % ut.energy)
 
 	print("")
 	if _failures.is_empty():

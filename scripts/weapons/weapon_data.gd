@@ -158,6 +158,8 @@ const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "
 ## Owner, session 3: a health pickup restores a share of max health, so armor matters all match.
 const HEALTH_PICKUP_RATIO := 0.30
 const MEGA_HEALTH_RATIO := 0.60 # confirmed by the owner (session 4)
+const HEALTH_ENERGY_S := 5.0 # round 11: seconds of energy regen a health pickup gives
+const MEGA_HEALTH_ENERGY_S := 8.0 # (full health gives all of it)
 const HEALTH_RESPAWN := 30.0
 const MEGA_RESPAWN := 50.0
 const WEAPON_RESPAWN := 14.0
