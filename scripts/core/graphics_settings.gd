@@ -65,7 +65,9 @@ static func apply(tree: SceneTree) -> void:
 		tree.node_added.connect(_on_node_added)
 	ModelLib.apply_quality() # Blender models: albedo only on LOW, normal + roughness maps on HIGH
 	var vp := tree.root
-	vp.msaa_3d = Viewport.MSAA_4X if high else Viewport.MSAA_DISABLED
+	# Round 12 (owner: HIGH 14-19 FPS on the HD 5500): measured, MSAA x4 was about half of a HIGH frame
+	# and the 4-split shadows about 40%. x2 and two splits over 120 m look nearly the same.
+	vp.msaa_3d = Viewport.MSAA_2X if high else Viewport.MSAA_DISABLED
 	vp.scaling_3d_mode = Viewport.SCALING_3D_MODE_BILINEAR
 	vp.scaling_3d_scale = 1.0 if high else 0.85
 	RenderingServer.directional_shadow_atlas_set_size(4096 if high else 2048, true)
@@ -73,8 +75,8 @@ static func apply(tree: SceneTree) -> void:
 		RenderingServer.SHADOW_QUALITY_SOFT_HIGH if high else RenderingServer.SHADOW_QUALITY_SOFT_LOW)
 	for n in vp.find_children("*", "DirectionalLight3D", true, false):
 		var sun := n as DirectionalLight3D
-		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if high else DirectionalLight3D.SHADOW_ORTHOGONAL
-		sun.directional_shadow_max_distance = 220.0 if high else 90.0
+		sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS if high else DirectionalLight3D.SHADOW_ORTHOGONAL
+		sun.directional_shadow_max_distance = 120.0 if high else 90.0
 		sun.shadow_blur = 1.4 if high else 1.0
 		sun.shadow_enabled = high
 	var forward_plus := RenderingServer.get_rendering_device() != null

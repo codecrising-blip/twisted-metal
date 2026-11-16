@@ -85,9 +85,8 @@ func _ready() -> void:
 	hud.set_lives(lives - 1)
 	if arena.has_method("radar_lines"):
 		hud.set_radar_lines(arena.radar_lines())
-	var stage_line: String = arena.title + ("  -  " + arena.subtitle if arena.subtitle != "" else "")
-	hud.show_message(arena.title, "%s\n%s  -  %s\n%s\n(ESC: pick another driver)" % [arena.subtitle, player.display_name, player.stats.get("driver", ""), player.stats.get("tagline", "")], 4.0)
-	print("Stage: ", stage_line)
+	# Round 12 (owner): no text at the start. The intro will be Calypso's own voice (lines to come).
+	print("Stage: ", arena.title + ("  -  " + arena.subtitle if arena.subtitle != "" else ""))
 
 	_start_music()
 
@@ -139,7 +138,6 @@ func _physics_process(delta: float) -> void:
 			v.global_transform = _safest_spawn()
 	if _respawn_timer > 0.0:
 		_respawn_timer -= delta
-		hud.set_countdown(ceili(_respawn_timer))
 		if _respawn_timer <= 0.0:
 			_respawn_player()
 
@@ -168,7 +166,6 @@ func _respawn_player() -> void:
 	player.protect()
 	camera.follow(player)
 	hud.bind(player, camera)
-	hud.show_message("BACK IN THE FIGHT", "", 1.5)
 	get_tree().create_timer(12.0).timeout.connect(func():
 		if is_instance_valid(wreck):
 			wreck.queue_free())
@@ -268,12 +265,12 @@ func _on_wall_slammed(v: Vehicle, impact: float) -> void:
 
 
 func _on_easter_egg(title: String, text: String) -> void:
-	hud.show_message(title, text, 4.0)
+	hud.show_message(title, text, 7.0) # round 12 (owner): 4 s was too short to read
 
 
 func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
-	var by := " by %s" % killer.display_name.to_upper() if is_instance_valid(killer) and killer != v else ""
-	hud.add_feed("%s WRECKED%s" % [v.display_name.to_upper(), by])
+	var by := " BY %s" % killer.display_name.to_upper() if is_instance_valid(killer) and killer != v else ""
+	hud.add_feed("%s HAS BEEN KILLED%s" % [v.display_name.to_upper(), by])
 	if is_instance_valid(player) and v.global_position.distance_to(player.global_position) < 30.0:
 		camera.add_shake(0.6)
 	if v == player or killer == player: # the kill moment: everything slows for a breath
@@ -282,16 +279,15 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 		return
 	if v == player:
 		lives -= 1
-		var who := "Taken out by %s." % killer.display_name if is_instance_valid(killer) and killer != v else "Burned out."
 		if lives <= 0:
 			state = "lost"
 			hud.game_over = true
 			hud.set_lives(0)
-			hud.show_message("GAME OVER", who + "\nNo lives left.  ENTER / CREATE to try again")
+			hud.show_message("GAME OVER")
 			return
+		# Round 12 (owner): no countdown and no text; the camera stays on the wreck for the 6 s.
 		hud.set_lives(lives - 1)
 		_respawn_timer = RESPAWN_DELAY
-		hud.show_message("WRECKED", who + "\n%d spare %s left" % [lives - 1, "life" if lives - 1 == 1 else "lives"], RESPAWN_DELAY - 1.0)
 		return
 	var alive := enemies.filter(func(e: Vehicle): return not e.is_dead).size()
 	hud.set_enemies_left(alive)
@@ -300,7 +296,7 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 		hud.game_over = true
 		_respawn_timer = -1.0
 		hud.set_countdown(-1)
-		hud.show_message("%s WINS" % player.display_name.to_upper(), "%s burns a little quieter.\nThe crowd chants his name, not yours.\nENTER / CREATE to play again" % arena.title.capitalize())
+		hud.show_banner("CONGRATULATIONS\n%s" % String(arena.get("next_line") if arena.get("next_line") else "").to_upper(), 5.0)
 
 
 func _restart() -> void:

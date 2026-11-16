@@ -420,6 +420,11 @@ func show_notice(text: String) -> void:
 	_notice_tween.tween_property(_notice, "modulate:a", 0.0, 0.6)
 
 
+## Text on the target plate for `secs` seconds (round 12: the win line), then it is gone.
+func show_banner(text: String, secs: float) -> void:
+	_target_box.show_banner(text, secs)
+
+
 func add_feed(text: String) -> void:
 	var l := _label(text, 18, Color(0.95, 0.75, 0.6))
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

@@ -11,6 +11,8 @@ enum Style { SHATTER, TOPPLE }
 
 ## Owner, round 9: every breakable goes down to ~0.6 s of machine-gun fire (0.55 x 12.5 rounds/s = 6.9 a second).
 const MG_HEALTH := 4.2
+## Round 12 (owner): glass, the weapon stands and the tower legs take a quarter of that (two rounds).
+const MG_HEALTH_LIGHT := MG_HEALTH * 0.25
 ## Round 9 (owner: hide behind palms and street lights from long-range fire): a wider column around
 ## the prop that only shots hit (physics layer 6). Cars still only meet the thin trunk or pole.
 const COVER_LAYER := 32
@@ -228,14 +230,15 @@ func _set_alight(body: RigidBody3D) -> void:
 	soot.roughness = 1.0
 	for node in visual.find_children("*", "MeshInstance3D", true, false):
 		(node as MeshInstance3D).material_overlay = soot
-	for h: float in [0.3, 0.62, 0.92]:
-		var f := FxKit.fire(1.5 if h > 0.8 else 1.0, 16 if h > 0.8 else 10)
+	# Round 12 (perf): two flames and a thinner smoke (three emitters cost too much overdraw on HIGH).
+	for h: float in [0.45, 0.92]:
+		var f := FxKit.fire(1.5 if h > 0.8 else 1.0, 12 if h > 0.8 else 7)
 		f.position = Vector3(0, topple_height * h, 0)
 		f.emission_sphere_radius = 0.9 if h > 0.8 else 0.35
 		body.add_child(f)
 		f.emitting = true
 		_fall_fires.append(f)
-	var smoke := FxKit.smoke(1.3, 10)
+	var smoke := FxKit.smoke(1.3, 6)
 	smoke.position = Vector3(0, topple_height * 0.8, 0)
 	body.add_child(smoke)
 	smoke.emitting = true

@@ -125,7 +125,7 @@ var ammo := {} # weapon id -> count
 var weapon_order: Array[String] = []
 var selected := 0
 var special_id := ""
-var special_charges := 2
+var special_charges := 4 # the most specials this car can hold (Roster.special_max)
 var charging_id := "" # weapon being charged while the fire button is held (Napalm Cone)
 var charge_time := 0.0
 
@@ -233,8 +233,9 @@ func setup(id: String, player: bool) -> void:
 	weight = stats.get("mass", 1.4)
 	knockback = stats.get("knockback", 1.0)
 	special_id = stats.get("special", "")
-	special_charges = int(WeaponData.get_def(special_id).get("charges", 2))
-	ammo[special_id] = special_charges
+	# Round 12 (owner): every life starts with 2 specials; held unused they build up to the car's max.
+	special_charges = Roster.special_max(id)
+	ammo[special_id] = mini(Roster.SPECIAL_START, special_charges)
 	weapon_order = [special_id]
 
 	collision_layer = 2
@@ -1564,10 +1565,12 @@ func launch(id: String, lock: Vehicle) -> void:
 	_break_invisibility()
 	var from := launch_point()
 	var dir := aim_forward()
+	var homing := float(WeaponData.get_def(id).get("homing", 0.0)) > 0.0
 	if is_instance_valid(lock) and not lock.is_dead:
 		var to_t := lock.aim_point() - from
-		# Start roughly toward the target so homing doesn't have to U-turn.
-		if dir.angle_to(to_t.normalized()) < deg_to_rad(60):
+		# Start roughly toward the target so homing doesn't have to U-turn. Round 12 (owner): only
+		# homing weapons; straight ones (power) leave along the nose, or they looked half-homing.
+		if homing and dir.angle_to(to_t.normalized()) < deg_to_rad(60):
 			dir = dir.lerp(to_t.normalized(), 0.6).normalized()
 	else:
 		lock = null
@@ -1596,6 +1599,9 @@ func add_ammo(id: String, amount: int) -> void:
 		else:
 			weapon_order.append(id)
 	ammo[id] = ammo.get(id, 0) + amount
+	var cap := int(WeaponData.get_def(id).get("max_ammo", 0))
+	if cap > 0 and id != special_id:
+		ammo[id] = mini(ammo[id], cap) # round 12 (owner): homing/fire 10, power 8, napalm/remote 6, zoomy/SAT 3
 	weapons_changed.emit(self)
 
 

@@ -218,10 +218,10 @@ func _wrecks() -> void:
 
 func _billboards() -> void:
 	var boards := [
-		# Round 10 texts: what the city believes. Calypso the benefactor, City Hall the culprit.
-		[Vector3(-60, 0, LosAngelesArena.HALF - 5.0), 0.0, "CALYPSO CARES", "FOOD. WATER. HOPE.  RELIEF ZONE 1", Color(0.5, 0.1, 0.08)],
-		[Vector3(LosAngelesArena.HALF - 5.0, 0, -62), 90.0, "THEY FAILED YOU", "CITY HALL RAN.  CALYPSO STAYED.", Color(0.6, 0.46, 0.1)],
-		[Vector3(-LosAngelesArena.HALF + 5.0, 0, -78), -90.0, "VOTE HALE", "ORDER WILL RETURN TO LOS ANGELES", Color(0.12, 0.26, 0.45)],
+		# Round 12 texts (owner): what the city believes, all praise for Calypso.
+		[Vector3(-60, 0, LosAngelesArena.HALF - 5.0), 0.0, "CALYPSO CARES", "HE NEVER FORGETS US", Color(0.5, 0.1, 0.08)],
+		[Vector3(LosAngelesArena.HALF - 5.0, 0, -62), 90.0, "HE ALWAYS KEEPS", "HIS PROMISE", Color(0.6, 0.46, 0.1)],
+		[Vector3(-LosAngelesArena.HALF + 5.0, 0, -78), -90.0, "CALYPSO", "WILL SAVE US", Color(0.12, 0.26, 0.45)],
 	]
 	var steel := _steel()
 	var dark := _dark()
@@ -243,11 +243,31 @@ func _billboards() -> void:
 			mb.box(dark, Vector3(0.3, 0.3, 0.8), MeshBuilder.at(Vector3(-5.0 + k * 5.0, 14.6, -0.5), Vector3(30, 0, 0)), 0.03)
 		_arena.batch_builder(mb, true, 0.3, node.transform)
 		for line in 2:
+			var text: String = b[2] if line == 0 else b[3]
 			var txf := node.transform * Transform3D(Basis(Vector3.UP, PI), Vector3(0, 12.6 if line == 0 else 10.4, -0.06))
-			_arena.batch_text(b[2] if line == 0 else b[3], txf, 200 if line == 0 else 110, 0.009,
-				Color(0.92, 0.9, 0.84) if line == 0 else Color(0.1, 0.08, 0.07))
+			# The second line is dark only on a light board (round 12: dark on dark red/blue was lost).
+			var second := Color(0.1, 0.08, 0.07) if (b[4] as Color).get_luminance() > 0.3 else Color(0.96, 0.84, 0.55)
+			_arena.batch_text(text, txf, billboard_font(text, 200 if line == 0 else 150), 0.009,
+				Color(0.92, 0.9, 0.84) if line == 0 else second)
 		for x: float in [-4.5, 4.5]:
 			_solid(Vector3(0.6, 9.0, 0.6), pos + Basis(Vector3.UP, deg_to_rad(yaw)) * Vector3(x, 4.5, 0.4))
+
+
+## The biggest font size (up to `largest`) at which `text` fits the billboard's printed face
+## (14.4 m wide; round 12, owner: never bigger than the frame) with 0.6 m to spare on each side.
+const BILLBOARD_TEXT_W := 13.2
+
+static func billboard_font(text: String, largest: int) -> int:
+	var tm := TextMesh.new()
+	tm.text = text
+	tm.pixel_size = 0.009
+	var fs := largest
+	while fs > 40:
+		tm.font_size = fs
+		if tm.get_aabb().size.x <= BILLBOARD_TEXT_W:
+			break
+		fs -= 6
+	return fs
 
 
 # ---------------------------------------------------------------- power lines

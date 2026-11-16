@@ -375,6 +375,22 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   `HEALTH_ENERGY_S` 5, `MEGA_HEALTH_ENERGY_S` 8 (x `ENERGY_REGEN`). Wall writing: `LosAngelesArena._wall_tags()` +
   `_on_wall()` puts it on the plate face (`WALL_FACE` 0.2 m out of the corner line) and the ribs are left out behind
   it (`_behind_writing`). Roadkill later: +8 energy per weapon pickup. PS5 pad issue: owner's side (no input changes).
+- **Round 12, full text `docs/design/17-owner-round-12.md`:** **HIGH perf** (measured: Blender did NOT change HIGH's cost;
+  MSAA x4 was ~half a HIGH frame, 4-split shadows ~40%): MSAA x2, 2 shadow splits to 120 m, burning palm = 2 flames + thin
+  smoke (-18-20% frame time). **Texts:** mostly praise, ONE opposing line per stage (yellow, no author's name), more in
+  later stages; billboards auto-fit their frame (`LaProps.billboard_font`); kept for later stages: THANK YOU CALYPSO,
+  WE BELIEVE IN CALYPSO; Rome: BREAD AND CIRCUSES. HOLLYWOOD riddle "A SYMBOL IS ONLY AS STRONG AS WHAT HOLDS IT UP.";
+  secret message 7 s. **HUD:** no start text (intro = Calypso's voice, lines to write with the owner: slow, arrogant,
+  rage-baiting, sarcastic, stretched words), no driver names (car names stay), feed "X HAS BEEN KILLED BY Y", respawn =
+  camera on the wreck 6 s with no text, win = target plate "CONGRATULATIONS / PREPARE FOR PARIS" 5 s (`arena.next_line`).
+  **Weapons:** napalm throw x1.4 / reach x1.3; glass, weapon stands, tower legs `Breakable.MG_HEALTH_LIGHT` (x0.25); MG
+  rounds hit a car box x1.1 (`Projectile._bullet_car`); missiles live 2.5 s (cone and skull unchanged); `seek` = seeker
+  half-angle (past it the lock is lost for good), turn rate falls to `NEAR_TURN` 0.4 inside `NEAR_RANGE` 15 m; only homing
+  weapons are aimed at the target at launch (power flies along the nose). **Ammo:** `max_ammo` (homing/fire 10, power 8,
+  napalm/remote 6, zoomy/SAT 3); specials start at `Roster.SPECIAL_START` 2 and build up to `Roster.special_max` (3/4/5);
+  Thumper's tank will be 10 s. **Pickups:** bright ring per kind (`Pickup.KIND_COLORS`, remote black + white rim, full
+  health royal red + blue collar, bigger, breathing); the whole base vanishes with the item; mega case is green (rebaked).
+  Calypso voice references: `audio/reference/voices/calypso_on_*`.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -430,7 +446,7 @@ scripts/ui/hud_status.gd    bottom-left panel: name, lives, segmented health (tr
 scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, ammo), other weapons as chips
 scripts/ui/hud_target.gd    top-center: locked enemy, health-coloured bar, trail, heartbeat + beep when low
 scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickups, walls/road from radar_lines()
-tests/                      smoke_test.gd (headless, ~145 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py,
+tests/                      smoke_test.gd (headless, ~185 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py,
                             map_check.gd (traps + narrow slots over the whole map), ai_ramp_check.gd (AI gets up
                             from beside each ramp: 5/12 in round 7, tune with the owner), _perf.gd (draw calls)
 assets/backdrops/           stage backdrops (equirectangular panoramas shown as the sky)

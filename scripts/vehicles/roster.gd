@@ -91,6 +91,19 @@ const CARS := {
 	},
 }
 
+## Round 12 (owner): specials per car. Every life starts with SPECIAL_START; one recharges at a time
+## (the weapon's "recharge" seconds) up to the car's max, which follows how hard the special is to land:
+## easy ones 3, hard ones 5, the rest 4. (Thumper's Megafire is a fuel tank instead: 10 s, design.)
+const SPECIAL_START := 2
+const SPECIAL_MAX := {
+	"spectre": 3, "warthog": 3, "crimson_fury": 3, "shadow": 3,
+	"mr_slam": 5, "hammerhead": 5, "yellow_jacket": 5, "darkside": 5,
+}
+
+static func special_max(id: String) -> int:
+	return int(SPECIAL_MAX.get(id, 4))
+
+
 static var _cache := {}
 
 

@@ -232,10 +232,16 @@ func _physics_process(delta: float) -> void:
 	else:
 		var homing: float = def.get("homing", 0.0)
 		if homing > 0.0 and is_instance_valid(target) and not target.is_dead and not target.is_hidden():
-			var desired := (target.aim_point() - global_position).normalized()
+			var to_t := target.aim_point() - global_position
+			var desired := to_t.normalized()
 			var angle := direction.angle_to(desired)
-			if angle > 0.001:
-				direction = direction.slerp(desired, minf(1.0, homing * delta / angle)).normalized()
+			if def.has("seek") and rad_to_deg(angle) > float(def["seek"]):
+				target = null # round 12: off the seeker's edge, the lock is gone; straight on from here
+			elif angle > 0.001:
+				var rate := homing
+				if def.has("seek"): # weaker as it closes in, so a late hard turn makes it overshoot
+					rate *= lerpf(WeaponData.NEAR_TURN, 1.0, clampf(to_t.length() / WeaponData.NEAR_RANGE, 0.0, 1.0))
+				direction = direction.slerp(desired, minf(1.0, rate * delta / angle)).normalized()
 		step = direction * float(def.get("speed", 50.0)) * delta
 
 	var from := global_position
@@ -247,12 +253,63 @@ func _physics_process(delta: float) -> void:
 	if is_instance_valid(shooter):
 		query.exclude = [shooter.get_rid()]
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	if def.get("kind", "bullet") == "bullet":
+		# Round 12 (owner): machine-gun rounds meet a car's box made 10% bigger than its body.
+		var car_hit := _bullet_car(from, to, hit)
+		if not car_hit.is_empty():
+			hit = car_hit
 	if not hit.is_empty():
 		_explode(hit.position, hit.normal, hit.collider)
 		return
 	global_position = to
 	if not _thrown():
 		_orient()
+
+
+## Bullets: the nearest car whose body box, scaled by BULLET_BOX, the step from -> to crosses before
+## whatever the ray hit. Returns a ray-style hit ({position, normal, collider}) or {}.
+const BULLET_BOX := 1.1
+
+func _bullet_car(from: Vector3, to: Vector3, ray_hit: Dictionary) -> Dictionary:
+	var limit := 1.0
+	if not ray_hit.is_empty():
+		limit = from.distance_to(ray_hit.position) / maxf(from.distance_to(to), 0.0001)
+	var best: Vehicle = null
+	var best_t := limit
+	for n in get_tree().get_nodes_in_group("vehicles"):
+		var v := n as Vehicle
+		if v == null or v == shooter or v.is_dead or v.global_position.distance_squared_to(from) > 40000.0:
+			continue
+		var size: Vector3 = v.stats.get("size", Vector3(2.2, 1.8, 5.0))
+		var half := Vector3(size.x, size.y - Vehicle.BODY_CLEARANCE, size.z) * 0.5 * BULLET_BOX
+		var centre := Vector3(0.0, (size.y + Vehicle.BODY_CLEARANCE) * 0.5, 0.0)
+		var inv := v.global_transform.affine_inverse()
+		var t := segment_box(inv * from - centre, inv * to - centre, half)
+		if t >= 0.0 and t < best_t:
+			best_t = t
+			best = v
+	if best == null:
+		return {}
+	return {"position": from.lerp(to, best_t), "normal": -direction, "collider": best}
+
+
+## Where (0..1) the segment a -> b first enters the box of half size `half` around the origin; -1 if never.
+static func segment_box(a: Vector3, b: Vector3, half: Vector3) -> float:
+	var d := b - a
+	var t0 := 0.0
+	var t1 := 1.0
+	for i in 3:
+		if absf(d[i]) < 0.000001:
+			if absf(a[i]) > half[i]:
+				return -1.0
+			continue
+		var ta := (-half[i] - a[i]) / d[i]
+		var tb := (half[i] - a[i]) / d[i]
+		t0 = maxf(t0, minf(ta, tb))
+		t1 = minf(t1, maxf(ta, tb))
+		if t0 > t1:
+			return -1.0
+	return t0
 
 
 func _thrown() -> bool:

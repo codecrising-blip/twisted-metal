@@ -193,7 +193,7 @@ off = finish("turbo", parts)
 band(off, -0.16, -0.06, (0.6, 0.22, 0.03))
 side_text(off, "N2O  TURBO", -0.02 + 0.2, 0.21, color=STENCIL, h=0.085)
 
-# ---------------------------------------------------------------- health cases (owner: white cross on blue / yellow / red)
+# ---------------------------------------------------------------- health cases (owner: white cross on blue / green / red)
 def med_case(name, s, bg):
     paint = T.M("paint", bg, 0.6, 0.3, 0.45)
     w, d, h = 0.92 * s, 0.4 * s, 0.7 * s
@@ -212,7 +212,7 @@ def med_case(name, s, bg):
         decals.append(T.Decal(T.cross_image(bg), (off[0], sy * d * 0.5, -h * 0.1), (0, sy, 0), (0, 0, 1), (0.5 * s, 0.5 * s), depth=0.06, kinds=("paint",)))
 
 med_case("health", 1.0, (0.03, 0.11, 0.45))
-med_case("mega", 1.3, (0.66, 0.42, 0.03))
+med_case("mega", 1.3, (0.05, 0.32, 0.07))  # round 12 (owner): green, not yellow
 med_case("full", 1.6, (0.45, 0.025, 0.02))
 
 # ---------------------------------------------------------------- pad: steel drop plate with marker lamps

@@ -1037,6 +1037,65 @@ func _run() -> void:
 	await _frames(4)
 	_check(absf(ut.energy - 5.0 * Vehicle.ENERGY_REGEN) < 1.0, "a health pickup gives 5 s of energy (%.1f)" % ut.energy)
 
+	# ---- Round 12 (owner).
+	# Seeker: a homing missile loses its lock for good once the target is past 45 degrees off its nose.
+	_place(ut, 40, 60, 0)
+	_place(ol, 40, 20, 0) # 40 m ahead (cars face -Z)
+	await _frames(2)
+	var from12 := ut.global_position + Vector3.UP * 1.5
+	var locked := Projectile.spawn(main, "homing", from12, (ol.aim_point() - from12).normalized(), ut, ol)
+	var side_dir := Vector3.RIGHT
+	var lost := Projectile.spawn(main, "homing", from12, side_dir, ut, ol) # target 90 degrees off its nose
+	await _frames(3)
+	_check(is_instance_valid(locked) and locked.target == ol, "a homing missile keeps a target inside its seeker cone")
+	_check(is_instance_valid(lost) and lost.target == null and lost.direction.angle_to(side_dir) < 0.01,
+		"...and past 45 degrees it loses the lock and flies straight on (round 12)")
+	for pr in [locked, lost]:
+		if is_instance_valid(pr):
+			pr.queue_free()
+	_check(float(WeaponData.get_def("homing").life) == 2.5 and float(WeaponData.get_def("power").life) == 2.5 and float(WeaponData.get_def("fire").life) == 2.5 and float(WeaponData.get_def("zoomy").life) == 2.5,
+		"missiles live 2.5 s, then burst in the air")
+	_check(float(WeaponData.get_def("ghost_missile").seek) == 55.0 and not WeaponData.get_def("reaper_skull").has("seek"),
+		"Spectre's ghost missile sees +-55 degrees; Grimm's skull is left as it was")
+	# Power leaves along the nose even with a lock off to the side (it looked half-homing).
+	_place(ol, 52, 30, 0) # ahead and to the right, ~20 degrees off
+	await _frames(2)
+	ut.launch("power", ol)
+	await _frames(1)
+	var pw: Projectile = null
+	for n in main.get_tree().get_nodes_in_group("projectiles"):
+		if n is Projectile and (n as Projectile).shooter == ut and String((n as Projectile).def.get("label", "")) == "Power Missile":
+			pw = n
+	_check(pw != null and pw.direction.angle_to(ut.aim_forward()) < 0.02, "a power missile leaves straight along the nose (round 12)")
+	if pw:
+		pw.queue_free()
+	# Ammo caps and specials.
+	ut.add_ammo("homing", 40)
+	ut.add_ammo("power", 40)
+	ut.add_ammo("sat", 40)
+	_check(ut.ammo["homing"] == 10 and ut.ammo["power"] == 8 and ut.ammo["sat"] == 3, "ammo caps: homing 10, power 8, SAT 3 (%d/%d/%d)" % [ut.ammo["homing"], ut.ammo["power"], ut.ammo["sat"]])
+	var fresh := Vehicle.new()
+	fresh.setup("spectre", false)
+	_check(fresh.ammo["ghost_missile"] == 2 and fresh.special_charges == 3 and Roster.special_max("outlaw") == 4 and Roster.special_max("mr_slam") == 5,
+		"every car starts with 2 specials and builds up to its max (Spectre 3, Outlaw 4, Mr. Slam 5)")
+	fresh.free()
+	# Machine-gun rounds meet a car box 10% bigger than the body.
+	var half := Vector3(1.0, 0.75, 2.5) * Projectile.BULLET_BOX
+	_check(Projectile.segment_box(Vector3(-5, 0, 2.6), Vector3(5, 0, 2.6), half) >= 0.0 and Projectile.segment_box(Vector3(-5, 0, 2.8), Vector3(5, 0, 2.8), half) < 0.0,
+		"a bullet 0.1 m past the body's end still hits (box x1.1)")
+	_check(Breakable.MG_HEALTH_LIGHT < 1.1, "glass, stands and tower legs break in two rounds")
+	# Pickups: the whole base goes with the item.
+	_place(ut, 40, 60, 0)
+	await _frames(2)
+	var pk := Pickup.create(main, "turbo", ut.global_position + Vector3(0, 0, -12))
+	await _frames(2)
+	_check(pk._ring != null and pk._ring.visible, "a pickup has a coloured ring around its base")
+	pk.global_position = ut.global_position
+	await _frames(4)
+	_check(not pk.active and not pk._ring.visible and (pk._pad == null or not pk._pad.visible), "picked up: no empty ring or plate is left behind")
+	pk.queue_free()
+	_check(String(main.arena.get("next_line")) == "Prepare for Paris", "a win reads CONGRATULATIONS / PREPARE FOR PARIS")
+
 	print("")
 	if _failures.is_empty():
 		print("ALL TESTS PASSED")

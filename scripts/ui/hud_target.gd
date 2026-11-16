@@ -1,7 +1,7 @@
 class_name HudTarget
 extends Control
 ## Top-center: the locked enemy (owner, round 7: "not just a red line"). A slanted plate with the
-## car and driver names and a bar whose colour follows the health like your own (green, yellow,
+## car's name (round 12: no driver names) and a bar whose colour follows the health like your own (green, yellow,
 ## orange, red), a pale trail that drains after each hit, and below 30% a heartbeat: the bar and
 ## frame pulse "lub-dub" and a monitor beep sounds on every beat, faster as the health runs out.
 
@@ -19,6 +19,14 @@ var _beat_t := 0.0 # time since the last beat
 var _pulse := 0.0 # 0..1 glow of the current beat
 var _hit_flash := 0.0
 var _last_f := 1.0
+var _banner := "" # round 12: after a win the plate reads this for a few seconds, then is gone
+var _banner_left := 0.0
+
+
+## Shows `text` on the plate instead of a target for `secs` seconds (fades out over the last one).
+func show_banner(text: String, secs: float) -> void:
+	_banner = text
+	_banner_left = secs
 
 
 func _ready() -> void:
@@ -42,6 +50,14 @@ static func beat_interval(f: float) -> float:
 
 
 func _process(delta: float) -> void:
+	if _banner_left > 0.0:
+		_banner_left -= delta
+		visible = _banner_left > 0.0
+		scale = Vector2.ONE
+		modulate.a = clampf(_banner_left, 0.0, 1.0)
+		queue_redraw()
+		return
+	modulate.a = 1.0
 	visible = is_instance_valid(target) and not target.is_dead
 	if not visible:
 		return
@@ -76,6 +92,17 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
+	if _banner_left > 0.0:
+		var plate_b := PackedVector2Array([Vector2(16, 0), Vector2(W - 16, 0), Vector2(W, H), Vector2(0, H)])
+		draw_colored_polygon(plate_b, Color(0.04, 0.04, 0.05, 0.72))
+		draw_polyline(PackedVector2Array([Vector2(16, 0), Vector2(W - 16, 0)]), Color(0.85, 0.22, 0.12, 0.9), 3.0)
+		var lines := _banner.split("\n")
+		for i in lines.size():
+			var fs := 22 if i == 0 else 16
+			var ls := font.get_string_size(lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+			draw_string(font, Vector2((W - ls.x) * 0.5, 27 + i * 22), lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, fs,
+				Color(0.95, 0.92, 0.86) if i == 0 else Color(0.85, 0.22, 0.12))
+		return
 	if not is_instance_valid(target):
 		return
 	var f := clampf(target.health / target.max_health, 0.0, 1.0)
@@ -89,15 +116,10 @@ func _draw() -> void:
 	if p > 0.01:
 		draw_polyline(PackedVector2Array([Vector2(16, 0), Vector2(W - 16, 0), Vector2(W, H), Vector2(0, H), Vector2(16, 0)]),
 			Color(1.0, 0.2, 0.15, 0.85 * p), 2.0 + 2.0 * p)
-	# Names: car big, driver small.
+	# The car's name only (owner, round 12: no driver names on the HUD).
 	var name := target.display_name.to_upper()
 	var ns := font.get_string_size(name, HORIZONTAL_ALIGNMENT_LEFT, -1, 22)
-	var driver := String(target.stats.get("driver", "")).to_upper()
-	var ds := font.get_string_size(driver, HORIZONTAL_ALIGNMENT_LEFT, -1, 13)
-	var x0 := (W - ns.x - (ds.x + 10.0 if driver != "" else 0.0)) * 0.5
-	draw_string(font, Vector2(x0, 27), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.95, 0.92, 0.86))
-	if driver != "":
-		draw_string(font, Vector2(x0 + ns.x + 10.0, 27), driver, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.6, 0.57, 0.52))
+	draw_string(font, Vector2((W - ns.x) * 0.5, 27), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.95, 0.92, 0.86))
 	# Bar: dark track, pale trail, the health in its colour with a lighter top half, tick marks.
 	var bar := Rect2(24, 36, W - 48, 14)
 	draw_rect(bar, Color(0.12, 0.12, 0.13, 0.9))

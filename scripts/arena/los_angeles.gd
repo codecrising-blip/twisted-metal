@@ -62,6 +62,7 @@ const ROAD_CTRL := [
 var title := "LOS ANGELES"
 var music := "los_angeles" # audio/music/los_angeles.mp3
 var subtitle := "Relief Zone One"
+var next_line := "Prepare for Paris" # round 12: the win line on the target plate
 var spawn_points: Array[Transform3D] = []
 var respawn_points: Array[Transform3D] = []
 var weapon_points: Array[Vector3] = []
@@ -880,17 +881,15 @@ func _wall_corners() -> Array:
 static func _wall_tags() -> Array:
 	var people_w := Color(0.84, 0.84, 0.8)
 	var people_r := Color(0.78, 0.18, 0.16)
-	var people_b := Color(0.3, 0.5, 0.85)
 	var knows := Color(0.92, 0.76, 0.22)
+	# Round 12 (owner): mostly praise for Calypso, one opposing line per stage (yellow, no name), the
+	# HOLLYWOOD riddle. CALYPSO WILL SAVE US moved up to a billboard; THANK YOU CALYPSO and
+	# WE BELIEVE IN CALYPSO are kept for later stages, BREAD AND CIRCUSES for Rome.
 	return [
-		["CALYPSO WILL SAVE US", Vector3(-35, 1.5, HALF - 0.85), 0.0, people_w, 220],
-		["BREAD AND CIRCUSES\n- JUVENAL", Vector3(95, 2.0, HALF - 0.85), 0.0, knows, 170],
-		["CITY HALL DID THIS", Vector3(HALF - 0.85, 1.5, -90), 90.0, people_r, 220],
-		["WHOEVER CAN SUPPLY THEM WITH ILLUSIONS\nIS EASILY THEIR MASTER  - LE BON, 1895", Vector3(HALF - 0.85, 2.0, 35), 90.0, knows, 130],
-		["THEY MAKE A DESERT\nAND CALL IT PEACE  - TACITUS", Vector3(-HALF + 0.85, 2.0, -20), -90.0, knows, 160],
-		["THANK YOU CALYPSO", Vector3(-HALF + 0.85, 1.5, 110), -90.0, people_b, 220],
-		["CUI BONO?  WHO PROFITS?", Vector3(-70, 1.5, -HALF + 0.85), 180.0, knows, 200],
-		["IT SOLD A HILL IN 1923.\nBRING IT DOWN AND SEE WHAT HE GIVES.", Vector3(30, 2.0, -HALF + 0.85), 180.0, knows, 130],
+		["HE GAVE US EVERYTHING", Vector3(-35, 1.5, HALF - 0.85), 0.0, people_w, 220],
+		["WHOEVER CAN SUPPLY THEM WITH ILLUSIONS\nIS EASILY THEIR MASTER", Vector3(HALF - 0.85, 1.55, 35), 90.0, knows, 120],
+		["CALYPSO SEES US", Vector3(-HALF + 0.85, 1.5, 110), -90.0, people_r, 220],
+		["A SYMBOL IS ONLY AS STRONG\nAS WHAT HOLDS IT UP.", Vector3(30, 1.7, -HALF + 0.85), 180.0, knows, 130],
 	]
 
 
@@ -1105,7 +1104,7 @@ func _tunnel_lamp() -> StandardMaterial3D:
 
 func _glass_panel(at: Vector3, thick: float) -> void:
 	var b := Breakable.new()
-	b.health = Breakable.MG_HEALTH
+	b.health = Breakable.MG_HEALTH_LIGHT
 	b.kind = "glass"
 	b.size_hint = Vector3(6.6, ROOF_Y - 1.4, 0.3)
 	b.debris_color = Color(0.7, 0.9, 1.0)
@@ -1302,7 +1301,7 @@ func _power_tower() -> void:
 	for k in corners:
 		var s: Vector3 = k
 		var leg := Breakable.new()
-		leg.health = Breakable.MG_HEALTH
+		leg.health = Breakable.MG_HEALTH_LIGHT
 		leg.smash_on_contact = false
 		leg.ram_damage_mult = 1.0
 		leg.debris_color = Color(0.45, 0.46, 0.48)
@@ -1431,7 +1430,7 @@ func _hot_dog_stands() -> void:
 ## Stand with a giant hot dog on the roof. Breaks into a weapon. All stands share one mesh.
 func _hot_dog_stand(pos: Vector3, yaw: float) -> void:
 	var b := Breakable.new()
-	b.health = Breakable.MG_HEALTH
+	b.health = Breakable.MG_HEALTH_LIGHT
 	b.kind = "wood"
 	b.size_hint = Vector3(4.2, 3.0, 3.0)
 	b.loot = "weapon"

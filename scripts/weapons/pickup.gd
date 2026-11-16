@@ -15,6 +15,7 @@ var bob := true
 
 var _visual: Node3D
 var _pad: MeshInstance3D
+var _ring: MeshInstance3D # round 12: the bright colour ring around the base
 var _respawn := 0.0
 var _t := 0.0
 
@@ -61,6 +62,9 @@ func _build() -> void:
 	if _pad:
 		_pad.queue_free()
 		_pad = null
+	if _ring:
+		_ring.queue_free()
+		_ring = null
 	_visual = Node3D.new()
 	add_child(_visual)
 	var mi := MeshInstance3D.new()
@@ -82,6 +86,8 @@ func _build() -> void:
 		_pad.visibility_range_end = 90.0
 		add_child(_pad)
 		_pad_lamps(true)
+		_ring = ring_for(kind)
+		add_child(_ring)
 	else:
 		_blender = false
 		mi.mesh = mesh_for(kind)
@@ -93,19 +99,88 @@ const HOVER := 1.15 # metres above the plate
 var _blender := false
 
 
-## The colour that marks this pickup's kind (pad lamps, radar).
+## Round 12 (owner): one bright colour per kind on the base, so each item reads from afar.
+## Fire, napalm and power are kept clearly apart: yellow, orange, red.
+const KIND_COLORS := {
+	"homing": Color(0.6, 0.2, 1.0), # purple
+	"fire": Color(1.0, 0.88, 0.05), # yellow
+	"napalm": Color(1.0, 0.45, 0.0), # orange
+	"power": Color(1.0, 0.04, 0.03), # red
+	"sat": Color(1.0, 0.15, 0.7), # magenta pink
+	"remote": Color(0.0, 0.0, 0.0), # black, with a white rim
+	"zoomy": Color(1.0, 1.0, 1.0), # white
+	"turbo": Color(0.1, 0.95, 1.0), # cyan
+	"health": Color(0.12, 0.35, 1.0), # blue
+	"mega": Color(0.12, 0.95, 0.18), # green
+	"full": Color(0.78, 0.0, 0.08), # royal red, with a blue collar, bigger and brighter
+}
+const RING_RIM := {"remote": Color(1.0, 1.0, 1.0), "full": Color(0.15, 0.4, 1.0)}
+
+static var _rings := {}
+static var _ring_mats := {}
+
+
+## The colour that marks this pickup's kind (ring, pad lamps).
 func kind_color() -> Color:
-	if kind == "health" or kind == "mega" or kind == "full":
-		return {"health": Color(0.2, 0.45, 0.95), "mega": Color(0.95, 0.75, 0.2), "full": Color(0.9, 0.14, 0.1)}[kind]
-	if kind == "turbo":
-		return Color(0.2, 0.6, 1.0)
-	return WeaponData.get_def(kind).get("color", Color.WHITE)
+	return KIND_COLORS.get(kind, WeaponData.get_def(kind).get("color", Color.WHITE))
 
 
-## The plate's marker lamps: lit in the item's colour, nearly dark while the item is gone.
+## A flat ring on the ground around the base (inner 1.1 m, outer 1.5 m; full health 1.3 to 2.1 plus
+## its blue collar), unshaded so it reads at full strength in any light. One mesh per kind, shared.
+static func ring_for(id: String) -> MeshInstance3D:
+	if not _rings.has(id):
+		var big := id == "full"
+		var inner := 1.3 if big else 1.1
+		var outer := 2.1 if big else 1.5
+		var am := ArrayMesh.new()
+		_annulus(am, inner, outer, 0.05, _ring_mat(KIND_COLORS.get(id, Color.WHITE)))
+		if RING_RIM.has(id):
+			_annulus(am, outer, outer + (0.35 if big else 0.14), 0.05, _ring_mat(RING_RIM[id]))
+		_rings[id] = am
+	var mi := MeshInstance3D.new()
+	mi.mesh = _rings[id]
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.visibility_range_end = 140.0
+	return mi
+
+
+static func _ring_mat(c: Color) -> StandardMaterial3D:
+	var key := c.to_html()
+	if not _ring_mats.has(key):
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.albedo_color = c
+		m.disable_fog = true # keeps its colour across the map
+		_ring_mats[key] = m
+	return _ring_mats[key]
+
+
+static func _annulus(am: ArrayMesh, r0: float, r1: float, y: float, mat: Material) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var n := 40
+	for i in n:
+		var a0 := TAU * i / n
+		var a1 := TAU * (i + 1) / n
+		var p00 := Vector3(cos(a0) * r0, y, sin(a0) * r0)
+		var p01 := Vector3(cos(a0) * r1, y, sin(a0) * r1)
+		var p10 := Vector3(cos(a1) * r0, y, sin(a1) * r0)
+		var p11 := Vector3(cos(a1) * r1, y, sin(a1) * r1)
+		st.set_normal(Vector3.UP)
+		for v: Vector3 in [p00, p01, p11, p00, p11, p10]: # clockwise seen from above (the visible side)
+			st.add_vertex(v)
+	st.set_material(mat)
+	st.commit(am)
+
+
+## The plate's marker lamps in the item's colour. Round 12 (owner): while the item is gone the
+## whole base (plate and ring) is gone too, no empty collar left behind.
 func _pad_lamps(on: bool) -> void:
+	if _ring:
+		_ring.visible = on
 	if _pad == null:
 		return
+	_pad.visible = on
 	var i := ModelLib.glow_surface(_pad.mesh)
 	if i >= 0:
 		var c := kind_color()
@@ -117,6 +192,8 @@ func _process(delta: float) -> void:
 	if active:
 		if _blender: # a slow, steady turn and the faintest drift: hardware, not a toy
 			_visual.rotation.y = _t * 0.9
+			if kind == "full" and _ring: # the brightest of them all: its ring breathes
+				_ring_mat(KIND_COLORS["full"]).albedo_color = (KIND_COLORS["full"] as Color).lerp(Color(1.0, 0.3, 0.32), 0.5 + 0.5 * sin(_t * 3.0))
 			if bob:
 				_visual.position.y = HOVER + sin(_t * 1.7) * 0.05
 			return
@@ -196,7 +273,7 @@ static func mesh_for(id: String) -> ArrayMesh:
 	var mb := MeshBuilder.new()
 	var color: Color = WeaponData.get_def(id).get("color", Color.WHITE)
 	if id == "health" or id == "mega" or id == "full":
-		color = {"health": Color(0.2, 0.45, 0.95), "mega": Color(0.95, 0.75, 0.2), "full": Color(0.85, 0.12, 0.1)}[id]
+		color = {"health": Color(0.2, 0.45, 0.95), "mega": Color(0.15, 0.8, 0.2), "full": Color(0.85, 0.12, 0.1)}[id]
 	elif id == "turbo":
 		color = Color(0.2, 0.6, 1.0)
 	var metal := MatKit.flat(Color(0.32, 0.33, 0.35), 0.45, 0.6)

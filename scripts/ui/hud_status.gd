@@ -42,11 +42,9 @@ func _draw() -> void:
 	draw_polyline(PackedVector2Array([Vector2(W, 0), Vector2(W - 34, H), Vector2(0, H)]), Color(1, 1, 1, 0.08), 1.0)
 	if not is_instance_valid(player):
 		return
-	# Name, driver, lives.
+	# Car name and lives (owner, round 12: no driver name).
 	var name_text := player.display_name.to_upper()
 	draw_string(font, Vector2(18, 40), name_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color(0.94, 0.91, 0.85))
-	var nw := font.get_string_size(name_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 30).x
-	draw_string(font, Vector2(26 + nw, 40), String(player.stats.get("driver", "")).to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.6, 0.57, 0.52))
 	draw_string(font, Vector2(W - 150, 24), "LIVES", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.6, 0.57, 0.52))
 	for i in 2:
 		_car_icon(Vector2(W - 100 + i * 34, 16), i < spare_lives)
