@@ -137,7 +137,8 @@ const DEFS := {
 	"chain_bomb": {
 		"label": "Chain Bomb", "kind": "bomb", "color": Color(1.0, 0.25, 0.1), "special": true, "handler": "chain_bomb",
 		"speed": 45.0, "chain": 25.0, "radius": 7.0, "damage": 30.0, "edge_damage": 15.0, "stuck_bonus": 10.0,
-		"fuse": 3.0, "cooldown": 1.0, "recharge": 15.0,
+		"fuse": 3.0, "cooldown": 1.0,
+		"burn": 4.0, "pool_radius": 5.0, "pool_time": 5.0, # round 16: the blast burns and leaves a fire pool "recharge": 15.0,
 	},
 	# Mr. Grimm: TM2 flaming skull. Owner (session 4): 65, the hardest single special hit but no
 	# instant kills (a medium car, 280, takes five).

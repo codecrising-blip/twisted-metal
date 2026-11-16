@@ -149,7 +149,15 @@ func detonate() -> void:
 		var push := o.global_position - center
 		push.y = 0.0
 		o.push(push.normalized() * 14.0 * o.knockback + Vector3.UP * 5.0)
+		o.ignite(float(def.get("burn", 4.0)), owner_car) # round 16 (owner's TMB clip): the blast sets them burning
 	FxKit.explosion(world, center, 2.4, Color(1.0, 0.45, 0.1))
+	# ...and leaves the ground there on fire for a while.
+	var ground := center
+	var q := PhysicsRayQueryParameters3D.create(center + Vector3.UP, center + Vector3.DOWN * 20.0, 1)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if not hit.is_empty():
+		ground = hit.position
+	FirePool.spawn(world, ground, float(def.get("pool_radius", 5.0)), float(def.get("pool_time", 5.0)), float(def.get("burn", 4.0)), owner_car)
 	if is_instance_valid(owner_car):
 		owner_car.set_live_special(null)
 	queue_free()

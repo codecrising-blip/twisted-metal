@@ -206,6 +206,26 @@ func _run() -> void:
 				root.get_viewport().get_texture().get_image().save_png(out)
 				quit()
 				return
+			"shield_close", "cloak": # round 16: Outlaw's electric shield / TM2 cloak; 3rd arg = frames after switching it on
+				Engine.max_physics_steps_per_frame = 1
+				var e: Vehicle = main.enemies[0]
+				var base := LosAngelesArena.ground(-40, 40)
+				player.global_position = Vector3(0, -200, 0)
+				e.controller = null
+				e.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(30)), base + Vector3(0, 0.05, 0))
+				await _frames(5)
+				e.energy = 100.0
+				e.energy_move("shield" if shot == "shield_close" else "invisible")
+				var after2 := OS.get_cmdline_user_args()
+				await _frames(int(after2[2]) if after2.size() > 2 else 12)
+				if after2.size() > 3: # 4th arg: how far through the cloak's sparks (0..1)
+					e.invisible_time = Vehicle.INVIS_TIME + Vehicle.CLOAK_IN * (1.0 - float(after2[3]))
+					await _frames(1)
+				_place(cam, base + Vector3(-3.6, 2.4, 6.2), base + Vector3(0, 1.0, 0), 60.0)
+				await RenderingServer.frame_post_draw
+				root.get_viewport().get_texture().get_image().save_png(out)
+				quit()
+				return
 			"impact": # a power missile hitting Outlaw: flash, shockwave, debris, jolt
 				var e: Vehicle = main.enemies[0]
 				var base := LosAngelesArena.ground(-40, 40)

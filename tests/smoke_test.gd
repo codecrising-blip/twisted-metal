@@ -195,7 +195,13 @@ func _run() -> void:
 	player.energy = 100.0
 	await _tap("move_invisible")
 	await _frames(3)
-	_check(player.is_hidden() and watcher.find_target() != player, "invisible: no lock on you")
+	_check(not player.is_hidden() and player.invisible_time > Vehicle.INVIS_TIME, "invisible: 0.8 s of sparks first, still seen (round 16, TM2)")
+	var cloak_wait := 0
+	while player.invisible_time > Vehicle.INVIS_TIME and cloak_wait < 240:
+		await _frames(1)
+		cloak_wait += 1
+	await _frames(2)
+	_check(player.is_hidden() and watcher.find_target() != player and not player.model.visible, "invisible: no lock on you, and the car is gone for its own driver too")
 	watcher.toggle_headlights()
 	await _frames(12)
 	var to_p := player.aim_point() - (watcher.global_position + Vector3.UP)

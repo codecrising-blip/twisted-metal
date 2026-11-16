@@ -67,6 +67,8 @@ var _last_laugh := false
 const SHIELD_TIME := 2.5
 const INVIS_COST := 50.0
 const INVIS_TIME := 6.0
+const CLOAK_IN := 0.8 # round 16 (owner, TM2): sparks for 0.8 s, then gone (before the 6 s)
+const CLOAK_OUT := 0.45 # sparks and fade coming back
 const MINE_COST := 25.0
 const REAR_ATTACK_COST := 30.0
 const HEADLIGHT_RANGE := 45.0
@@ -189,7 +191,10 @@ var invisible_time := 0.0 # energy invisibility: no locks on you, AI loses you p
 var revealed_time := 0.0 # seen anyway for a moment: hit, or caught in headlights
 var headlights_on := false
 var _energy_mines: Array = []
-var _shield_fx: MeshInstance3D
+var _shield_cage: ShieldCage # round 16: the electric cage (was a glass bubble)
+var _cloak: CloakFx # round 16: TM2 sparks going invisible and coming back
+var _was_invisible := false
+var _cloak_back := 0.0 # coming back into sight (seconds left)
 var _shield_hum: AudioStreamPlayer3D
 var _headlight_t := 0.0
 var _turbo_kick := false # this step is the shove at the start of a boost
@@ -299,6 +304,10 @@ func setup(id: String, player: bool) -> void:
 		_wheel_rest[w] = w.position
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		_flash_meshes.append(mi as MeshInstance3D)
+	_cloak = CloakFx.new()
+	_cloak.car = self
+	_cloak.size = stats.get("size", Vector3(2.2, 1.8, 5.0))
+	add_child(_cloak)
 	if _blob_mat == null:
 		_blob_mat = StandardMaterial3D.new()
 		_blob_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -1184,9 +1193,11 @@ func energy_move(move: String) -> void:
 			_show_shield(true)
 			GameFeel.play("shield_activate", global_position + Vector3.UP, self, -2.0)
 		"invisible":
-			invisible_time = INVIS_TIME
+			invisible_time = INVIS_TIME + CLOAK_IN # the sparks first, then 6 s unseen
 			revealed_time = 0.0
+			_cloak.play(CLOAK_IN)
 			GameFeel.play("teleport", global_position + Vector3.UP, self, -6.0, 1.4)
+			GameFeel.play("taser_fizzle", global_position + Vector3.UP, self, -8.0, 1.3)
 			if is_player:
 				notice.emit(self, "INVISIBLE")
 		"mines":
@@ -1219,24 +1230,19 @@ func _launch_rear(id: String, count: int) -> void:
 func _energy_tick(delta: float) -> void:
 	if shield_time > 0.0:
 		shield_time -= delta
-		if _shield_fx:
-			var pulse := 0.5 + 0.5 * sin(_clock * 18.0)
-			(_shield_fx.material_override as StandardMaterial3D).albedo_color.a = (0.18 + 0.12 * pulse) * (0.4 if shield_time < 0.5 and fmod(shield_time, 0.15) < 0.07 else 1.0)
 		if shield_time <= 0.0:
 			_show_shield(false)
 			GameFeel.play("shield_off", global_position + Vector3.UP, self, -4.0)
 	if invisible_time > 0.0:
-		invisible_time -= delta
+		invisible_time = maxf(0.0, invisible_time - delta)
+	if _was_invisible and invisible_time <= 0.0: # time up or broken by firing: back, with sparks
+		_cloak_back = CLOAK_OUT
+		_cloak.play(CLOAK_OUT)
+		GameFeel.play("taser_fizzle", global_position + Vector3.UP, self, -10.0, 1.5)
+	_was_invisible = invisible_time > 0.0
+	_cloak_back = maxf(0.0, _cloak_back - delta)
 	revealed_time = maxf(0.0, revealed_time - delta)
-	var want := 0.0
-	if invisible_time > 0.0:
-		# Others see a heat shimmer (almost nothing) unless it is revealed; you see yourself faintly.
-		want = 0.55 if is_player else (0.45 if revealed_time > 0.0 else 0.93)
-	if absf(want - _invis_shown) > 0.01:
-		_invis_shown = want
-		for mi in _flash_meshes:
-			if is_instance_valid(mi):
-				mi.transparency = want
+	_cloak_look()
 	# Headlights reveal invisible cars in the beam (owner: from the start; Calypso's clones later).
 	if headlights_on:
 		_headlight_t -= delta
@@ -1254,7 +1260,70 @@ func _energy_tick(delta: float) -> void:
 
 ## Invisible and not revealed: no locks, no homing, the AI loses you past 12 m.
 func is_hidden() -> bool:
-	return invisible_time > 0.0 and revealed_time <= 0.0
+	return invisible_time > 0.0 and invisible_time <= INVIS_TIME and revealed_time <= 0.0
+
+
+## Round 16 (owner, TM2): while the sparks fly the body breaks up and fades; then it is gone for
+## everyone, its own driver too (a headlight or a hit shows it faintly for a moment); coming back
+## it fades in through the sparks.
+func _cloak_look() -> void:
+	var t := 0.0 # 1 = gone
+	var gone := false
+	if invisible_time > INVIS_TIME:
+		var p := 1.0 - (invisible_time - INVIS_TIME) / CLOAK_IN
+		t = clampf(p + randf_range(-0.3, 0.3) * p, 0.0, 0.97) # it flickers apart, not a smooth fade
+	elif invisible_time > 0.0:
+		if revealed_time > 0.0:
+			t = 0.55 + randf_range(0.0, 0.15)
+		else:
+			gone = true
+	elif _cloak_back > 0.0:
+		var q := _cloak_back / CLOAK_OUT
+		t = clampf(q + randf_range(-0.25, 0.25) * q, 0.0, 0.97)
+	if model and model.visible == gone:
+		model.visible = not gone
+		if _blob:
+			_blob.visible = not gone and not GraphicsSettings.high
+	if absf(t - _invis_shown) > 0.01 or (t > 0.0 and not gone):
+		_invis_shown = t
+		_dissolve(t if not gone else 0.0)
+
+
+## Round 16: the body breaks up in a pixel pattern (TM2's look; per-mesh transparency does nothing on
+## the Compatibility renderer). Each surface gets a copy of its material with distance fade in
+## pixel-dither mode, its fade band placed around the camera's distance so `amount` of the pixels
+## drop out (0 = solid, 1 = gone). At 0 the copies are dropped again.
+const DISSOLVE_BAND := 1000.0
+var _dissolving := false
+
+func _dissolve(amount: float) -> void:
+	if amount <= 0.001:
+		if _dissolving:
+			_dissolving = false
+			for mi in _flash_meshes:
+				if is_instance_valid(mi):
+					for i in mi.get_surface_override_material_count():
+						mi.set_surface_override_material(i, null)
+		return
+	var cam := get_viewport().get_camera_3d() if is_inside_tree() else null
+	var d := cam.global_position.distance_to(global_position) if cam else 10.0
+	var low := d - DISSOLVE_BAND * (1.0 - amount)
+	for mi in _flash_meshes:
+		if not is_instance_valid(mi) or mi.mesh == null:
+			continue
+		for i in mi.mesh.get_surface_count():
+			var m := mi.get_surface_override_material(i) as BaseMaterial3D
+			if m == null or not m.has_meta("dissolve"):
+				var src := mi.get_active_material(i) as BaseMaterial3D
+				if src == null:
+					continue
+				m = src.duplicate() as BaseMaterial3D
+				m.set_meta("dissolve", true)
+				m.distance_fade_mode = BaseMaterial3D.DISTANCE_FADE_PIXEL_DITHER
+				mi.set_surface_override_material(i, m)
+			m.distance_fade_min_distance = low
+			m.distance_fade_max_distance = low + DISSOLVE_BAND
+	_dissolving = true
 
 
 func _break_invisibility() -> void:
@@ -1265,28 +1334,16 @@ func _break_invisibility() -> void:
 
 
 func _show_shield(on: bool) -> void:
-	if on and _shield_fx == null:
-		var size: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
-		_shield_fx = MeshInstance3D.new()
-		var sphere := SphereMesh.new()
-		sphere.radius = 1.0
-		sphere.height = 2.0
-		sphere.radial_segments = 20
-		sphere.rings = 10
-		_shield_fx.mesh = sphere
-		var mat := StandardMaterial3D.new()
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-		mat.albedo_color = Color(0.35, 0.75, 1.0, 0.25)
-		_shield_fx.material_override = mat
-		_shield_fx.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_shield_fx.scale = Vector3(size.x * 0.75, size.y * 0.75, size.z * 0.62)
-		_shield_fx.position = Vector3(0, size.y * 0.5, 0)
-		_visual.add_child(_shield_fx)
-	if _shield_fx:
-		_shield_fx.visible = on
+	if on and (_shield_cage == null or not is_instance_valid(_shield_cage)):
+		_shield_cage = ShieldCage.new()
+		_shield_cage.car = self
+		_shield_cage.size = stats.get("size", Vector3(2.2, 1.8, 5.0))
+		add_child(_shield_cage)
+		var size: Vector3 = _shield_cage.size
+		GameFeel.flash(get_parent(), global_position + Vector3.UP * size.y * 0.5, size.y * 0.45, Color(0.55, 0.78, 1.0), 0.08)
+	elif not on and _shield_cage and is_instance_valid(_shield_cage):
+		_shield_cage.queue_free()
+		_shield_cage = null
 	if on:
 		if _shield_hum == null:
 			_shield_hum = GameFeel.loop("shield_loop", self, -10.0, 12.0)
@@ -1391,6 +1448,9 @@ func _charge_sound(delta: float) -> void:
 
 ## The round shadow sits on the ground under the car, fading as the car rises.
 func _place_blob() -> void:
+	if model and not model.visible: # invisible (round 16): no shadow either
+		_blob.visible = false
+		return
 	if not _blob.visible and not GraphicsSettings.high:
 		_blob.visible = true
 	if not _blob.is_visible_in_tree():
@@ -1659,6 +1719,8 @@ func take_damage(amount: float, attacker: Vehicle = null) -> void:
 		return
 	if shield_time > 0.0:
 		GameFeel.play("shield_impact", global_position + Vector3.UP, self, -4.0)
+		if _shield_cage and is_instance_valid(_shield_cage):
+			_shield_cage.hit_from(attacker.global_position if is_instance_valid(attacker) else global_position + global_basis.z * 5.0)
 		return
 	if invisible_time > 0.0:
 		revealed_time = maxf(revealed_time, 0.5) # a hit shows where you are for a moment

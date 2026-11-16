@@ -413,6 +413,17 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   (Outlaw shield 55, `stats.shield_cost`) are built now. Pickup items 1.3x bigger (`Pickup.ITEM_SCALE` 1.56, `HOVER`
   1.4) with a light self-lit copy of the baked material (`ITEM_GLOW` 0.12; 0.45 washed the colours to pastel).
   Shield / invisibility look: waiting for the owner's reference clips (to `docs/reference/videos/`, frames via ffmpeg).
+- **Round 16, full text `docs/design/21-owner-round-16.md`:** the owner's 24 reference clips are in
+  `docs/reference/videos/` (README lists each; study them as ffmpeg frame sheets). **Shield** = TMB electric cage
+  (`ShieldCage`: waist + roof loops, corner jumps, outward arcs, sputters in the last 0.5 s, arcs toward hits; one
+  Bolt mesh; light on HIGH only). **Invisibility** = TM2 (`CloakFx` + `Vehicle._cloak_look`): `CLOAK_IN` 0.8 s of blue
+  sparks while the body breaks up, then gone for everyone incl. its driver (model + blob hidden) for `INVIS_TIME`;
+  `is_hidden()` only after the sparks; `CLOAK_OUT` 0.45 s back. Gotcha: `GeometryInstance3D.transparency` does nothing
+  on Compatibility; the break-up is per-surface material copies with `DISTANCE_FADE_PIXEL_DITHER` whose band is
+  placed around the camera distance (`Vehicle._dissolve`). **Chain Bomb** blast now ignites (4 s) + fire pool.
+  For later: Darkside T-slide ram bonus, Brimstone's sinner runs/crawls, Sweet Bot barrage (smaller than TMB's),
+  Roadkill charged missiles (Claude: replace "The Other Marcus", 8/10; owner to decide). Screenshot shots
+  `shield_close` / `cloak` (3rd arg frames, 4th arg cloak progress 0..1).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
