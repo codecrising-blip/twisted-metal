@@ -191,7 +191,9 @@ var invisible_time := 0.0 # energy invisibility: no locks on you, AI loses you p
 var revealed_time := 0.0 # seen anyway for a moment: hit, or caught in headlights
 var headlights_on := false
 var _energy_mines: Array = []
-var _shield_cage: ShieldCage # round 16: the electric cage (was a glass bubble)
+var _shield_mat: ShaderMaterial # round 16: horizontal field lines over the body (TMB shield)
+var _shield_flare := 0.0 # a hit lights the field up for a moment
+const SHIELD_SHADER := preload("res://scripts/fx/shield_field.gdshader")
 var _cloak: CloakFx # round 16: TM2 sparks going invisible and coming back
 var _was_invisible := false
 var _cloak_back := 0.0 # coming back into sight (seconds left)
@@ -1230,6 +1232,13 @@ func _launch_rear(id: String, count: int) -> void:
 func _energy_tick(delta: float) -> void:
 	if shield_time > 0.0:
 		shield_time -= delta
+		if _shield_mat:
+			# Fades in, holds, sputters in its last half second; a hit flares it.
+			var up := clampf((SHIELD_TIME - shield_time) / 0.15, 0.0, 1.0)
+			var sputter := (0.12 if randf() < 0.35 else 0.75) if shield_time < 0.5 else 1.0
+			_shield_flare = maxf(0.0, _shield_flare - delta * 6.0)
+			_shield_mat.set_shader_parameter("strength", up * sputter * (1.0 + _shield_flare * 1.5))
+			_shield_mat.set_shader_parameter("car_inv", Projection(global_transform.affine_inverse()))
 		if shield_time <= 0.0:
 			_show_shield(false)
 			GameFeel.play("shield_off", global_position + Vector3.UP, self, -4.0)
@@ -1334,16 +1343,13 @@ func _break_invisibility() -> void:
 
 
 func _show_shield(on: bool) -> void:
-	if on and (_shield_cage == null or not is_instance_valid(_shield_cage)):
-		_shield_cage = ShieldCage.new()
-		_shield_cage.car = self
-		_shield_cage.size = stats.get("size", Vector3(2.2, 1.8, 5.0))
-		add_child(_shield_cage)
-		var size: Vector3 = _shield_cage.size
-		GameFeel.flash(get_parent(), global_position + Vector3.UP * size.y * 0.5, size.y * 0.45, Color(0.55, 0.78, 1.0), 0.08)
-	elif not on and _shield_cage and is_instance_valid(_shield_cage):
-		_shield_cage.queue_free()
-		_shield_cage = null
+	if on and _shield_mat == null:
+		_shield_mat = ShaderMaterial.new()
+		_shield_mat.shader = SHIELD_SHADER
+	if _shield_mat:
+		_shield_mat.set_shader_parameter("strength", 0.0)
+		_shield_mat.set_shader_parameter("car_inv", Projection(global_transform.affine_inverse()))
+	_apply_overlays()
 	if on:
 		if _shield_hum == null:
 			_shield_hum = GameFeel.loop("shield_loop", self, -10.0, 12.0)
@@ -1351,6 +1357,19 @@ func _show_shield(on: bool) -> void:
 			_shield_hum.play()
 	elif _shield_hum:
 		_shield_hum.stop()
+
+
+## The layer drawn over the car's own meshes: the white hit flash, else the shield's field lines.
+func _apply_overlays() -> void:
+	var over: Material = null
+	if _flash_time > 0.0:
+		over = _white
+	elif shield_time > 0.0 and _shield_mat:
+		over = _shield_mat
+	for mi in _flash_meshes:
+		# Only the body: the soft ground shadow and the fake headlight beams carry their own override.
+		if is_instance_valid(mi) and mi.material_override == null:
+			mi.material_overlay = over
 
 
 ## Headlights on/off (owner: Circle / H). They light the way and show invisible cars in the beam.
@@ -1719,8 +1738,7 @@ func take_damage(amount: float, attacker: Vehicle = null) -> void:
 		return
 	if shield_time > 0.0:
 		GameFeel.play("shield_impact", global_position + Vector3.UP, self, -4.0)
-		if _shield_cage and is_instance_valid(_shield_cage):
-			_shield_cage.hit_from(attacker.global_position if is_instance_valid(attacker) else global_position + global_basis.z * 5.0)
+		_shield_flare = 1.0 # the field flares where it took the hit
 		return
 	if invisible_time > 0.0:
 		revealed_time = maxf(revealed_time, 0.5) # a hit shows where you are for a moment
@@ -1838,9 +1856,7 @@ func _animate(delta: float) -> void:
 	if _flash_time > 0.0:
 		_flash_time -= delta
 		if _flash_time <= 0.0:
-			for mi in _flash_meshes:
-				if is_instance_valid(mi):
-					mi.material_overlay = null
+			_apply_overlays()
 	_jolt = _jolt.lerp(Vector3.ZERO, 1.0 - exp(-12.0 * delta))
 	_update_charge_fx()
 	_place_blob()
