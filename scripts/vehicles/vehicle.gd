@@ -1346,6 +1346,7 @@ func _show_shield(on: bool) -> void:
 	if on and _shield_mat == null:
 		_shield_mat = ShaderMaterial.new()
 		_shield_mat.shader = SHIELD_SHADER
+		_shield_mat.set_shader_parameter("half_width", float((stats.get("size", Vector3(2.2, 1.8, 5.0)) as Vector3).x) * 0.5)
 	if _shield_mat:
 		_shield_mat.set_shader_parameter("strength", 0.0)
 		_shield_mat.set_shader_parameter("car_inv", Projection(global_transform.affine_inverse()))

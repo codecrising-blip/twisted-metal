@@ -2,7 +2,7 @@
 
 Study material from the Twisted Metal series, sent by the owner. Not game files. To study one, pull frames:
 `ffmpeg -i <file> -vf "fps=4,scale=480:-2,tile=4x3" -frames:v 1 sheet.jpg` (Claude can't play video or hear audio).
-Names marked `NN_` are not identified for sure (no audio here); the owner can rename them.
+All clips named by the owner's answers (round 16).
 
 | File | What it shows | Use |
 |---|---|---|
@@ -15,8 +15,13 @@ Names marked `NN_` are not identified for sure (no audio here); the owner can re
 | `special_roadkill_charged_missiles.mp4` | Roadkill: "MAX MISSILE CHARGE", then "ALL MISSILES HIT" | Roadkill's charged missiles (see design 21 for where it goes) |
 | `special_junkyard_dog_spike_ball.mp4` | Junkyard Dog's spike ball, a ring on the ground, the blast | Chain Bomb: the blast now sets cars burning and leaves a fire pool |
 | `story_tmb_sweet_tooth.mp4`, `story_tmb_mr_grimm.mp4` | TMB story openings (Blackfield Asylum, 3D, dark) | How story openings are told |
-| `story_tmb_10_woman_asylum.mp4` | TMB, a woman in the asylum (Shadow / Raven?) | Story openings |
-| `story_tmb_13_cross_biplane.mp4`, `story_tmb_16_man_hat_glasses.mp4` | TMB story openings (Brimstone / Junkyard Dog / Crazy 8?) | Story openings |
+| `story_tmb_shadow_raven.mp4` | TMB: Raven, Shadow's driver | The owner's pick for Shadow's driver (not Mortimer) |
+| `story_tmb_junkyard_dog_billy_ray.mp4` | TMB: Billy Ray; the biplane is the man who destroyed his life, he wants revenge | Junkyard Dog's story |
+| `story_tmb_brimstone_jedediah.mp4` | TMB: Jedediah, Brimstone's driver | Brimstone's story |
 | `story_tm2_outlaw.mp4`, `story_tm2_minion.mp4` | TM2: Calypso grants wishes; the world as his battleground | Calypso's manner, wish scenes |
-| `story_headon_mr_grimm.mp4`, `story_headon_roadkill.mp4`, `story_headon_05_calypso_sweet_tooth.mp4`, `story_headon_06_agents.mp4`, `story_headon_14_old_man_goggles.mp4`, `story_headon_15_demon.mp4` | Head-On comic-panel wish stories (Grimm, Roadkill, Sweet Tooth, Crimson Fury...) | Calypso granting wishes; our Mr. Grimm is the Head-On reaper, not TMB's soldier |
+| `story_headon_sweet_tooth_ending.mp4` | Head-On: Sweet Tooth's ending; the white-haired man is Calypso | Our Calypso has his young TM2 look, not this old one |
+| `story_headon_needles_marcus_and_crimson_fury_ending.mp4` | Head-On: Needles Kane sees Marcus Kane in the mirror; then Crimson Fury's ending, Agent Shepherd Smith surrounds the area and arrests Calypso | The Kane twist; Crimson Fury's story |
+| `story_headon_axel.mp4` | Head-On: Axel; the old man in goggles is the doctor who forced Axel onto the machine to win Twisted Metal for him | Axel's story |
+| `story_headon_minion.mp4` | Head-On: Minion, the demon of hell whose powers Calypso stole | Minion's story |
+| `story_headon_mr_grimm.mp4`, `story_headon_roadkill.mp4` | Head-On comic-panel wish stories | Our Mr. Grimm is the Head-On reaper, not TMB's soldier |
 | `tmb_intro_and_menu.mp4`, `tmb_menu.mp4` | TMB intro and main menu | Menu mood later |

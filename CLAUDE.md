@@ -416,9 +416,13 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 - **Round 16, full text `docs/design/21-owner-round-16.md`:** the owner's 24 reference clips are in
   `docs/reference/videos/` (README lists each; study them as ffmpeg frame sheets). **Shield** = the field on Crazy 8's car in the TMB clip (NOT the lightning: that is his special; Claude
   built that first and the owner was furious): `scripts/fx/shield_field.gdshader` as the car meshes' `material_overlay`
-  (`Vehicle._apply_overlays`, body meshes only: those with no material_override), pale blue, grown 5 cm outside the
-  body, thin lines flowing continuously from tail to nose (`car_inv` uniform = the car's frame each tick), rim glow,
-  fades in, sputters in the last 0.5 s, flares on a blocked hit. **Invisibility** = TM2 (`CloakFx` + `Vehicle._cloak_look`): `CLOAK_IN` 0.8 s of blue
+  (`Vehicle._apply_overlays`, body meshes only: those with no material_override), alpha-blended **darkish royal
+  blue** (additive washed to white), grown 5 cm outside the body, thin lines flowing continuously from tail to nose
+  (`car_inv` uniform = the car's frame each tick), one side slightly ahead of the other, swapping over time, faint bow
+  (owner: waviness 6 of 100), rim glow, fades in, sputters in the last 0.5 s, flares on a blocked hit.
+  Story facts (owner): Calypso = young TM2 look; Minion = the demon of hell whose powers Calypso stole; Billy Ray
+  (Junkyard Dog) hunts the pilot who ruined his life; Head-On Axel was forced onto the machine by an old doctor;
+  Crimson Fury's ending: Shepherd Smith arrests Calypso. **Invisibility** = TM2 (`CloakFx` + `Vehicle._cloak_look`): `CLOAK_IN` 0.8 s of blue
   sparks while the body breaks up, then gone for everyone incl. its driver (model + blob hidden) for `INVIS_TIME`;
   `is_hidden()` only after the sparks; `CLOAK_OUT` 0.45 s back. Gotcha: `GeometryInstance3D.transparency` does nothing
   on Compatibility; the break-up is per-surface material copies with `DISTANCE_FADE_PIXEL_DITHER` whose band is
