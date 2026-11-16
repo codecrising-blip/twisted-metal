@@ -76,6 +76,9 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
   (4) Pit of fire on LOW: ~45 flame quads instead of ~110 (the pit's FirePool draws no flames of its own).
   (5) `max_physics_steps_per_frame` 4. (6) F3 shows physics ms, scripts ms, draws, triangles. AI rate untouched (owner).
   Measure CPU with `Performance.TIME_PHYSICS_PROCESS` headless; cars are ~36k triangles each (hero models).
+- **Owner's download (GitHub "Download ZIP"):** `.gitattributes` `export-ignore` keeps `docs/reference/`,
+  `audio/reference/` and `docs/screenshots/` out of the zip (285 -> 102 MB; the reference videos broke it). Put new
+  study material in those folders; check with `git archive --format=zip -o /tmp/t.zip HEAD` + `unzip -tq`.
 - The game starts in the **preview match** (Sweet Tooth vs Outlaw only). `-- full` = all five cars (tests use it).
   `-- high` / `-- low` force a graphics level for one run.
 

@@ -1,0 +1,6 @@
+# Study material stays in the repo (the owner and Claude read it on GitHub) but is left out of
+# GitHub's "Download ZIP" (built with git archive, which honours export-ignore), so the game
+# download stays small: the reference videos alone made the zip ~285 MB and it kept breaking.
+/docs/reference export-ignore
+/audio/reference export-ignore
+/docs/screenshots export-ignore
