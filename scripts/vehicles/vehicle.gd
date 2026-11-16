@@ -1035,10 +1035,11 @@ func hit_react(dir: Vector3, amount: float) -> void:
 				_white.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 				_white.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 				_white.albedo_color = Color(1.0, 0.97, 0.9, 0.6)
-			for mi in _flash_meshes:
-				if is_instance_valid(mi):
-					mi.material_overlay = _white
 		_flash_time = maxf(_flash_time, 0.05 + minf(amount, 60.0) / 1200.0)
+		# Body meshes only (round 17): flashing every mesh also whitened the soft ground shadow and
+		# the fake headlight beams, and the end of the flash only clears the body, so after the first
+		# hit a bright square stayed under the car for good.
+		_apply_overlays()
 
 
 ## A blast throws the car (heavy cars less). flip 1 = about one full roll through the air away from
@@ -1147,7 +1148,7 @@ func _combat(delta: float) -> void:
 			charge_time = minf(charge_time + delta, charge_full(charging_id))
 			_charge_hold += delta
 			_charge_sound(delta)
-			var melt := float(WeaponData.get_def(charging_id).get("meltdown", 0.0))
+			var melt := meltdown_at(charging_id)
 			if melt > 0.0 and _charge_hold >= melt:
 				_meltdown(charging_id)
 		else:
@@ -1398,6 +1399,12 @@ static func charge_full(id: String) -> float:
 	return float(WeaponData.get_def(id).get("charge_time", 2.0))
 
 
+## Seconds of holding fire (from the press) after which a charged weapon melts down; 0 = never.
+static func meltdown_at(id: String) -> float:
+	var after := float(WeaponData.get_def(id).get("meltdown_after", -1.0))
+	return charge_full(id) + after if after >= 0.0 else 0.0
+
+
 ## 0..1 while charging (HUD meter); 0 when not charging.
 func charge_ratio() -> float:
 	return clampf(charge_time / charge_full(charging_id), 0.0, 1.0) if charging_id != "" else 0.0
@@ -1455,7 +1462,9 @@ func _charge_sound(delta: float) -> void:
 	if charge_time >= full:
 		# Owner, round 10: the full charge keeps humming for as long as it is held (it used to fade to
 		# silence), climbing in pitch as the meltdown nears.
-		var melt := float(WeaponData.get_def(charging_id).get("meltdown", full + 1.0))
+		var melt := meltdown_at(charging_id)
+		if melt <= 0.0:
+			melt = full + 1.0
 		var near := clampf((_charge_hold - full) / maxf(melt - full, 0.1), 0.0, 1.0)
 		if _charge_hum == null:
 			_charge_hum = GameFeel.loop("taser_loop", self, -3.0, 10.0)

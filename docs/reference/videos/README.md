@@ -6,7 +6,8 @@ All clips named by the owner's answers (round 16).
 
 | File | What it shows | Use |
 |---|---|---|
-| `shield_tmb_pick.mp4` | TMB, Crazy 8. The lightning is his special (not wanted). The **shield** is the pale blue field over the car with thin lines flowing from tail to nose (around 6 s) | **The shield, built in round 16** (`shield_field.gdshader`) |
+| `shield_tmb_pick.mp4` | TMB, Crazy 8. The lightning is his special (not wanted). The **shield** is the pale blue field over the car with thin lines flowing from tail to nose (around 6 s) | Built in round 16 (`shield_field.gdshader`); the owner found it bad in round 17 and picked the Head-On shield instead |
+| `shield_headon_pick.mp4` | Head-On, round 17: **the shield the owner wants now** (about 11.5-14 s): the car's body turns solid glossy green, details faintly through, wheels and some parts keep their colours, fades out at the end. The icy shell that bursts into purple crystals (16-18 s) is the freeze, not the shield | Shield look, to build once the owner confirms Claude's reading (colour: forest green or French blue) |
 | `evolution_invisibility_pick_tm2.mp4` | Invisibility in TM1, TM2, TM3, TM4, Black, Small Brawl, Head-On | **TM2 picked, built in round 16** (`CloakFx`): blue sparks, pixel break-up, gone for everyone |
 | `evolution_freeze.mp4` | The freeze attack through the series | Later freeze look |
 | `special_darkside_ram_tslide.mp4`, `special_darkside_ram_2.mp4` | Darkside's ram charge; "T-SLIDE BONUS" | Darkside: ramming while sliding sideways = extra damage, very hard |

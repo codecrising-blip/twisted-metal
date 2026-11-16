@@ -436,6 +436,13 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   to launch 20 zoomy-like missiles at 4 each; they can hit Sweet Tooth; robot dies to power + fire (59) with a
   remote-like blast. Screenshot shots
   `shield_close` / `cloak` (3rd arg frames, 4th arg cloak progress 0..1).
+- **Round 17, full text `docs/design/22-owner-round-17.md`:** top container of the stack at (-74, 46) is solid now;
+  the hit flash only overlays body meshes (`_apply_overlays`): flashing every mesh left the soft ground shadow white
+  for good ("bright square under my car"); Napalm Cone melts down `meltdown_after` 2 s past the full charge
+  (`Vehicle.meltdown_at`). **Shield:** the owner found the TMB field bad and sent the Head-On one
+  (`shield_headon_pick.mp4`: the body turns solid glossy green, details faintly through; colour forest green or French
+  blue). NOT built: waiting for the owner to confirm Claude's reading. `tests/_spot_shot.gd -- x,y,z,yaw out.png`
+  shoots the chase camera at an F3 position.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

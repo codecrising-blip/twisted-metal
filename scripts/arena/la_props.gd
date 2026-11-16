@@ -442,6 +442,8 @@ func _container_stack() -> void:
 		mb.box(dark, Vector3(0.08, 2.4, 2.3), MeshBuilder.at(p + Basis(Vector3.UP, deg_to_rad(yaw)) * Vector3(6.02, 0, 0), Vector3(0, yaw, 0)), 0.0)
 	_arena.batch_builder(mb, true, 0.5)
 	_solid(Vector3(12.2, 2.6, 5.1), base + Vector3(0, 1.3, 1.3))
+	# the top container too (owner, round 17: cars drove up the stack and straight through it)
+	_solid(Vector3(12.0, 2.6, 2.45), base + Vector3(1.0, 3.9, 0.4), 6.0)
 
 
 # ---------------------------------------------------------------- rubble, manholes, stains

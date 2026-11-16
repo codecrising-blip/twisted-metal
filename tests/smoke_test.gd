@@ -487,7 +487,8 @@ func _run() -> void:
 	await _frames(45)
 	_check(n_hp - outlaw.health >= 89.5, "charged Napalm Cone hits for 90 (%.1f)" % (n_hp - outlaw.health))
 	_check(outlaw.burn_time > 0.0, "...and burns")
-	# Meltdown (owner, round 10): held 3 s the charge is lost, no ammo spent, weapon locked 3 s.
+	# Meltdown (owner, rounds 10 + 17): held 2 s past the full charge (4 s in all) the charge is lost,
+	# no ammo spent, weapon locked 3 s.
 	player.ammo["napalm_cone"] = 2
 	player._weapon_cooldowns.clear()
 	player._special_timer = 0.0 # no special comes back during the hold (it would add one)
@@ -497,11 +498,11 @@ func _run() -> void:
 	await _frames(2)
 	var melt_shots := Projectile.spawned_total
 	Input.action_press("fire_weapon")
-	await _frames(150)
-	_check(player.charging_id == "napalm_cone", "a full charge can still be held for a moment (2.5 s)")
+	await _frames(210)
+	_check(player.charging_id == "napalm_cone", "a full charge can still be held for 2 s (3.5 s)")
 	await _frames(40)
 	_check(player.charging_id == "" and player.locked_left("napalm_cone") > 2.0 and player.ammo["napalm_cone"] == 2 and Projectile.spawned_total == melt_shots,
-		"held 3 s the Napalm Cone melts down: no shot, no ammo lost, locked (%.1f s)" % player.locked_left("napalm_cone"))
+		"held 4 s the Napalm Cone melts down: no shot, no ammo lost, locked (%.1f s)" % player.locked_left("napalm_cone"))
 	_check(said.has("NAPALM CONE MELTDOWN"), "...and the HUD says so")
 	Input.action_release("fire_weapon")
 	await _frames(2)
@@ -513,6 +514,17 @@ func _run() -> void:
 	player.notice.disconnect(hear)
 	player._locked.clear()
 	player._weapon_cooldowns.clear()
+	# Round 17: the white hit flash once covered every mesh of the car, the soft ground shadow too, and
+	# only the body was cleared afterwards: a bright square stayed under the car for good.
+	player.hit_react(Vector3.FORWARD, 30.0)
+	await _frames(20)
+	var lit_overrides := player._flash_meshes.filter(func(mi: Variant) -> bool:
+		return is_instance_valid(mi) and (mi as MeshInstance3D).material_override != null and (mi as MeshInstance3D).material_overlay != null)
+	_check(lit_overrides.is_empty() and player._flash_time <= 0.0, "a hit flash leaves no white square under the car")
+	# Round 17: the top container of the stack was a ghost (cars drove up the stack and through it).
+	var box_ray := PhysicsRayQueryParameters3D.create(Vector3(-73.0, 12.0, 46.4), Vector3(-73.0, 6.0, 46.4), 1)
+	var box_hit: Dictionary = main.get_viewport().world_3d.direct_space_state.intersect_ray(box_ray)
+	_check(not box_hit.is_empty() and float((box_hit.position as Vector3).y) > 9.0, "the top container is solid (%s)" % str(box_hit.get("position", "nothing")))
 
 	# Napalm (gas can): thrown up and ahead, dropped on the car with a second press.
 	_place(outlaw, 20, 70, 90)
