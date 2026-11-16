@@ -55,7 +55,8 @@ const CARS := {
 	"sweet_tooth": {
 		"name": "Sweet Tooth", "ram": 7.5, "engine": "ic_truck", "driver": "Needles Kane",
 		"spd": 4, "arm": 8, "hnd": 4, "spc": 8, "class": "heavy",
-		"special": "napalm_cone", "freeze_cost": 35.0, # perk: Brain Freeze
+		"special": "napalm_cone", "freeze_cost": 35.0, # energy perk: Brain Freeze (design 5.5)
+		"last_laugh": true, # perk (design 2.1): under 30% health the special recharges 50% faster, the roof fire burns blue
 		"size": Vector3(2.5, 2.8, 6.6), "camera": [6.4, 13.0],
 		"tagline": "He laughs louder than the engine.",
 	},
@@ -63,6 +64,7 @@ const CARS := {
 		"name": "Outlaw", "ram": 5.0, "engine": "taxi", "driver": "Jamie Roberts", "female": true,
 		"spd": 7, "arm": 6, "hnd": 6, "spc": 5, "class": "medium",
 		"special": "omni_taser", "brake_mult": 1.3, # perk: Interceptor
+		"shield_cost": 55.0, # energy perk: Riot Shield (design 5.5; the shield is 70 for everyone else)
 		# Round 11 (owner): she U-turns like a light car, and her turbo tank holds 1.4x (7 s instead of 5).
 		"uturn": "light", "turbo_tank": 1.4,
 		"size": Vector3(2.2, 1.6, 5.0),

@@ -61,6 +61,9 @@ const FREEZE_COST := 50.0
 # Energy moves (design 5.2, owner's combos play-test 1).
 const REAR_FREEZE_COST := 40.0
 const SHIELD_COST := 70.0
+const LAST_LAUGH_AT := 0.3 # Sweet Tooth's perk: below this share of health...
+const LAST_LAUGH_RATE := 1.5 # ...the special recharges this much faster
+var _last_laugh := false
 const SHIELD_TIME := 2.5
 const INVIS_COST := 50.0
 const INVIS_TIME := 6.0
@@ -462,8 +465,12 @@ func _tick(delta: float) -> void:
 		if burn_time <= 0.0:
 			_burn_fx.emitting = false
 	# Specials recharge one charge at a time; the slot comes back with the first one.
+	var laughing: bool = stats.get("last_laugh", false) and health < max_health * LAST_LAUGH_AT and not is_dead
+	if laughing != _last_laugh:
+		_last_laugh = laughing
+		BlenderCars.cone_fire_blue(model, laughing)
 	if ammo.get(special_id, 0) < special_charges:
-		_special_timer += delta
+		_special_timer += delta * (LAST_LAUGH_RATE if laughing else 1.0)
 		if _special_timer >= Roster.special_recharge(car_id):
 			_special_timer = 0.0
 			ammo[special_id] = ammo.get(special_id, 0) + 1

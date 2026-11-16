@@ -82,9 +82,10 @@ static func _cone_fire(m: Node3D, at: Vector3) -> void:
 	var fire := FxKit.fire(0.34, 10)
 	fire.position = at
 	fire.emission_sphere_radius = 0.13
-	fire.color_ramp = FxKit._ramp([Color(0.9, 0.45, 0.12, 0.5), Color(0.8, 0.22, 0.04, 0.38), Color(0.3, 0.07, 0.02, 0.2), Color(0.08, 0.05, 0.05, 0.0)])
+	fire.color_ramp = FxKit._ramp(CONE_FIRE)
 	m.add_child(fire)
 	fire.emitting = true
+	m.set_meta("cone_fire", fire)
 	var glow := FlickerLight.new()
 	glow.light_color = Color(1.0, 0.45, 0.12)
 	glow.base_energy = 0.8
@@ -93,3 +94,18 @@ static func _cone_fire(m: Node3D, at: Vector3) -> void:
 	glow.add_to_group(GraphicsSettings.EXTRA_LIGHT_GROUP)
 	glow.visible = GraphicsSettings.high
 	m.add_child(glow)
+	m.set_meta("cone_glow", glow)
+
+
+const CONE_FIRE := [Color(0.9, 0.45, 0.12, 0.5), Color(0.8, 0.22, 0.04, 0.38), Color(0.3, 0.07, 0.02, 0.2), Color(0.08, 0.05, 0.05, 0.0)]
+## Last Laugh (Sweet Tooth under 30% health): the roof fire burns blue, a warning everyone can see.
+const CONE_FIRE_BLUE := [Color(0.55, 0.8, 1.0, 0.55), Color(0.15, 0.4, 1.0, 0.42), Color(0.05, 0.1, 0.4, 0.2), Color(0.04, 0.05, 0.08, 0.0)]
+
+static func cone_fire_blue(m: Node3D, blue: bool) -> void:
+	if m == null or not m.has_meta("cone_fire"):
+		return
+	var fire: CPUParticles3D = m.get_meta("cone_fire")
+	fire.color_ramp = FxKit._ramp(CONE_FIRE_BLUE if blue else CONE_FIRE)
+	fire.amount = 16 if blue else 10
+	var glow: Light3D = m.get_meta("cone_glow")
+	glow.light_color = Color(0.3, 0.55, 1.0) if blue else Color(1.0, 0.45, 0.12)

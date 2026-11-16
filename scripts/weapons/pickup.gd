@@ -76,8 +76,9 @@ func _build() -> void:
 		# turning slowly over a steel drop plate whose marker lamps carry the item's colour.
 		_blender = true
 		mi.mesh = ModelLib.mesh("pickups", kind)
+		_brighten(mi)
 		_visual.position = Vector3.UP * HOVER
-		_visual.scale = Vector3.ONE * 1.2
+		_visual.scale = Vector3.ONE * ITEM_SCALE
 		_pad = MeshInstance3D.new()
 		_pad.mesh = ModelLib.mesh("pickups", "pad")
 		_pad.position = Vector3.UP * 0.02
@@ -95,7 +96,27 @@ func _build() -> void:
 		_visual.scale = Vector3.ONE * 1.25
 
 
-const HOVER := 1.15 # metres above the plate
+const HOVER := 1.4 # metres above the plate
+const ITEM_SCALE := 1.56 # round 15 (owner): 1.3x bigger (was 1.2)
+const ITEM_GLOW := 0.12 # round 15 (owner): the items' own colours a little brighter (self-lit share)
+static var _bright: StandardMaterial3D
+
+
+## The item (not its plate) in a self-lit copy of the baked material, so its colours read from afar
+## and in shadow.
+static func _brighten(mi: MeshInstance3D) -> void:
+	if mi.mesh == null:
+		return
+	var atlas := ModelLib.atlas("pickups")
+	if _bright == null:
+		_bright = atlas.duplicate() as StandardMaterial3D
+		_bright.emission_enabled = true
+		_bright.emission = Color.WHITE
+		_bright.emission_texture = atlas.albedo_texture
+		_bright.emission_energy_multiplier = ITEM_GLOW
+	for i in mi.mesh.get_surface_count():
+		if mi.mesh.surface_get_material(i) == atlas:
+			mi.set_surface_override_material(i, _bright)
 var _blender := false
 
 

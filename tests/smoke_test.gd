@@ -1129,6 +1129,27 @@ func _run() -> void:
 	_check(brain._weapon_value("power", 15.0, 0.05, tgt) > brain._weapon_value("homing", 15.0, 0.05, tgt)
 		and brain._weapon_value("zoomy", 40.0, 0.3, tgt) > brain._weapon_value("homing", 40.0, 0.3, tgt),
 		"AI picks the weapon worth most at the range (power close and dead ahead, zoomy at mid range)")
+	# Round 15: driver perks from design chapter 1.
+	var ol15: Vehicle = main.enemies.filter(func(e: Vehicle): return e.car_id == "outlaw")[0]
+	ol15.energy = 100.0
+	ol15.shield_time = 0.0
+	ol15.energy_move("shield")
+	_check(ol15.shield_time > 0.0 and absf(ol15.energy - 45.0) < 1.0, "Outlaw's Riot Shield costs 55 energy (left %.0f)" % ol15.energy)
+	ol15.shield_time = 0.0
+	var st15: Vehicle = main.player
+	st15.ammo["napalm_cone"] = 0
+	st15.health = st15.max_health * 0.2
+	st15._special_timer = 0.0
+	await _frames(40)
+	var laugh_t := st15._special_timer
+	var blue := st15._last_laugh
+	st15.health = st15.max_health
+	st15._special_timer = 0.0
+	await _frames(40)
+	var calm_t := st15._special_timer
+	_check(blue and not st15._last_laugh and laugh_t > calm_t * 1.3,
+		"Sweet Tooth's Last Laugh: under 30%% health the special recharges 1.5x faster, roof fire blue (%.2f vs %.2f)" % [laugh_t, calm_t])
+	st15.ammo["napalm_cone"] = 2
 
 	print("")
 	if _failures.is_empty():

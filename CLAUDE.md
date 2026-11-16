@@ -407,6 +407,12 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   told apart by height, so the cage deck (11 m) and tunnel roof (9 m) were "the same": `LosAngelesArena.level_of()`
   (road/battle/roof/deck), `FENCED_LEVELS` left only by their ramp, ramps carry their width `w`; (5) the ramp test put
   the player inside the cage deck. `ai_ramp_check` 12/12 in 7.5-9 s, new `tests/ai_bridge_check.gd` 6/6.
+- **Round 15, full text `docs/design/20-owner-round-15.md`:** driver perks checked against design ch1: Brain Freeze
+  (Sweet Tooth freeze 35) and Interceptor (Outlaw brakes x1.3) were built; **Last Laugh** (Sweet Tooth under 30%:
+  special recharge x1.5, roof fire blue: `Vehicle.LAST_LAUGH_*`, `BlenderCars.cone_fire_blue`) and **Riot Shield**
+  (Outlaw shield 55, `stats.shield_cost`) are built now. Pickup items 1.3x bigger (`Pickup.ITEM_SCALE` 1.56, `HOVER`
+  1.4) with a light self-lit copy of the baked material (`ITEM_GLOW` 0.12; 0.45 washed the colours to pastel).
+  Shield / invisibility look: waiting for the owner's reference clips (to `docs/reference/videos/`, frames via ffmpeg).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
