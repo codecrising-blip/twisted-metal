@@ -397,6 +397,16 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   share of the turn the flight path follows; `Vehicle._in_air`, `_air_steer_w` eases out only the stick's own turn);
   sign text fits its board (`LosAngelesArena.fit_font`). The AI pocket-ramp smoke check stays flaky (~50%, also with
   AI air steering off; `ai_ramp_check` 7/12 either way).
+- **Round 14, full text `docs/design/19-owner-round-14.md`:** special recharge by slots, of the original times:
+  3 slots x2, 4 x1.75, 5 x1.5 (`WeaponData.SPECIAL_RECHARGE_BY_SLOTS`, `Roster.special_recharge`). **AI x1.1**
+  (`AIDriver.SMARTS`): decisions 1.1x sooner, grabs health within 28 m under 70%, fires the weapon worth most at the
+  range (`_weapon_value`, 75%); aggression unchanged. **AI ramps/bridges, root causes fixed:** (1) the wall feelers hit
+  the ramp's rising surface and steered off its edge: `_ray` ignores hits with normal.y > 0.75; (2) climbs began
+  45 deg off the line and used the handbrake on the ramp: one pure-pursuit rule (`RAMP_LOOK` 13 m on the ramp line),
+  no handbrake while `_ramp_committed`; (3) the wall-jump plan wiped the ramp goal mid-approach; (4) levels were
+  told apart by height, so the cage deck (11 m) and tunnel roof (9 m) were "the same": `LosAngelesArena.level_of()`
+  (road/battle/roof/deck), `FENCED_LEVELS` left only by their ramp, ramps carry their width `w`; (5) the ramp test put
+  the player inside the cage deck. `ai_ramp_check` 12/12 in 7.5-9 s, new `tests/ai_bridge_check.gd` 6/6.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -454,7 +464,8 @@ scripts/ui/hud_target.gd    top-center: locked enemy, health-coloured bar, trail
 scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickups, walls/road from radar_lines()
 tests/                      smoke_test.gd (headless, ~185 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py,
                             map_check.gd (traps + narrow slots over the whole map), ai_ramp_check.gd (AI gets up
-                            from beside each ramp: 5/12 in round 7, tune with the owner), _perf.gd (draw calls)
+                            from beside each ramp: 12/12 in round 14), ai_bridge_check.gd (roof/deck/road, 6/6),
+                            _perf.gd (draw calls)
 assets/backdrops/           stage backdrops (equirectangular panoramas shown as the sky)
 audio/music/                FINAL themes (owner's list, see its README): `<arena.music>.ogg` per stage + boss names
                             (manslaughter, warhawk, minion, calypso); unpicked/ = candidates. -16 LUFS, trimmed.

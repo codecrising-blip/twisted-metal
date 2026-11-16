@@ -484,6 +484,7 @@ func _run() -> void:
 	# Meltdown (owner, round 10): held 3 s the charge is lost, no ammo spent, weapon locked 3 s.
 	player.ammo["napalm_cone"] = 2
 	player._weapon_cooldowns.clear()
+	player._special_timer = 0.0 # no special comes back during the hold (it would add one)
 	var said: Array[String] = []
 	var hear := func(_v: Vehicle, text: String) -> void: said.append(text)
 	player.notice.connect(hear)
@@ -1115,7 +1116,19 @@ func _run() -> void:
 	_place(ut, 40, 60, 0)
 	_check(float(air_turned.light) > 40.0 and float(air_turned.heavy) > 12.0 and float(air_turned.heavy) < float(air_turned.light) * 0.7,
 		"steering works in the air, light cars turn more than heavy ones (%.0f / %.0f deg in 0.67 s)" % [air_turned.light, air_turned.heavy])
-	_check(WeaponData.SPECIAL_RECHARGE_SCALE == 2.0, "specials recharge at half the old pace (round 13)")
+	_check(is_equal_approx(Roster.special_recharge("spectre"), 18.0 * 2.0) and is_equal_approx(Roster.special_recharge("sweet_tooth"), 16.0 * 1.75)
+		and is_equal_approx(Roster.special_recharge("outlaw"), 19.0 * 1.75),
+		"specials recharge by slots: 3 slots x2, 4 slots x1.75, 5 slots x1.5 (round 14)")
+	# Round 14: AI levels and weapon sense.
+	_check(LosAngelesArena.level_of(Vector3(55, 11, -42)) == "deck" and LosAngelesArena.level_of(Vector3(0, 9, -128)) == "roof"
+		and LosAngelesArena.level_of(Vector3(40, 5, 20)) == "battle" and LosAngelesArena.level_of(Vector3(0, 2.2, 5)) == "battle"
+		and LosAngelesArena.level_of(Vector3(130, 0, 0)) == "road",
+		"the AI tells road, battleground, tunnel roof and cage deck apart (not by height alone)")
+	var brain := AIDriver.new()
+	var tgt: Vehicle = ut
+	_check(brain._weapon_value("power", 15.0, 0.05, tgt) > brain._weapon_value("homing", 15.0, 0.05, tgt)
+		and brain._weapon_value("zoomy", 40.0, 0.3, tgt) > brain._weapon_value("homing", 40.0, 0.3, tgt),
+		"AI picks the weapon worth most at the range (power close and dead ahead, zoomy at mid range)")
 
 	print("")
 	if _failures.is_empty():

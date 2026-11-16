@@ -161,8 +161,10 @@ const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "
 	"napalm", "napalm", "remote", "remote", "zoomy", "zoomy", "sat"]
 
 ## Owner, session 3: a health pickup restores a share of max health, so armor matters all match.
-## Round 13 (owner: specials came back too fast once they could pile up): every special's recharge x2.
-const SPECIAL_RECHARGE_SCALE := 2.0
+## Round 14 (owner): specials recharge slower the fewer a car can hold (they pile up to 3/4/5):
+## x2 for the 3-slot cars (easy to land), x1.75 for 4 slots, x1.5 for 5 (hard to land), of the
+## original "recharge" times. Roster.special_recharge(id) applies it.
+const SPECIAL_RECHARGE_BY_SLOTS := {3: 2.0, 4: 1.75, 5: 1.5}
 
 const HEALTH_PICKUP_RATIO := 0.30
 const MEGA_HEALTH_RATIO := 0.60 # confirmed by the owner (session 4)

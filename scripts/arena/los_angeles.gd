@@ -278,6 +278,20 @@ static func ramp_profile(along: float) -> float:
 
 
 ## Signed distance (m, approx.) from the battleground edge: > 0 inside.
+## Round 13 (AI routes by level, not by height: the cage deck at 11 m and the tunnel roof at 9 m are
+## only 2 m apart but not joined). road | battle | roof | deck.
+const FENCED_LEVELS := ["deck"] # left only by its ramp
+
+static func level_of(p: Vector3) -> String:
+	if p.y > PLAT_H + DECK_Y - 1.5 and absf(p.x - DECK_CENTER.x) < 16.0 and absf(p.z - DECK_CENTER.z) < 16.0:
+		return "deck"
+	if p.y > ROOF_Y - 1.5 and absf(p.x) < TUNNEL_X + 1.0 and p.z > TUNNEL_Z0 - 1.0 and p.z < TUNNEL_Z1 + 1.0:
+		return "roof"
+	if p.y > 1.0 and edge_distance(p.x, p.z) > -0.5:
+		return "battle"
+	return "road"
+
+
 static func edge_distance(x: float, z: float) -> float:
 	var f := pow(absf(x) / PLAT_A, 4.0) + pow(absf(z) / PLAT_B, 4.0)
 	var s := pow(f, 0.25)
@@ -783,7 +797,7 @@ func _ramps_build() -> void:
 			var fwd := (b - a).normalized()
 			shape.transform = Transform3D(Basis.looking_at(fwd, Vector3.UP), (a + b) * 0.5 + Vector3(0, park * 0.5 - 0.3, 0))
 			rails.add_child(shape)
-		ramps.append({"foot": foot + dir * 10.0, "top": top - dir * 8.0})
+		ramps.append({"foot": foot + dir * 10.0, "top": top - dir * 8.0, "w": RAMP_W})
 	batch_builder(mb, true, 0.5)
 	for rp: Dictionary in ramp_list():
 		var pts := PackedVector3Array()
@@ -1098,7 +1112,7 @@ func _tunnels() -> void:
 			var t := (k + 0.5) / 4.0
 			var z := lerpf(z0, z1, t)
 			mb.box(_m.yellow_line, Vector3(9.0, 0.05, 1.2), MeshBuilder.at(Vector3(x, PLAT_H + (ROOF_Y - PLAT_H) * t + 0.06, z), Vector3(rad_to_deg(atan((ROOF_Y - PLAT_H) / run)), 0, 0)), 0.0)
-		ramps.append({"foot": Vector3(x, PLAT_H, z0 + 10.0), "top": Vector3(x, ROOF_Y, z1 - 8.0)})
+		ramps.append({"foot": Vector3(x, PLAT_H, z0 + 10.0), "top": Vector3(x, ROOF_Y, z1 - 8.0), "w": 14.0})
 	# The gap between the two ramps' supports was a closed pit: a car that fell in had no way out
 	# (owner, round 7). Filled to battleground height: a concrete apron in front of the tunnel.
 	var fz0 := -PLAT_B + 0.5
@@ -1142,7 +1156,7 @@ func _overpass_and_cage() -> void:
 	var slope := rad_to_deg(atan(DECK_Y / 30.0))
 	for side: float in [-1.0, 1.0]:
 		MeshKit.solid_box(self, Vector3(0.6, 1.0, 30.8), c + Vector3(side * 6.3, DECK_Y * 0.5 + 0.5, 30), _m.concrete, Vector3(slope, 0, 0))
-	ramps.append({"foot": c + Vector3(0, 0, 52), "top": c + Vector3(0, DECK_Y, 6)})
+	ramps.append({"foot": c + Vector3(0, 0, 52), "top": c + Vector3(0, DECK_Y, 6), "w": 12.0})
 	var fence_h := 4.5
 	var y := DECK_Y + fence_h * 0.5
 	var runs := [

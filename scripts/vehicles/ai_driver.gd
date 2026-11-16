@@ -17,8 +17,15 @@ const MAX_ON_PLAYER := 2
 const RETREAT_AT := 0.3 # share of max health
 const HUNT_RANGE := 55.0 # attack runs start inside this distance
 const SPECIAL_RANGE := 8.0 # close-range specials (Outlaw's taser) only this close (owner)
+const RAMP_LOOK := 13.0 # pure pursuit along a ramp's line: aim this far ahead on it
+const DRIVABLE_NORMAL_Y := 0.75 # a feeler hit this flat (up to ~40 degrees) is ground, not a wall
 
 var aggression := 1.2 # 0.5 easy .. 1.5 hard; 1.2 = the owner's 7/10
+## Round 14 (owner: "1.1x smarter, a battle, not a massacre, not a chess player"): decisions come 1.1x
+## sooner, it picks up health it passes when hurt, and it fires the weapon worth most at that range.
+const SMARTS := 1.1
+const GRAB_HEALTH_BELOW := 0.7 # share of max health: a health pickup close by is worth the detour
+const GRAB_HEALTH_RANGE := 28.0
 var arena: Node3D # stage: ramps, wander area
 var mode := "wander" # hunt | chase | attack | retreat | detour | wander (tests and debugging read it)
 var phase := "approach" # attack run: approach | pass | turn
@@ -55,7 +62,7 @@ func drive(v: Vehicle, delta: float) -> void:
 	_weapon_timer -= delta
 	_special_timer -= delta
 	if _retarget <= 0.0:
-		_retarget = 0.6
+		_retarget = 0.6 / SMARTS
 		v.target = _choose_target(v)
 	_energy_moves(v, delta)
 
@@ -91,6 +98,8 @@ func drive(v: Vehicle, delta: float) -> void:
 	if absf(angle) > 1.0 and v.speed > 15.0 and phase != "pass":
 		throttle = minf(throttle, 0.35)
 	var handbrake := (_drift and absf(angle) > 0.8 and v.speed > 10.0) or (absf(angle) > 1.4 and v.speed > 12.0)
+	if _ramp_committed(v): # round 13: a drift on or near a ramp slid the car off its edge
+		handbrake = false
 	if handbrake and not v.in_handbrake:
 		drifts += 1
 
@@ -98,7 +107,7 @@ func drive(v: Vehicle, delta: float) -> void:
 	# A homing missile coming in: break hard to one side with a drift (not every time: beatable).
 	_dodge_scan -= delta
 	if _dodge_scan <= 0.0 and _dodge_t <= 0.0:
-		_dodge_scan = 0.15
+		_dodge_scan = 0.15 / SMARTS
 		_watch_missiles(v)
 	if _dodge_t > 0.0:
 		_dodge_t -= delta
@@ -174,7 +183,7 @@ func _energy_moves(v: Vehicle, delta: float) -> void:
 	_energy_think -= delta
 	if _energy_think > 0.0:
 		return
-	_energy_think = randf_range(0.8, 1.6)
+	_energy_think = randf_range(0.8, 1.6) / SMARTS
 	var hidden_near := false
 	for node in v.get_tree().get_nodes_in_group("vehicles"):
 		var o := node as Vehicle
@@ -222,7 +231,8 @@ func _plan(v: Vehicle, delta: float) -> Dictionary:
 	var t_vel := Vector3(t.velocity.x, 0, t.velocity.z)
 	var running := t_vel.length() > 9.0 and t_vel.normalized().dot(flat_to) > 0.4 # driving away from us
 	_plan_jump = false
-	if to.y > 2.5 and to.y < 5.6 and d < 70.0 and _no_jump <= 0.0 and v.energy >= Vehicle.JUMP_COST and _runway(v, t):
+	if to.y > 2.5 and to.y < 5.6 and d < 70.0 and _no_jump <= 0.0 and v.energy >= Vehicle.JUMP_COST \
+			and _level(t.global_position) == "battle" and not _ramp_committed(v) and _runway(v, t):
 		# It is up on the battleground and close: drive straight at it and jump the wall (the
 		# owner's "unorthodox entrance"). If that fails we fall back to the ramps for a while.
 		mode = "chase"
@@ -230,10 +240,17 @@ func _plan(v: Vehicle, delta: float) -> Dictionary:
 		_ramp_goal = {}
 		return {"goal": t.global_position, "throttle": 1.0, "turbo": d > 30.0}
 	var mid_climb: bool = not _ramp_goal.is_empty() and _ramp_goal.get("climbing", false) and v.global_position.y < (_ramp_goal.top as Vector3).y - 0.6
-	if absf(to.y) > 2.5 or mid_climb: # up on a deck or down on the road: go round by a ramp (and finish the climb)
+	if _level(v.global_position) != _level(t.global_position) or mid_climb: # another level: by a ramp (and finish the climb)
 		mode = "chase"
 		return {"goal": _via_ramp(v, t.global_position + Vector3.UP * (5.0 if mid_climb else 0.0)), "throttle": 1.0, "turbo": d > 40.0}
 	_ramp_goal = {}
+	# Round 14: hurt (not yet retreating) and a health pickup is close on this level: grab it.
+	if v.health < v.max_health * GRAB_HEALTH_BELOW and phase != "pass":
+		var hp := _nearest_pickup(v, "health")
+		if hp and _level(hp.global_position) == _level(v.global_position) \
+				and v.global_position.distance_to(hp.global_position) < GRAB_HEALTH_RANGE:
+			mode = "detour"
+			return {"goal": hp.global_position, "throttle": 1.0}
 	# Low on weapons or turbo and not in the thick of it: pick some up on the way.
 	if d > 35.0:
 		var detour := _detour(v)
@@ -362,8 +379,20 @@ func _choose_target(v: Vehicle) -> Vehicle:
 
 ## Something up on a roof or deck: drive to the foot of the nearest ramp, then up it.
 func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
-	if arena == null or arena.ramps.is_empty() or goal.y < v.global_position.y + 3.5:
+	var here := _level(v.global_position)
+	var there := _level(goal)
+	var climbing_now: bool = not _ramp_goal.is_empty() and _ramp_goal.get("climbing", false)
+	if arena == null or arena.ramps.is_empty() or (here == there and not climbing_now):
 		_ramp_goal = {}
+		return goal
+	if goal.y < v.global_position.y and not climbing_now:
+		_ramp_goal = {}
+		# Going down: drive off the edge, unless this level is fenced in (the cage deck): down its ramp.
+		if "FENCED_LEVELS" in arena and here in arena.FENCED_LEVELS:
+			for r: Dictionary in arena.ramps:
+				if _level(r.top) == here:
+					var near_top := Vector2(v.global_position.x - r.top.x, v.global_position.z - r.top.z).length() < 8.0
+					return r.foot if near_top or v.global_position.y < (r.top as Vector3).y - 1.0 else r.top
 		return goal
 	# The goal moved a long way since this ramp was picked (it was chosen for a wander point, a
 	# pickup, an old position of the target): pick again, unless already on the way up.
@@ -379,7 +408,7 @@ func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
 		var best_any := INF
 		var any: Dictionary = {}
 		for r: Dictionary in arena.ramps:
-			if absf(r.top.y - goal.y) > 2.0:
+			if _level(r.top) != there:
 				continue
 			var d: float = v.global_position.distance_to(r.foot) + (r.top as Vector3).distance_to(goal)
 			if d < best_any:
@@ -397,31 +426,51 @@ func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
 		_ramp_goal["for"] = goal
 	var foot: Vector3 = _ramp_goal.foot
 	var top: Vector3 = _ramp_goal.top
-	var axis := Vector3(foot.x - top.x, 0, foot.z - top.z).normalized() # from the top out to the foot
+	if not _ramp_goal.climbing and _level(foot) != here:
+		return _lower_ramp(v, foot) # that ramp starts up on another level: get up there first
+	# Round 13 (owner: AI on ramps and bridges, "find the root cause"). The old approach started a
+	# climb up to 45 degrees off the line and 6 m to the side, then steered hard and drifted off the
+	# edge; its line-up loop circled the foot. Now: one rule, pure pursuit along the ramp's line.
+	# From out on the road it aims at a point on the line RAMP_LOOK metres nearer the top, so it
+	# merges onto the line before the foot and stays on it all the way up.
+	var axis := Vector3(foot.x - top.x, 0, foot.z - top.z) # from the top out to the foot
+	var s_foot := axis.length()
+	axis /= maxf(s_foot, 0.001)
+	var side := Vector3(-axis.z, 0, axis.x)
+	var half_w := float(_ramp_goal.get("w", 10.0)) * 0.5
 	var rel := v.global_position - top
-	var lateral := absf(rel.dot(Vector3(-axis.z, 0, axis.x)))
-	if not _ramp_goal.climbing:
-		if foot.y > v.global_position.y + 3.5:
-			return _lower_ramp(v, foot) # that ramp starts up on a plateau: get up there first
-		var out := rel.dot(axis) # how far out along the ramp's line (the foot is ~RAMP_L + 10 out)
-		var lined_up := v.flat_forward().dot(-axis) > 0.7 and lateral < 6.0
-		if lined_up and out > 8.0:
-			_ramp_goal.climbing = true
-		elif Vector2(v.global_position.x - foot.x, v.global_position.z - foot.z).length() < 10.0:
-			_ramp_goal["lineup"] = true
-		if _ramp_goal.get("lineup", false) and not _ramp_goal.climbing:
-			# Missed the line: swing out a bit further along it, then come back in straight.
-			if Vector2(v.global_position.x - foot.x - axis.x * 12.0, v.global_position.z - foot.z - axis.z * 12.0).length() < 7.0:
-				_ramp_goal["lineup"] = false
-			return foot + axis * 12.0
-		if not _ramp_goal.climbing:
+	var s := rel.dot(axis) # metres out from the top along the line
+	var lateral := rel.dot(side)
+	if _ramp_goal.climbing:
+		# Fell off the side before reaching the top: back to the road, try again.
+		if absf(lateral) > half_w + 1.5 and v.global_position.y < top.y - 1.0 and s > 2.0:
+			_ramp_failed()
 			return foot
-	# Climbing: drifted off the side before reaching the top? Abort, back out, line up again.
-	if lateral > 9.0 and v.global_position.y < top.y - 1.0 and rel.dot(axis) > 2.0:
-		_ramp_failed()
-		return foot
-	# Steer for the ramp's centre line a little ahead, not straight at the top: keeps it off the rails.
-	return top + axis * maxf(rel.dot(axis) - 9.0, 0.0)
+	else:
+		if absf(lateral) < half_w - 1.0 and s < s_foot - 2.0:
+			_ramp_goal.climbing = true # on the line and past the foot: committed
+		elif absf(lateral) > half_w + 1.0 and s < s_foot - 4.0:
+			# Beside the ramp (its side is a wall): go out round the foot first.
+			return foot + axis * 10.0 + side * signf(lateral) * minf(absf(lateral), half_w)
+	return top + axis * maxf(s - RAMP_LOOK, 0.0)
+
+
+## Which level a point is on (the stage says: road, battle, roof, deck); by height bands otherwise.
+func _level(p: Vector3) -> String:
+	if arena and arena.has_method("level_of"):
+		return arena.level_of(p)
+	return str(roundi(p.y / 4.0))
+
+
+## On a ramp's line or close to its foot: stay with it (round 13: the wall-jump plan used to wipe the
+## ramp goal mid-approach, and the two plans took turns all the way round the foot).
+func _ramp_committed(v: Vehicle) -> bool:
+	if _ramp_goal.is_empty():
+		return false
+	if _ramp_goal.get("climbing", false):
+		return true
+	var foot: Vector3 = _ramp_goal.foot
+	return Vector2(v.global_position.x - foot.x, v.global_position.z - foot.z).length() < 35.0
 
 
 func _ramp_key(r: Dictionary) -> String:
@@ -493,8 +542,9 @@ func _try_jump_up(v: Vehicle) -> void:
 func _lower_ramp(v: Vehicle, level: Vector3) -> Vector3:
 	var best: Dictionary = {}
 	var best_d := INF
+	var here := _level(v.global_position)
 	for r: Dictionary in arena.ramps:
-		if absf(r.top.y - level.y) > 2.0 or r.foot.y > v.global_position.y + 2.0:
+		if _level(r.top) != _level(level) or _level(r.foot) != here:
 			continue
 		var d: float = v.global_position.distance_to(r.foot) + (r.top as Vector3).distance_to(level)
 		if d < best_d:
@@ -516,7 +566,7 @@ func _nearest_pickup(v: Vehicle, what: String) -> Pickup:
 		if not p.active:
 			continue
 		var ok := p.is_health() if what == "health" else (p.is_turbo() if what == "turbo" else (not p.is_health() and not p.is_turbo()))
-		if not ok or (what != "health" and absf(p.global_position.y - v.global_position.y) > 3.0):
+		if not ok or (what != "health" and _level(p.global_position) != _level(v.global_position)):
 			continue
 		var d := v.global_position.distance_to(p.global_position)
 		if d < best_d:
@@ -544,11 +594,13 @@ func _avoid(v: Vehicle, fwd: Vector3) -> float:
 	return correction
 
 
-## Fraction (0..1) of the ray that is clear.
+## Fraction (0..1) of the ray that is clear. Round 13 root cause: the flat feelers ran into the
+## rising surface of a ramp (or a hill) ahead, took it for a wall and steered the car off the ramp's
+## edge. Ground it can drive on (a surface facing mostly up) is not an obstacle.
 func _ray(space: PhysicsDirectSpaceState3D, origin: Vector3, vec: Vector3) -> float:
 	var q := PhysicsRayQueryParameters3D.create(origin, origin + vec, WORLD_MASK)
 	var hit := space.intersect_ray(q)
-	if hit.is_empty():
+	if hit.is_empty() or (hit.normal as Vector3).y > DRIVABLE_NORMAL_Y:
 		return 1.0
 	return origin.distance_to(hit.position) / vec.length()
 
@@ -576,7 +628,7 @@ func _shoot(v: Vehicle, delta: float) -> void:
 	if mode == "retreat" and dist > 30.0:
 		return # busy getting away
 	if _special_timer <= 0.0 and v.ammo.get(v.special_id, 0) > 0 and _special_makes_sense(v, dist, angle):
-		_special_timer = randf_range(3.0, 6.0) / aggression
+		_special_timer = randf_range(3.0, 6.0) / aggression / SMARTS
 		v.selected = maxi(v.weapon_order.find(v.special_id), 0)
 		v.want_fire_weapon = true
 		if v.special_id == "napalm_cone" and angle < 0.12 and dist > 18.0 and dist < 50.0 and randf() < 0.35:
@@ -584,17 +636,47 @@ func _shoot(v: Vehicle, delta: float) -> void:
 			v.in_fire_weapon = true
 		return
 	if _weapon_timer <= 0.0:
+		# Round 14: the weapon worth most at this range (damage x the chance it lands), usually; now and
+		# then another that makes sense, so it never plays like a machine.
 		var options: Array[int] = []
+		var best := -1
+		var best_value := 0.0
 		for i in v.weapon_order.size():
 			var id := v.weapon_order[i]
 			if id != v.special_id and v.ammo.get(id, 0) > 0 and _weapon_makes_sense(id, dist, angle):
 				options.append(i)
+				var value := _weapon_value(id, dist, angle, t)
+				if value > best_value:
+					best_value = value
+					best = i
 		if not options.is_empty():
-			_weapon_timer = randf_range(1.8, 4.5) / aggression
-			v.selected = options.pick_random()
+			_weapon_timer = randf_range(1.8, 4.5) / aggression / SMARTS
+			v.selected = best if best >= 0 and randf() < 0.75 else options.pick_random()
 			v.want_fire_weapon = true
 	if dist < 30.0 and v.energy >= 80.0 and randf() < 0.004 * aggression:
 		v.want_freeze = true
+
+
+## Rough damage a weapon should land from here: its damage x how likely it hits at this range.
+func _weapon_value(id: String, dist: float, angle: float, t: Vehicle) -> float:
+	var dmg := float(WeaponData.get_def(id).get("damage", 10.0))
+	var slow := Vector2(t.velocity.x, t.velocity.z).length() < 12.0
+	match id:
+		"power": # straight and heavy: deadly close and dead ahead
+			return dmg * (0.85 if dist < 25.0 and angle < 0.1 else 0.45)
+		"homing":
+			return dmg * (0.85 if dist > 12.0 and dist < 55.0 else 0.55)
+		"fire": # 14 + about 12 of burning
+			return (dmg + 12.0) * (0.6 if dist < 45.0 else 0.35)
+		"zoomy": # ten small ones, about half land
+			return dmg * 10.0 * (0.5 if dist < 50.0 else 0.3)
+		"napalm":
+			return (dmg + 15.0) * (0.45 if slow else 0.25)
+		"sat":
+			return dmg * (0.45 if slow and dist < 40.0 else 0.15)
+		"remote":
+			return dmg * 0.5
+	return dmg * 0.5
 
 
 func _weapon_makes_sense(id: String, dist: float, angle: float) -> bool:

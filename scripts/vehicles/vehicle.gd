@@ -464,7 +464,7 @@ func _tick(delta: float) -> void:
 	# Specials recharge one charge at a time; the slot comes back with the first one.
 	if ammo.get(special_id, 0) < special_charges:
 		_special_timer += delta
-		if _special_timer >= float(WeaponData.get_def(special_id).get("recharge", 20.0)) * WeaponData.SPECIAL_RECHARGE_SCALE:
+		if _special_timer >= Roster.special_recharge(car_id):
 			_special_timer = 0.0
 			ammo[special_id] = ammo.get(special_id, 0) + 1
 			if ammo[special_id] == 1 and is_player:

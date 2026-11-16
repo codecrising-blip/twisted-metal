@@ -104,6 +104,13 @@ static func special_max(id: String) -> int:
 	return int(SPECIAL_MAX.get(id, 4))
 
 
+## Seconds for one special to come back for this car (its weapon's "recharge" x the slot factor).
+static func special_recharge(id: String) -> float:
+	var special: String = get_car(id).get("special", "")
+	var base := float(WeaponData.get_def(special).get("recharge", 20.0))
+	return base * float(WeaponData.SPECIAL_RECHARGE_BY_SLOTS.get(special_max(id), 1.75))
+
+
 ## Round 13 (owner): steering in the air, by class (Outlaw flies like the light cars). rate = turn
 ## rad/s (a 6 m jump lasts ~1.3 s: light ~140 deg, medium ~105, heavy ~70, super ~40 if held);
 ## carry = the share of that turn the flight path follows (the rest comes from turbo along the nose).

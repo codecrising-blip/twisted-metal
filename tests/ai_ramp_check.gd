@@ -26,7 +26,9 @@ func _run() -> void:
 		var rtop: Vector3 = rp.top
 		var side := 1.0 if (trial / 4) % 2 == 0 else -1.0
 		var pocket := Vector3(rtop.x, 0, rtop.z) + (rp.dir as Vector3) * 4.0 + (rp.side as Vector3) * side * (LosAngelesArena.RAMP_W * 0.5 + 3.5)
-		player.global_transform = Transform3D(Basis.IDENTITY, LosAngelesArena.ground(rtop.x - rp.dir.x * 30.0, rtop.z - rp.dir.z * 30.0, 0.1))
+		# 14 m in from the edge (round 13: 30 m in put ramp 3's player inside the cage deck; it fell
+		# through the floor and the AI was chasing a car on the road)
+		player.global_transform = Transform3D(Basis.IDENTITY, LosAngelesArena.ground(rtop.x - rp.dir.x * 14.0, rtop.z - rp.dir.z * 14.0, 0.1))
 		outlaw.global_transform = Transform3D(Basis.looking_at(-(rp.dir as Vector3), Vector3.UP), LosAngelesArena.ground(pocket.x, pocket.z, 0.1))
 		outlaw.add_ammo("homing", 6)
 		var climbed := -1.0
