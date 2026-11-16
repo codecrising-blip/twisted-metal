@@ -239,6 +239,34 @@ static func spark(parent: Node, pos: Vector3, normal := Vector3.UP) -> void:
 	tw.tween_callback(p.queue_free)
 
 
+## Sparks thrown off the green shield coat where it blocks a hit (round 17): a quick white-hot to
+## lime to forest-green spray along the surface normal, lighter than a ram's crash burst.
+static func shield_sparks(parent: Node, pos: Vector3, normal: Vector3) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var p := CPUParticles3D.new()
+	p.mesh = particle_mesh(true)
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.amount = 14
+	p.lifetime = 0.4
+	p.local_coords = false
+	p.direction = normal if normal.length() > 0.01 else Vector3.UP
+	p.spread = 70.0
+	p.gravity = Vector3(0, -12, 0)
+	p.initial_velocity_min = 3.5
+	p.initial_velocity_max = 10.0
+	p.scale_amount_min = 0.05
+	p.scale_amount_max = 0.16
+	p.color_ramp = _ramp([Color(1, 1, 0.85, 1), Color(0.75, 1.0, 0.4, 0.9), Color(0.13, 0.55, 0.13, 0)])
+	parent.add_child(p)
+	p.global_position = pos
+	p.emitting = true
+	var tw := p.create_tween()
+	tw.tween_interval(0.6)
+	tw.tween_callback(p.queue_free)
+
+
 ## Car-on-car impact (rams, round 7: "show it strong"): a fan of sparks sprayed along the hit, bent
 ## metal bits thrown off and a white-hot flash at the contact. power 0..1 (a light tap .. a full ram).
 static func crash_burst(parent: Node, pos: Vector3, normal: Vector3, power: float) -> void:

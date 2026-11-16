@@ -439,10 +439,13 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 - **Round 17, full text `docs/design/22-owner-round-17.md`:** top container of the stack at (-74, 46) is solid now;
   the hit flash only overlays body meshes (`_apply_overlays`): flashing every mesh left the soft ground shadow white
   for good ("bright square under my car"); Napalm Cone melts down `meltdown_after` 2 s past the full charge
-  (`Vehicle.meltdown_at`). **Shield:** the owner found the TMB field bad and sent the Head-On one
-  (`shield_headon_pick.mp4`: the body turns solid glossy green, details faintly through; colour forest green or French
-  blue). NOT built: waiting for the owner to confirm Claude's reading. `tests/_spot_shot.gd -- x,y,z,yaw out.png`
-  shoots the chase camera at an F3 position.
+  (`Vehicle.meltdown_at`). **Shield = Head-On's** (`shield_headon_pick.mp4`; the TMB field lines are gone):
+  `scripts/fx/shield_coat.gdshader` as the body meshes' overlay (not the wheels: `_wheel_meshes`), a glossy **forest
+  green** coat (nudged blue: LA's warm light turned #228B22 olive) hiding 80% of the paint, bright pulse on switch-on,
+  blinks bright/dim 3 times in the last `SHIELD_BLINK` 0.6 s; a blocked hit (`hit_react` -> `_shield_hit`) lights a
+  hot yellow-lime patch at the hit point on the car's box that spreads and cools in ~0.5 s, plus
+  `FxKit.shield_sparks` (no white flash while shielded). Screenshot `shield_close <out> <frames> [hit frames]`.
+  `tests/_spot_shot.gd -- x,y,z,yaw out.png` shoots the chase camera at an F3 position.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

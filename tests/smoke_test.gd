@@ -168,6 +168,13 @@ func _run() -> void:
 	var shield_hp := player.health
 	player.take_damage(30.0, main.enemies[0])
 	_check(is_equal_approx(player.health, shield_hp) and not player.freeze_for(2.0), "the shield stops damage and freezes")
+	# Round 17 (Head-On): a green coat on the body, not on the wheels; a blocked hit lights a patch
+	# instead of the white flash.
+	var coated := player._flash_meshes.filter(func(mi: Variant) -> bool: return is_instance_valid(mi) and (mi as MeshInstance3D).material_overlay == player._shield_mat)
+	var wheels_bare := player._wheel_meshes.keys().all(func(mi: Variant) -> bool: return (mi as MeshInstance3D).material_overlay == null)
+	_check(not coated.is_empty() and not player._wheel_meshes.is_empty() and wheels_bare, "the shield coats the body, not the wheels")
+	player.hit_react(Vector3.BACK, 30.0)
+	_check(player._shield_hit_age == 0.0 and player._flash_time <= 0.0, "a blocked hit lights the coat where it landed (no white flash)")
 	await _frames(170)
 	_check(player.shield_time <= 0.0, "the shield drops after 2.5 s")
 	player.energy = 100.0

@@ -206,7 +206,7 @@ func _run() -> void:
 				root.get_viewport().get_texture().get_image().save_png(out)
 				quit()
 				return
-			"shield_close", "cloak": # round 16: Outlaw's electric shield / TM2 cloak; 3rd arg = frames after switching it on
+			"shield_close", "cloak": # round 17: the green shield coat / TM2 cloak; 3rd arg = frames after switching it on
 				Engine.max_physics_steps_per_frame = 1
 				var e: Vehicle = main.enemies[0]
 				var base := LosAngelesArena.ground(-40, 40)
@@ -218,9 +218,12 @@ func _run() -> void:
 				e.energy_move("shield" if shot == "shield_close" else "invisible")
 				var after2 := OS.get_cmdline_user_args()
 				await _frames(int(after2[2]) if after2.size() > 2 else 12)
-				if after2.size() > 3: # 4th arg: how far through the cloak's sparks (0..1)
+				if after2.size() > 3 and shot == "cloak": # 4th arg: how far through the cloak's sparks (0..1)
 					e.invisible_time = Vehicle.INVIS_TIME + Vehicle.CLOAK_IN * (1.0 - float(after2[3]))
 					await _frames(1)
+				elif after2.size() > 3: # shield: 4th arg = frames since a missile hit it from the front-left
+					e.hit_react(e.global_basis * Vector3(0.6, 0, 0.8).normalized(), 30.0)
+					await _frames(int(after2[3]))
 				_place(cam, base + Vector3(-3.6, 2.4, 6.2), base + Vector3(0, 1.0, 0), 60.0)
 				await RenderingServer.frame_post_draw
 				root.get_viewport().get_texture().get_image().save_png(out)
