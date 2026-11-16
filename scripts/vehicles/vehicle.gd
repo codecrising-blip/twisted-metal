@@ -41,6 +41,8 @@ const SUSP_K := 190.0 # about 2.2 Hz
 const SUSP_REST := SUSP_TOP + GRAVITY / SUSP_K
 const SUSP_DROOP := 0.25 # wheels still count as touching this far below rest
 const SUSP_DAMP := 0.9 # 2 x damping ratio
+const AIR_YAW_RESPONSE := 7.0 # rad/s^2: how fast air steering reaches its turn rate (Roster.air_turn)
+var _air_steer_w := 0.0 # the yaw rate air steering has added this flight
 const BODY_CLEARANCE := 0.3 # the collision box starts this high: wheels hold it, the box takes the hard knocks
 const SUSP_BUMP := 0.3 # compression where the bump stop starts (rest is GRAVITY / SUSP_K = 0.16)
 const SUSP_BUMP_STIFF := 7.0 # bump stop: this many times the spring rate on top
@@ -462,7 +464,7 @@ func _tick(delta: float) -> void:
 	# Specials recharge one charge at a time; the slot comes back with the first one.
 	if ammo.get(special_id, 0) < special_charges:
 		_special_timer += delta
-		if _special_timer >= float(WeaponData.get_def(special_id).get("recharge", 20.0)):
+		if _special_timer >= float(WeaponData.get_def(special_id).get("recharge", 20.0)) * WeaponData.SPECIAL_RECHARGE_SCALE:
 			_special_timer = 0.0
 			ammo[special_id] = ammo.get(special_id, 0) + 1
 			if ammo[special_id] == 1 and is_player:
@@ -546,6 +548,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_ground_n = (normal_sum / maxf(1.0, touching)).normalized() if touching > 0 else Vector3.UP
 	v = _upside_watch(dt, up, state, v)
 	if _grounded:
+		_air_steer_w = 0.0
 		v = _tyres(state, v, dt)
 	else:
 		v = _in_air(state, v, dt)
@@ -710,6 +713,22 @@ func _in_air(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 	if flipped:
 		_turbo_step(0.0, dt)
 		return v
+	# Round 13 (owner: "near zero control after the jump"): steering turns the car in the air, light
+	# cars quickly, heavy ones a little; the flight bends a share of that turn, and turbo then drives
+	# the car the way it now faces. Pitch and roll keep their takeoff attitude.
+	var air := Roster.air_turn(stats)
+	var steer := in_steer if frozen_time <= 0.0 else 0.0
+	var w := state.angular_velocity
+	var wy := w.dot(Vector3.UP)
+	var new_wy := wy
+	if absf(steer) > 0.05:
+		new_wy = move_toward(wy, -steer * float(air.rate), AIR_YAW_RESPONSE * dt)
+		hv = hv.rotated(Vector3.UP, new_wy * dt * float(air.carry))
+	elif _air_steer_w != 0.0: # let go: only the turn the stick added eases out (hit spins stay)
+		var eased := move_toward(_air_steer_w, 0.0, AIR_YAW_RESPONSE * dt)
+		new_wy = wy + (eased - _air_steer_w)
+	_air_steer_w += new_wy - wy
+	state.angular_velocity = w + Vector3.UP * (new_wy - wy)
 	if _turbo_step(dir, dt):
 		var air_top: float = float(stats.max_speed) * TURBO_MULT if dir > 0.0 else minf(float(stats.reverse) * 2.0, float(stats.max_speed) * TURBO_MULT)
 		var along := hv.dot(forward)

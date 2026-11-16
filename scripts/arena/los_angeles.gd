@@ -145,6 +145,22 @@ func batch_builder(mb: MeshBuilder, shadows := true, grime := 0.0, xf := Transfo
 
 ## Text as real geometry (replaces Label3D, which costs a draw call each). The text faces +Z of xf.
 ## neon = unshaded and bright (shop signs); otherwise lit paint.
+## The biggest font size (up to `largest`) at which `text` fits a w x h metre frame (round 13: signs'
+## lettering ran off their boards).
+static func fit_font(text: String, pixel_size: float, w: float, h: float, largest: int) -> int:
+	var tm := TextMesh.new()
+	tm.text = text
+	tm.pixel_size = pixel_size
+	var fs := largest
+	while fs > 12:
+		tm.font_size = fs
+		var size := tm.get_aabb().size
+		if size.x <= w and size.y <= h:
+			break
+		fs -= 4
+	return fs
+
+
 func batch_text(text: String, xf: Transform3D, font_size: int, pixel_size: float, color: Color, neon := false) -> void:
 	var tm := TextMesh.new()
 	tm.text = text
@@ -1035,7 +1051,8 @@ func _tunnels() -> void:
 	for dz: float in [-4.5, 4.5]:
 		MeshKit.cylinder(self, 0.25, 6.0, sign_post + Vector3(0, 3.0, dz), _m.steel)
 	MeshKit.box(self, Vector3(0.3, 3.2, 11.0), sign_post + Vector3(0, 6.6, 0), MeshKit.mat(Color(0.1, 0.4, 0.22), 0.6))
-	batch_text("101  HOLLYWOOD FWY", Transform3D(Basis(Vector3.UP, deg_to_rad(-90.0)), sign_post + Vector3(-0.2, 6.6, 0)), 140, 0.012, Color(0.95, 0.95, 0.92), true)
+	batch_text("101  HOLLYWOOD FWY", Transform3D(Basis(Vector3.UP, deg_to_rad(-90.0)), sign_post + Vector3(-0.2, 6.6, 0)),
+		fit_font("101  HOLLYWOOD FWY", 0.012, 10.0, 2.6, 140), 0.012, Color(0.95, 0.95, 0.92), true)
 	# Walls along x: pillars every 8 m with glass between. The roof ramps cover bays on the south side.
 	var ramp_bays := [1, 2, 5, 6]
 	for wall_z: float in [TUNNEL_Z0 + 0.5, cz, TUNNEL_Z1 - 0.5]:
@@ -1158,8 +1175,9 @@ func _overpass_and_cage() -> void:
 		for py: float in [-0.8, 0.7]:
 			plate.cylinder(_m.steel, 0.04, 0.08, MeshBuilder.at(warn_xf.origin + Vector3(px, py - 0.05, -0.02), Vector3(90, 0, 0)), 6)
 	batch_builder(plate)
-	batch_text("CALYPSO RELIEF\nDEPOT 7", warn_xf * Transform3D(Basis.IDENTITY, Vector3(0.05, -0.05, -0.02)), 120, 0.012, Color(0.05, 0.05, 0.05))
-	batch_text("CALYPSO RELIEF\nDEPOT 7", warn_xf, 120, 0.012, Color(0.95, 0.2, 0.15))
+	var depot_fs := fit_font("CALYPSO RELIEF\nDEPOT 7", 0.012, 4.1, 1.6, 120) # inside the 4.6 x 1.9 m plate
+	batch_text("CALYPSO RELIEF\nDEPOT 7", warn_xf * Transform3D(Basis.IDENTITY, Vector3(0.03, -0.03, -0.02)), depot_fs, 0.012, Color(0.05, 0.05, 0.05))
+	batch_text("CALYPSO RELIEF\nDEPOT 7", warn_xf, depot_fs, 0.012, Color(0.95, 0.2, 0.15))
 	mega_points.append(c + Vector3(0, DECK_Y, -2))
 	weapon_points.append(c + Vector3(-9, DECK_Y, -9))
 	weapon_points.append(c + Vector3(9, DECK_Y, -9))

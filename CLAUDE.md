@@ -391,6 +391,12 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   Thumper's tank will be 10 s. **Pickups:** bright ring per kind (`Pickup.KIND_COLORS`, remote black + white rim, full
   health royal red + blue collar, bigger, breathing); the whole base vanishes with the item; mega case is green (rebaked).
   Calypso voice references: `audio/reference/voices/calypso_on_*`.
+- **Round 13, full text `docs/design/18-owner-round-13.md` (owner: two notes left, then "ready to make the rest of the
+  game"):** specials recharge x2 (`WeaponData.SPECIAL_RECHARGE_SCALE`; Claude suggested x1.5 for the 5-cap group when
+  built); **air steering** by class (`Roster.AIR_TURN`, Outlaw flies light: rate 2.0 / 1.5 / 1.0 / 0.6 rad/s, `carry` =
+  share of the turn the flight path follows; `Vehicle._in_air`, `_air_steer_w` eases out only the stick's own turn);
+  sign text fits its board (`LosAngelesArena.fit_font`). The AI pocket-ramp smoke check stays flaky (~50%, also with
+  AI air steering off; `ai_ramp_check` 7/12 either way).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

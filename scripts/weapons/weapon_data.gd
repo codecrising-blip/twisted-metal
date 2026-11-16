@@ -161,6 +161,9 @@ const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "
 	"napalm", "napalm", "remote", "remote", "zoomy", "zoomy", "sat"]
 
 ## Owner, session 3: a health pickup restores a share of max health, so armor matters all match.
+## Round 13 (owner: specials came back too fast once they could pile up): every special's recharge x2.
+const SPECIAL_RECHARGE_SCALE := 2.0
+
 const HEALTH_PICKUP_RATIO := 0.30
 const MEGA_HEALTH_RATIO := 0.60 # confirmed by the owner (session 4)
 const HEALTH_ENERGY_S := 5.0 # round 11: seconds of energy regen a health pickup gives

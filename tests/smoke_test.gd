@@ -1096,6 +1096,27 @@ func _run() -> void:
 	pk.queue_free()
 	_check(String(main.arena.get("next_line")) == "Prepare for Paris", "a win reads CONGRATULATIONS / PREPARE FOR PARIS")
 
+	# ---- Round 13 (owner): steering in the air, light cars much more than heavy ones; specials x2 slower.
+	var air_turned := {}
+	for cls: String in ["light", "heavy"]:
+		ut.stats["uturn"] = cls
+		ut.global_transform = Transform3D(Basis.IDENTITY, LosAngelesArena.ground(-40, 60, 70.0))
+		ut.velocity = Vector3.ZERO
+		ut.angular_velocity = Vector3.ZERO
+		await _frames(3)
+		var a0 := -ut.global_basis.z
+		Input.action_press("steer_right")
+		await _frames(40)
+		Input.action_release("steer_right")
+		var a1 := -ut.global_basis.z
+		air_turned[cls] = absf(rad_to_deg(Vector2(a0.x, a0.z).angle_to(Vector2(a1.x, a1.z))))
+		await _frames(2)
+	ut.stats.erase("uturn")
+	_place(ut, 40, 60, 0)
+	_check(float(air_turned.light) > 40.0 and float(air_turned.heavy) > 12.0 and float(air_turned.heavy) < float(air_turned.light) * 0.7,
+		"steering works in the air, light cars turn more than heavy ones (%.0f / %.0f deg in 0.67 s)" % [air_turned.light, air_turned.heavy])
+	_check(WeaponData.SPECIAL_RECHARGE_SCALE == 2.0, "specials recharge at half the old pace (round 13)")
+
 	print("")
 	if _failures.is_empty():
 		print("ALL TESTS PASSED")

@@ -258,16 +258,7 @@ func _billboards() -> void:
 const BILLBOARD_TEXT_W := 13.2
 
 static func billboard_font(text: String, largest: int) -> int:
-	var tm := TextMesh.new()
-	tm.text = text
-	tm.pixel_size = 0.009
-	var fs := largest
-	while fs > 40:
-		tm.font_size = fs
-		if tm.get_aabb().size.x <= BILLBOARD_TEXT_W:
-			break
-		fs -= 6
-	return fs
+	return LosAngelesArena.fit_font(text, 0.009, BILLBOARD_TEXT_W, 99.0, largest)
 
 
 # ---------------------------------------------------------------- power lines

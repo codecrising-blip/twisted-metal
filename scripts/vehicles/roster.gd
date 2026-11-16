@@ -104,6 +104,20 @@ static func special_max(id: String) -> int:
 	return int(SPECIAL_MAX.get(id, 4))
 
 
+## Round 13 (owner): steering in the air, by class (Outlaw flies like the light cars). rate = turn
+## rad/s (a 6 m jump lasts ~1.3 s: light ~140 deg, medium ~105, heavy ~70, super ~40 if held);
+## carry = the share of that turn the flight path follows (the rest comes from turbo along the nose).
+const AIR_TURN := {
+	"light": {"rate": 2.0, "carry": 0.35},
+	"medium": {"rate": 1.5, "carry": 0.28},
+	"heavy": {"rate": 1.0, "carry": 0.2},
+	"super": {"rate": 0.6, "carry": 0.14},
+}
+
+static func air_turn(stats: Dictionary) -> Dictionary:
+	return AIR_TURN.get(String(stats.get("uturn", stats.get("class", "medium"))), AIR_TURN["medium"])
+
+
 static var _cache := {}
 
 
