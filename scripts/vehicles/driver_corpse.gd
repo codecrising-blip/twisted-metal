@@ -92,6 +92,7 @@ func _ready() -> void:
 	(_model.get_meta("anim") as AnimationPlayer).play("limp")
 	if burning:
 		_flames = TmbFire.on_body(_model) # TMB flames on the limbs; they rise whichever way it lies
+		TmbFire.set_all(_flames, 1.0)
 	else:
 		_heat = 0.0
 		_mat.set_shader_parameter("heat", 0.0)

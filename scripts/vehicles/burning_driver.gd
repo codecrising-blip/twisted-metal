@@ -154,6 +154,7 @@ func _ready() -> void:
 	_anim.seek(randf() * 1.3)
 	_anim.speed_scale = randf_range(0.92, 1.08)
 	_flames = TmbFire.on_body(_model)
+	TmbFire.set_all(_flames, 1.0)
 	_next_stumble = randf_range(0.8, 1.6)
 	_scream = GameFeel.play("death_female" if female else "death_male", global_position + Vector3.UP * 1.5, self, -1.0, randf_range(0.95, 1.05))
 	_wander = randf() * TAU

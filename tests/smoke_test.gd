@@ -55,6 +55,10 @@ func _run() -> void:
 	var player: Vehicle = main.player
 	_check(main.arena is LosAngelesArena, "stage 1 is Los Angeles")
 	_check(player != null and player.car_id == "sweet_tooth", "Sweet Tooth spawned as the player")
+	var lit: Array = []
+	for g: TmbFireGroup in [player._fire, player._burn_fx, player._pyre]:
+		lit.append_array(g.sheets.filter(func(m): return (m as MeshInstance3D).visible))
+	_check(lit.is_empty(), "a healthy car shows no flames (fire sheets start out)")
 	_check(main.enemies.size() == 4, "four AI enemies in stage 1 (%d)" % main.enemies.size())
 	_check(get_nodes_in_group("pickups").size() >= 20, "weapon and health pickups placed (%d)" % get_nodes_in_group("pickups").size())
 	_check(player.is_on_floor(), "player rests on the ground")

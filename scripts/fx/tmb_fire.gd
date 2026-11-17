@@ -27,7 +27,9 @@ static func sheet(parent: Node3D, size: Vector2, at := Vector3.ZERO) -> MeshInst
 	mat.shader = SHADER
 	mat.set_shader_parameter("seed", randf() * 100.0)
 	mat.set_shader_parameter("speed", randf_range(2.1, 2.8))
+	mat.set_shader_parameter("intensity", 0.0) # out until something lights it (set_all)
 	mi.material_override = mat
+	mi.visible = false
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	mi.extra_cull_margin = 2.0 # the sheet is turned in the shader
 	mi.position = at

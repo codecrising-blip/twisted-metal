@@ -100,7 +100,8 @@ func _run() -> void:
 				follow = ds[0] if not ds.is_empty() else follow
 			if follow:
 				var p: Vector3 = follow.global_position
-				cam_at = cam_at.lerp(p + Vector3(-3.2, 2.2, 3.2), 0.2) if i > 0 else p + Vector3(-3.2, 2.2, 3.2)
+				var off := Vector3(-2.3, 1.5, 2.3) if scenario == "close" else Vector3(-3.2, 2.2, 3.2)
+				cam_at = cam_at.lerp(p + off, 0.2) if i > 0 else p + off
 				look = p + Vector3(0, 0.8, 0)
 		cam.global_position = cam_at
 		cam.look_at(look)
@@ -108,4 +109,6 @@ func _run() -> void:
 		if i % every == 0:
 			root.get_viewport().get_texture().get_image().save_png("%s/f%03d.png" % [out, n])
 			n += 1
+		if i % 15 == 0:
+			print("frame %d player hp %.0f/%.0f burn %.1f fire %s burn_fx %s" % [i, player.health, player.max_health, player.burn_time, player._fire.on, player._burn_fx.on])
 	quit()
