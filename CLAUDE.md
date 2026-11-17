@@ -465,7 +465,20 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   Camera never follows a driver. Gotchas: switch `CPUParticles3D.emitting` off BEFORE `add_child` or its first
   particle freezes in place (a black ball); `continuous_cd` still let a fast thin body through the ground's
   triangles, so `DriverCorpse._integrate_forces` rays from the last position; flames on a lying body must point up
-  in world space. `tests/_driver_clip.gd` films ground / close / air / windshield / under.
+  in world space. `tests/_driver_clip.gd` films ground / close / air / windshield / under / burn.
+  **Second pass (owner: v1 run "goofy", corpse "Henry stickman", smoke ball ugly; "do it exactly like TMB"):**
+  bodies by shape, no hair: woman 1.68 m, narrow shoulders, hourglass waist, fuller hips/backside, small chest
+  (Jamie Roberts build); man 1.82 m, wider shoulders and longer arms, chest about as wide as the hips. Run = hunched,
+  stumbling, arms thrashing and beating at the flames, slowing down; death = crumpled on its side, knees drawn up,
+  fists to the face (pugilistic pose). No smoke, no text after a driver kill (energy paid silently); bodies lie
+  `BODY_STAYS` 8 s, then sink and vanish. **TMB fire = the game's standard fire** (owner, from
+  `docs/reference/videos/death_tmb_*` / `fire_tmb_*`): `scripts/fx/tmb_fire.gdshader` (camera-facing upright sheets of
+  streaky red-orange licks, yellow only in the hottest strands, soft root, ragged tip, `lean` sweeps the tips back
+  against the motion, `forward` pulls the sheet toward the camera so it draws over the body it stands in);
+  `TmbFire.on_body()` puts sheets on the dummy's bones; `TmbFireGroup` (on / level / rise / fall, lean from its own
+  motion) is the fire on burning cars (`_burn_fx`), badly damaged cars (`_fire`, under 25%), the wreck pyre (`_pyre`,
+  `PYRE_TIME` 3 s), fire pools, burning palms, the pit of fire and the burnt building. Draw calls unchanged (each
+  sheet is one call; centre view 257, worst 407).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -490,6 +503,7 @@ tools/blender/              Blender asset pipeline (round 10): tmlib.py + build_
 scripts/core/model_lib.gd   loads the Blender models and their baked materials
 scripts/vehicles/blender_cars.gd  assembles a Blender car (body, wheels, spinners, markers) with the usual metadata
 scripts/vehicles/burning_driver.gd + driver_corpse.gd  burning drivers out of wrecks (round 17); fx/blood_fx.gd
+scripts/fx/tmb_fire.gd(shader) + tmb_fire_group.gd  TMB flame sheets: the standard fire everywhere (round 17)
 scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (simple primitives),
                             MeshBuilder (detailed models merged per material: chamfered boxes, lofts, lathes),
                             MatKit (generated paint/rust/chrome/rubber textures; world-mapped ground: pavement,
