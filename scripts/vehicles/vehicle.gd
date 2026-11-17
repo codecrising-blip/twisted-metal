@@ -345,6 +345,9 @@ func setup(id: String, player: bool) -> void:
 	_gun_snd = GameFeel.loop("guns_loop", self, -9.0, 14.0)
 	_skid_snd = GameFeel.loop("skid_loop", self, -14.0, 10.0)
 	_fx.setup(model)
+	# The fake headlight beams are built now, hidden (round 18, owner: switching the lights on lagged:
+	# building them and their shaders on the first switch-on cost a whole extra frame).
+	VehicleFx.headlight_beams(model, stats.get("size", Vector3(2.2, 1.8, 5.0)))
 
 	var top: Vector3 = model.get_meta("top", Vector3(0, 2, 0))
 	_smoke = FxKit.smoke(0.8, 24)

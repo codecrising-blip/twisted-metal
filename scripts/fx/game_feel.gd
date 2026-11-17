@@ -292,6 +292,17 @@ static func prewarm(parent: Node3D, cam: Camera3D) -> void:
 	var smoke := FxKit.smoke(0.3, 4)
 	holder.add_child(smoke)
 	smoke.emitting = true
+	# Round 18: the game's fire and the fake headlight beams, so their shaders are built now, not in the
+	# middle of a fight (switching the lights on stalled for a frame).
+	var flames := FoamFire.new()
+	flames.size = 0.4
+	flames.rate = 30.0
+	holder.add_child(flames)
+	flames.on = true
+	var lamps := Node3D.new()
+	holder.add_child(lamps)
+	VehicleFx.update_headlight_fx(VehicleFx.headlight_beams(lamps, Vector3(1.0, 1.0, 1.0)), true)
+	(lamps.get_node("HeadlightFx/Pool") as Node3D).visible = true
 	holder.get_tree().create_timer(0.6).timeout.connect(holder.queue_free)
 
 

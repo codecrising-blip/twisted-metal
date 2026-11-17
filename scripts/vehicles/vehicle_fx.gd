@@ -188,9 +188,7 @@ static func headlight_beams(model: Node3D, car_size: Vector3) -> Node3D:
 	var length := 20.0
 	var pool := MeshInstance3D.new()
 	pool.name = "Pool"
-	var quad := PlaneMesh.new()
-	quad.size = Vector2(9.0, length)
-	pool.mesh = quad
+	pool.mesh = _pool_mesh(9.0, length)
 	pool.material_override = _pool_material()
 	pool.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	pool.position = Vector3(0, 0.07, -near - length * 0.5)
@@ -212,6 +210,28 @@ static func headlight_beams(model: Node3D, car_size: Vector3) -> Node3D:
 	beam.transform = Transform3D(Basis(Vector3.RIGHT, deg_to_rad(88.0)), lamp + Vector3(0, -0.25, -7.0))
 	holder.add_child(beam)
 	return holder
+
+
+## The ground pool's shape (round 18, owner: the lights lagged): a trapezoid that hugs the lit part of the
+## texture (narrow at the lamps, wide far out) instead of a full 9 x 20 m rectangle of mostly empty pixels
+## that the HD 5500 still had to blend. Lies flat, facing up, centred on its node; u, v as a plane's.
+static func _pool_mesh(width: float, length: float) -> ArrayMesh:
+	var near_half := width * 0.19 # the texture's lit half width at the lamps is 0.16 of the width
+	var far_half := width * 0.5
+	var zn := length * 0.5 # +Z = near the car (the plane's v = 1 end)
+	var zf := -length * 0.5
+	var verts := PackedVector3Array([Vector3(-near_half, 0, zn), Vector3(near_half, 0, zn), Vector3(far_half, 0, zf), Vector3(-far_half, 0, zf)])
+	var uvs := PackedVector2Array([Vector2(0.5 - near_half / width, 1.0), Vector2(0.5 + near_half / width, 1.0), Vector2(1.0, 0.0), Vector2(0.0, 0.0)])
+	var normals := PackedVector3Array([Vector3.UP, Vector3.UP, Vector3.UP, Vector3.UP])
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = PackedInt32Array([0, 2, 1, 0, 3, 2])
+	var m := ArrayMesh.new()
+	m.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return m
 
 
 ## Shows or hides the fake beam: the ground pool only on LOW (HIGH has the real light for that).
