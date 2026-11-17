@@ -1890,6 +1890,8 @@ func _clamp_step(delta: float) -> void:
 	in_throttle = maxf(in_throttle, 0.0) # no reverse
 	in_steer = free * maxf(WheelClamp.MIN_TURN, in_steer * free) # only ever toward the free side
 	var moving := linear_velocity.length() > WheelClamp.MOVING_SPEED
+	if is_instance_valid(_clamp_boot):
+		WheelClamp.blink(_clamp_boot)
 	if is_instance_valid(_clamp_snd):
 		if moving and not _clamp_snd.playing:
 			_clamp_snd.play()

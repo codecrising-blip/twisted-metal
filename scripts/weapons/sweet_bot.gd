@@ -66,12 +66,54 @@ func _ready() -> void:
 	add_to_group(&"bots")
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(1.9, 2.2, 1.0)
+	box.size = Vector3(2.0, 2.6, 1.2)
 	shape.shape = box
-	shape.position = Vector3(0, 1.1, 0)
+	shape.position = Vector3(0, 1.3, 0)
 	add_child(shape)
 	_model = Node3D.new()
 	add_child(_model)
+	if ModelLib.has("sweet_bots") and POD.has(style):
+		_build_candidate()
+	else:
+		_build_v1()
+	for mi in _model.find_children("*", "MeshInstance3D", true, false):
+		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+
+
+## Round 19: the four TMB-style candidates (tools/blender/build_sweet_bots.py), until the owner picks one.
+## The whole robot turns to aim; the missiles leave its pods. POD = for each look, the centre of each pod
+## (Godot space, robot facing -Z), columns x rows, the spacing, and which way the pod faces (y tilt).
+static var style := "a"
+const POD := {
+	"a": [[Vector3(-0.98, 1.98, -0.42), Vector3(0.98, 1.98, -0.42)], 2, 5, 0.095],
+	"b": [[Vector3(-0.82, 1.85, -0.53), Vector3(0.82, 1.85, -0.53)], 2, 5, 0.09],
+	"c": [[Vector3(0.0, 2.27, -0.23)], 5, 4, 0.12],
+	"d": [[Vector3(-0.72, 2.33, -0.1), Vector3(0.72, 2.33, -0.1)], 2, 5, 0.1],
+}
+
+
+func _build_candidate() -> void:
+	_waist = Vector3.ZERO
+	_upper = Node3D.new()
+	_model.add_child(_upper)
+	_upper.add_child(ModelLib.instance("sweet_bots", "bot_" + style))
+	var pod: Array = POD[style]
+	var cols := int(pod[1])
+	var rows := int(pod[2])
+	var pitch := float(pod[3])
+	var per: Array = []
+	for c: Vector3 in pod[0]:
+		var mouths: Array = []
+		for r in rows: # bottom row first
+			for k in cols:
+				mouths.append(c + Vector3((k - (cols - 1) * 0.5) * pitch, (r - (rows - 1) * 0.5) * pitch, 0.0))
+		per.append(mouths)
+	for i in rows * cols: # one pod and then the other in turn
+		for mouths: Array in per:
+			_tubes.append(mouths[i])
+
+
+func _build_v1() -> void:
 	var marks := ModelLib.marks("sweet_bot")
 	var waist: Vector3 = (marks.get("m_waist", Transform3D(Basis.IDENTITY, Vector3(0, 1.12, 0))) as Transform3D).origin
 	var legs := ModelLib.instance("sweet_bot", "legs")
@@ -89,19 +131,17 @@ func _ready() -> void:
 	if _tubes.is_empty():
 		_tubes = [Vector3(-0.86, 0.66, -0.42), Vector3(0.86, 0.66, -0.42)]
 	_cone_fire = FoamFire.new() # the little burnt cone on top still burns, like the truck's
-	_cone_fire.size = 0.5 # a short flame sitting in the cone, not a column
+	_cone_fire.size = 0.5
 	_cone_fire.rate = 26.0
 	_cone_fire.life = 0.4
 	_cone_fire.rise = 0.8
 	_cone_fire.inherit = 0.0
-	_cone_fire.glow = 0.95 # seen against the sky: more body, less added light
+	_cone_fire.glow = 0.95
 	_cone_fire.box = Vector3(0.07, 0.02, 0.07)
 	var cone: Variant = marks.get("m_cone")
 	_cone_fire.position = (((cone as Transform3D).origin - waist) if cone != null else Vector3(0, 1.57, 0.02)) + Vector3.DOWN * 0.2
 	_upper.add_child(_cone_fire)
 	_cone_fire.on = true
-	for mi in _model.find_children("*", "MeshInstance3D", true, false):
-		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 
 ## Ordered to fire (its owner's R L U while it stands): only when it is ready (not mid-barrage, not reloading).

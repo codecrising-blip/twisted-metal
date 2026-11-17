@@ -1,6 +1,6 @@
 extends SceneTree
 ## Scratch (round 18): film the secondary weapons. Run with --fixed-fps 30. args: scenario out_dir frames every
-##   bot      Sweet Tooth drops Sweet Bot, Outlaw comes up behind, the special's fire button sends the barrage
+##   bot      Sweet Tooth drops Sweet Bot, Outlaw comes up behind, R L U again sends the barrage
 ##   botkill  Outlaw shoots the waiting robot (power + fire missile): it goes up like a Remote
 ##   clamp    Outlaw throws the wheel clamp at Sweet Tooth driving ahead of her: the steering drags aside
 
@@ -63,9 +63,8 @@ func _run() -> void:
 				if i == 15:
 					p.ammo[p.special_id] = 3
 					p.energy_move("secondary")
-				if i == 70:
-					p.selected = p.weapon_order.find(p.special_id)
-					pp.fire = true
+				if i == 70: # round 19: R L U again orders the barrage
+					p.energy_move("secondary")
 				var at := base + Vector3(5.7, 0, 0) # where the robot lands, behind the truck
 				cam.global_position = at + Vector3(-5.5, 3.2, 7.5)
 				cam.look_at(at + Vector3(5.0, 1.3, 0))
@@ -84,7 +83,7 @@ func _run() -> void:
 				if i == 10:
 					p.ammo[p.special_id] = 3
 					p.energy_move("secondary")
-				bot = p.live_special() as SweetBot
+				bot = p.bot
 				if (i == 45 or i == 62) and is_instance_valid(bot):
 					var from := e.launch_point()
 					Projectile.spawn(main, "power" if i == 45 else "fire", from, (bot.global_position + Vector3.UP * 1.2 - from).normalized(), e, null)
@@ -112,5 +111,5 @@ func _run() -> void:
 			root.get_viewport().get_texture().get_image().save_png("%s/f%03d.png" % [out, n])
 			n += 1
 		if i % 30 == 0:
-			print("frame %d bot %s state %s shots %d | player hp %.0f clamped %.1f | spawned %d" % [i, is_instance_valid(p.live_special()), (p.live_special() as SweetBot).state if p.live_special() is SweetBot else "-", (p.live_special() as SweetBot)._shots if p.live_special() is SweetBot else 0, p.health, p.clamped_time, Projectile.spawned_total])
+			print("frame %d bot %s state %s shots %d | player hp %.0f clamped %.1f | spawned %d" % [i, is_instance_valid(p.bot), p.bot.state if is_instance_valid(p.bot) else "-", p.bot._shots if is_instance_valid(p.bot) else 0, p.health, p.clamped_time, Projectile.spawned_total])
 	quit()

@@ -517,6 +517,22 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   Tooth drops the robot at 12-45 m with 3+ charges. `FoamFire.glow` per fire (the robot's cone flame is seen against the
   sky: 0.95). `tests/_secondary_clip.gd -- bot|botkill|clamp|botlook out frames every`.
   **Next (owner):** test this build; then model Roadkill, Darkside and Mr. Grimm.
+- **Round 19, full text `docs/design/24-owner-round-19.md`:** **Sweet Bot** (owner: v1 "factory worker" was wrong; the
+  model is TMB's robot, smaller, clown head on every one): four candidates `tools/blender/build_sweet_bots.py` ->
+  `sweet_bots.glb` nodes `bot_a..d` (A TMB box on 4 wheels, B walker, C two-wheeler with a rocket box, D hunched brute;
+  ~11k tris each), `SweetBot.style` (default "a") + `SweetBot.POD` (pod centres, cols x rows, pitch) until the owner
+  picks; v1 (`sweet_bot.glb`) is the fallback. Behaviour: slides out of the back, STAYS; R L U again orders the barrage
+  (free; not the live special, so the Napalm Cone still fires), then `COOLDOWN` 5 s and it can fire again; gone only
+  when an opponent destroys it; a dead truck's robot is adopted by the same driver's next one (`_adopt`);
+  `Vehicle.bot`, `reload_left()`, HUD chip BOT READY / BOT n. Claude flagged balance (20 missiles every ~7 s, free):
+  suggested 1 charge per re-launch, owner to decide. Door opening needs a Sweet Tooth rebuild (later).
+  **Wheel clamp** (owner's rules): hit side locks; while moving the car can only turn the other way
+  (`in_steer = free * max(MIN_TURN, ...)`), no turbo, no reverse; wears off after 5 s of MOVING (`MOVING_SPEED` 2 m/s);
+  15 on hit + `SCRAPE_DPS` 5 while moving (25), then it breaks off. Four candidates `build_wheel_clamps.py` ->
+  `wheel_clamps.glb` (`clamp_a..d` + glow lamps `lamp_*`, built round a 0.5 m wheel, face +X), `WheelClamp.style`,
+  sized `SIZE` 1.15 x the wheel, mirrored by negative scale x on the left; lamps blink (`blink`), a `Streak` dragged
+  from its foot, sparks, scratch marks, hit = flash + shockwave + scale pop. Tests: `tests/_bot_lineup.gd`,
+  `tests/_clamp_lineup.gd` (`-- full`). Gotcha: AI cars may have a shield up at spawn (clamp refused).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -542,7 +558,7 @@ scripts/core/model_lib.gd   loads the Blender models and their baked materials
 scripts/vehicles/blender_cars.gd  assembles a Blender car (body, wheels, spinners, markers) with the usual metadata
 scripts/vehicles/burning_driver.gd + driver_corpse.gd  burning drivers out of wrecks (round 17); fx/blood_fx.gd
 scripts/fx/foam_fire.gd(shader)  THE fire of the game (round 18, owner's pick "hair strands"): world-space puffs
-scripts/weapons/sweet_bot.gd + wheel_clamp.gd  secondary weapons (round 18): Sweet Tooth's robot, Outlaw's wheel clamp
+scripts/weapons/sweet_bot.gd + wheel_clamp.gd  secondary weapons (rounds 18-19): Sweet Tooth's robot, Outlaw's wheel clamp
 scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (simple primitives),
                             MeshBuilder (detailed models merged per material: chamfered boxes, lofts, lathes),
                             MatKit (generated paint/rust/chrome/rubber textures; world-mapped ground: pavement,

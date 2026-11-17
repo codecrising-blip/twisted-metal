@@ -8,54 +8,93 @@ class_name WheelClamp
 const MIN_TURN := 0.6 # the least it turns toward the free side while moving (of full lock)
 const MOVING_SPEED := 2.0 # m/s: slower than this the car counts as standing still (the clamp doesn't wear)
 const SCRAPE_DPS := 5.0 # 25 over the 5 s of moving
-const BOOT_SCALE := 1.35 # on the wheel: bigger than the wheel itself, so nobody misses it
 const MARKS_MAX := 70
 
 static var _marks: Array = []
 static var _mark_mesh: QuadMesh
 
 
-## The boot: a safety-yellow plate over the whole wheel face with a red and white reflective ring, a jaw
-## arm round the tyre, a heavy padlock and a red warning lamp on top. Its plate faces +X (outward on a
-## right-hand wheel). About 0.75 m across before BOOT_SCALE.
-static func build_boot(parent: Node3D) -> void:
+## Which of the four Blender looks (tools/blender/build_wheel_clamps.py) the game uses: the owner picks.
+static var style := "a"
+const LAMPS := {"a": ["lamp_a"], "b": ["lamp_b"], "c": ["lamp_c_red", "lamp_c_blue"], "d": ["lamp_d"]}
+const MODEL_R := 0.5 # the Blender clamps are built round a wheel this big
+const SIZE := 1.15 # x the car's wheel: a little bigger than the wheel itself, so nobody misses it
+
+
+## The boot, its plate facing +X (outward on a right-hand wheel), about a 0.5 m wheel. The Blender model
+## when it is there (lamps as children named "Lamp*", blinking while it holds), else the old primitives.
+static func build_boot(parent: Node3D, look := "") -> void:
+	var st := look if look != "" else style
+	if ModelLib.has("wheel_clamps") and LAMPS.has(st):
+		parent.add_child(ModelLib.instance("wheel_clamps", "clamp_" + st))
+		var k := 0
+		for lamp_name: String in LAMPS[st]:
+			var l := ModelLib.instance("wheel_clamps", lamp_name)
+			l.name = "Lamp%d" % k
+			parent.add_child(l)
+			k += 1
+	else:
+		_build_simple(parent)
+	for mi in parent.find_children("*", "MeshInstance3D", true, false):
+		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+
+
+static func _build_simple(parent: Node3D) -> void:
 	var yellow := MeshKit.emissive(Color(1.0, 0.74, 0.04), 0.35)
 	yellow.roughness = 0.5
 	var red := MeshKit.emissive(Color(0.85, 0.06, 0.04), 0.4)
 	var white := MeshKit.emissive(Color(0.95, 0.95, 0.9), 0.3)
 	var iron := MeshKit.mat(Color(0.07, 0.07, 0.075), 0.5, 0.6)
-	MeshKit.cylinder(parent, 0.38, 0.08, Vector3.ZERO, yellow, Vector3(0, 0, 90), 16)
-	MeshKit.cylinder(parent, 0.3, 0.09, Vector3(0.005, 0, 0), red, Vector3(0, 0, 90), 16)
-	MeshKit.cylinder(parent, 0.26, 0.1, Vector3(0.01, 0, 0), white, Vector3(0, 0, 90), 16)
-	MeshKit.cylinder(parent, 0.2, 0.11, Vector3(0.015, 0, 0), yellow, Vector3(0, 0, 90), 16)
-	MeshKit.cylinder(parent, 0.09, 0.16, Vector3(0.06, 0, 0), iron, Vector3(0, 0, 90), 8)
-	MeshKit.box(parent, Vector3(0.12, 0.7, 0.16), Vector3(-0.09, -0.26, 0.0), yellow) # arm down round the tyre
-	MeshKit.box(parent, Vector3(0.5, 0.12, 0.18), Vector3(-0.28, -0.58, 0.0), yellow) # jaw under it
-	MeshKit.box(parent, Vector3(0.18, 0.2, 0.14), Vector3(0.12, -0.34, 0.14), iron) # padlock
-	var lamp := MeshKit.sphere(parent, 0.07, Vector3(0.0, 0.44, 0.0), MeshKit.emissive(Color(1.0, 0.1, 0.05), 4.0), Vector3.ONE, 8)
-	lamp.name = "Lamp"
-	for mi in parent.find_children("*", "MeshInstance3D", true, false):
-		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	MeshKit.cylinder(parent, 0.38, 0.08, Vector3(0.25, 0, 0), yellow, Vector3(0, 0, 90), 16)
+	MeshKit.cylinder(parent, 0.3, 0.09, Vector3(0.255, 0, 0), red, Vector3(0, 0, 90), 16)
+	MeshKit.cylinder(parent, 0.26, 0.1, Vector3(0.26, 0, 0), white, Vector3(0, 0, 90), 16)
+	MeshKit.cylinder(parent, 0.09, 0.16, Vector3(0.31, 0, 0), iron, Vector3(0, 0, 90), 8)
+	MeshKit.box(parent, Vector3(0.5, 0.12, 0.18), Vector3(0.0, 0.42, 0.0), yellow)
+	var lamp := MeshKit.sphere(parent, 0.07, Vector3(0.25, 0.46, 0.0), MeshKit.emissive(Color(1.0, 0.1, 0.05), 4.0), Vector3.ONE, 8)
+	lamp.name = "Lamp0"
 
 
-## Puts a boot on `car`'s front wheel on `side` (+1 right, -1 left). Returns it (a child of the model).
+## Puts a boot on `car`'s front wheel on `side` (+1 right, -1 left), sized to the wheel and mirrored for a
+## left one. Returns it (a child of the model). A bright ribbon is dragged from its foot (the trail).
 static func attach(car: Vehicle, side: float) -> Node3D:
 	var boot := Node3D.new()
 	boot.name = "WheelClamp"
 	build_boot(boot)
 	var size: Vector3 = car.stats.get("size", Vector3(2.2, 1.8, 5.0))
-	var at := Vector3(side * size.x * 0.5, 0.5, -size.z * 0.3) # a guess: front wheel on that side
+	var radius := float(car.model.get_meta("wheel_radius", 0.5))
+	var at := Vector3(side * size.x * 0.5, radius, -size.z * 0.3) # a guess: front wheel on that side
+	var half := 0.19 # the tyre's half width
 	var best := INF
 	for w in car.model.get_meta("wheels", []):
 		var lp := car.model.to_local((w as Node3D).global_position)
-		if signf(lp.x) == signf(side) and lp.z < best: # the front-most wheel on that side (cars face -Z)
+		if (signf(lp.x) == signf(side) or absf(lp.x) < 0.15) and lp.z < best: # front-most wheel on that side (bikes: the middle)
 			best = lp.z
 			at = lp
-	boot.position = at + Vector3(side * 0.24, 0.0, 0.0)
-	boot.rotation = Vector3(0, 0 if side > 0.0 else PI, 0)
-	boot.scale = Vector3.ONE * BOOT_SCALE
+			for mi in (w as Node3D).find_children("*", "MeshInstance3D", true, false):
+				half = maxf(half, (mi as MeshInstance3D).get_aabb().size.x * 0.5)
+	var k := radius / MODEL_R * SIZE
+	boot.position = at + Vector3(side * maxf(0.0, half - 0.19 * k), 0.0, 0.0)
+	boot.scale = Vector3(side * k, k, k) # mirrored for a left wheel: the face still looks outward
+	boot.set_meta("k", k)
 	car.model.add_child(boot)
+	var foot := Node3D.new() # where the clamp grinds on the road: the trail is dragged from here
+	foot.name = "Foot"
+	foot.position = Vector3(0.28, -MODEL_R + 0.04, 0.0)
+	boot.add_child(foot)
+	var trail := Streak.attach(foot, Color(1.0, 0.62, 0.12), 0.45, 0.22)
+	trail.set_meta("clamp_trail", true)
+	boot.set_meta("trail", trail)
 	return boot
+
+
+## The lamps blink the whole time it holds (police C: red and blue in turn).
+static func blink(boot: Node3D) -> void:
+	var t := Time.get_ticks_msec() * 0.001
+	var on := fmod(t * 3.2, 1.0) < 0.5
+	for c in boot.get_children():
+		if String(c.name).begins_with("Lamp"):
+			var idx := int(String(c.name).substr(4))
+			(c as Node3D).visible = on if idx % 2 == 0 else not on
 
 
 ## The hit (juice guide: tell, impact, aftermath): a yellow flash, a burst of sparks, the clang, the
@@ -72,8 +111,10 @@ static func hit_feel(car: Vehicle, boot: Node3D) -> void:
 	if car.is_player:
 		GameFeel.hitstop(car.get_tree(), 0.06)
 	if is_instance_valid(boot):
-		boot.scale = Vector3.ONE * BOOT_SCALE * 1.35
-		boot.create_tween().tween_property(boot, "scale", Vector3.ONE * BOOT_SCALE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		var rest := boot.scale
+		boot.scale = rest * 1.4
+		boot.create_tween().tween_property(boot, "scale", rest, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	GameFeel.shockwave(world, at, 2.4, Color(1.0, 0.75, 0.2))
 
 
 ## While the car moves: sparks spray back off the locked wheel and bright scratch lines are left on the
@@ -85,9 +126,6 @@ static func scrape(car: Vehicle, boot: Node3D) -> void:
 	var back := -car.linear_velocity.normalized()
 	FxKit.spark(world, g + Vector3.UP * 0.1, (back + Vector3.UP * 0.5 + car.global_basis.x * 0.3 * signf(car.global_basis.x.dot(at - car.global_position))).normalized())
 	_mark(world, g, car.linear_velocity)
-	var lamp := boot.get_node_or_null("Lamp") as Node3D
-	if lamp:
-		lamp.visible = fmod(Time.get_ticks_msec() * 0.006, 1.0) < 0.55
 
 
 static func _mark(world: Node, at: Vector3, vel: Vector3) -> void:
