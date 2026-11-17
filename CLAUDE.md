@@ -500,7 +500,23 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   drawn from birth with the root on the surface (fade-in 5% of life). Scream `SCREAM_DB` -0.2 (owner: x1.1). Draw calls
   centre 257 -> 232, worst 407 -> 369. `FxKit.ghost_guard` also restarts an emitter added already emitting (else it
   is drawn black for one frame: the dot inside explosions). `tests/_fire_styles.gd -- 1 scene(park|side|drive|spot|pit)
-  out frames every`. **Next (owner):** test this build; then model Roadkill, Darkside and Mr. Grimm.
+  out frames every`. **Headlights (owner: "lag when turned on"):** measured: the first switch-on built the fake beams,
+  textures and shaders on the spot (one 234 ms frame against ~117; after it 1-3%). Built hidden with the car, prewarmed
+  (`GameFeel.prewarm` also warms FoamFire); ground pool = trapezoid hugging its lit texture (`VehicleFx._pool_mesh`).
+  `tests/_light_perf.gd`. **Secondary weapons (combo R L U, `Vehicle._secondary`, paid in special charges
+  `WeaponData.SECONDARY_COST`; `Roster` "secondary"):** **Sweet Bot** (`SweetBot`, owner's round-16 design; Blender model
+  `tools/blender/build_sweet_bot.py`: legs + `upper` turning at `m_waist`, `m_tube_l/r0..9` muzzles, `m_cone` flame; 3.3k
+  tris): 2 charges, dropped behind the truck facing back, waits; the special's fire button (HUD "FIRE: LAUNCH BOT", it is
+  the live special) sends `BOT_MISSILES` 20 `bot_missile`s (Zoomy-like, 4 each, `hits_owner`: they can hit Sweet Tooth;
+  `Projectile.ignore` skips the robot) at Sweet Tooth's target or the nearest car it sees; `BOT_HEALTH` 59 (projectiles,
+  blasts via group "bots"); a car running into it crushes it; destroyed = a Remote blast (`Mine.detonate`, credit to the
+  killer); spent / 30 s / owner dead = harmless pop; an AI owner's robot fires by itself. **Wheel Clamp** (Outlaw, design
+  2.3; `WheelClamp`): 1 charge, kind "clamp" projectile (yellow boot, 60 m/s, light homing, 50 m), hit = 10 + the boot on
+  the struck side's front wheel, `clamped_time` 4 s: no turbo, steering dragged `WheelClamp.PULL` 0.55 to that side
+  (`_clamp_step`), sparks, HUD chip CLAMPED. AI: Outlaw clamps a target dead ahead within 35 m (keeps a charge), Sweet
+  Tooth drops the robot at 12-45 m with 3+ charges. `FoamFire.glow` per fire (the robot's cone flame is seen against the
+  sky: 0.95). `tests/_secondary_clip.gd -- bot|botkill|clamp|botlook out frames every`.
+  **Next (owner):** test this build; then model Roadkill, Darkside and Mr. Grimm.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -526,6 +542,7 @@ scripts/core/model_lib.gd   loads the Blender models and their baked materials
 scripts/vehicles/blender_cars.gd  assembles a Blender car (body, wheels, spinners, markers) with the usual metadata
 scripts/vehicles/burning_driver.gd + driver_corpse.gd  burning drivers out of wrecks (round 17); fx/blood_fx.gd
 scripts/fx/foam_fire.gd(shader)  THE fire of the game (round 18, owner's pick "hair strands"): world-space puffs
+scripts/weapons/sweet_bot.gd + wheel_clamp.gd  secondary weapons (round 18): Sweet Tooth's robot, Outlaw's wheel clamp
 scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (simple primitives),
                             MeshBuilder (detailed models merged per material: chamfered boxes, lofts, lathes),
                             MatKit (generated paint/rust/chrome/rubber textures; world-mapped ground: pavement,

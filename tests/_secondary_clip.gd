@@ -69,6 +69,17 @@ func _run() -> void:
 				var at := base + Vector3(5.7, 0, 0) # where the robot lands, behind the truck
 				cam.global_position = at + Vector3(-5.5, 3.2, 7.5)
 				cam.look_at(at + Vector3(5.0, 1.3, 0))
+			"botlook": # the robot close up, from the front
+				if i == 5:
+					p.ammo[p.special_id] = 3
+					p.energy_move("secondary")
+				var at3 := base + Vector3(5.7, 0, 0)
+				if args.size() > 4 and args[4] == "cone":
+					cam.global_position = at3 + Vector3(2.2, 2.9, 1.6)
+					cam.look_at(at3 + Vector3(0, 2.8, 0))
+				else:
+					cam.global_position = at3 + Vector3(3.6, 1.9, 2.4)
+					cam.look_at(at3 + Vector3(0, 1.15, 0))
 			"botkill":
 				if i == 10:
 					p.ammo[p.special_id] = 3

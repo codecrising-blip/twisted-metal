@@ -85,13 +85,15 @@ func _ready() -> void:
 	if _tubes.is_empty():
 		_tubes = [Vector3(-0.86, 0.66, -0.42), Vector3(0.86, 0.66, -0.42)]
 	_cone_fire = FoamFire.new() # the little burnt cone on top still burns, like the truck's
-	_cone_fire.size = 0.32
-	_cone_fire.rate = 16.0
-	_cone_fire.life = 0.5
-	_cone_fire.rise = 1.6
-	_cone_fire.box = Vector3(0.05, 0.02, 0.05)
+	_cone_fire.size = 0.5 # a short flame sitting in the cone, not a column
+	_cone_fire.rate = 26.0
+	_cone_fire.life = 0.4
+	_cone_fire.rise = 0.8
+	_cone_fire.inherit = 0.0
+	_cone_fire.glow = 0.95 # seen against the sky: more body, less added light
+	_cone_fire.box = Vector3(0.07, 0.02, 0.07)
 	var cone: Variant = marks.get("m_cone")
-	_cone_fire.position = ((cone as Transform3D).origin - waist) if cone != null else Vector3(0, 1.35, 0.02)
+	_cone_fire.position = (((cone as Transform3D).origin - waist) if cone != null else Vector3(0, 1.57, 0.02)) + Vector3.DOWN * 0.2
 	_upper.add_child(_cone_fire)
 	_cone_fire.on = true
 	for mi in _model.find_children("*", "MeshInstance3D", true, false):

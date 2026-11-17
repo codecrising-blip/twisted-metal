@@ -24,6 +24,8 @@ var inherit := 0.5 # share of the emitter's velocity a puff keeps when born
 var drag := 2.2 # how fast a puff forgets that velocity
 var rise_in := 3.0 # strength per second while flaring up
 var die_out := 1.0 # ...and while dying down
+var glow := -1.0 # >= 0: this fire's own blend (1 = plain see-through, no light added); small fires seen
+# against the bright sky (Sweet Bot's cone) need more body or they wash out
 
 var _s := 0.0
 var _acc := 0.0
@@ -55,6 +57,9 @@ func _ready() -> void:
 		_shared_mat = ShaderMaterial.new()
 		_shared_mat.shader = SHADER
 	_mat = _shared_mat
+	if glow >= 0.0:
+		_mat = _shared_mat.duplicate() as ShaderMaterial
+		_mat.set_shader_parameter("glow", glow)
 	_am = ArrayMesh.new()
 	_mesh = MeshInstance3D.new()
 	_mesh.mesh = _am
