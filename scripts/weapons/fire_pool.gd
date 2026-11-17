@@ -12,7 +12,7 @@ var show_flames := true # false: the stage draws its own fire there (the pit of 
 
 var _tick := 0.0
 var _light: OmniLight3D
-var _flames: CPUParticles3D
+var _flames: TmbFireGroup # TMB flame sheets over the pool (round 17)
 
 
 static func spawn(parent: Node, pos: Vector3, pool_radius: float, seconds: float, burn_seconds: float, by: Vehicle, flames := true) -> FirePool:
@@ -44,12 +44,13 @@ func _ready() -> void:
 	glow.albedo_color = Color(1.0, 0.4, 0.05, 0.7)
 	MeshKit.cylinder(self, radius, 0.05, Vector3.UP * 0.06, glow, Vector3.ZERO, 16)
 	if show_flames:
-		_flames = FxKit.fire(1.0 + radius * 0.3, int(18 + radius * 10))
-		_flames.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-		_flames.emission_sphere_radius = radius * 0.8
-		_flames.position = Vector3.UP * 0.4
+		_flames = TmbFireGroup.new()
+		_flames.scatter(radius * 0.85, clampi(int(radius * 2.2), 3, 10), Vector2(0.5 + radius * 0.3, 1.3 + radius * 0.25))
+		_flames.position = Vector3.UP * 0.05
 		add_child(_flames)
-		_flames.emitting = true
+		_flames.rise = 8.0
+		_flames.fall = 1.0
+		_flames.on = true
 	_light = OmniLight3D.new()
 	_light.light_color = Color(1.0, 0.5, 0.15)
 	_light.light_energy = 2.5
@@ -74,6 +75,6 @@ func _physics_process(delta: float) -> void:
 	if time < 1.0:
 		_light.light_energy = 2.5 * maxf(time, 0.0)
 		if _flames:
-			_flames.emitting = false
+			_flames.on = false
 	if time <= 0.0:
 		queue_free()

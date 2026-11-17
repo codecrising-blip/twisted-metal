@@ -986,7 +986,7 @@ func _run() -> void:
 	var palm := palms[0] as Breakable
 	palm.weapon_hit(50.0, main.player, palm.global_position + Vector3(4, 0, 0), true)
 	await _frames(3)
-	_check(palm.is_broken and is_instance_valid(palm._fall_body) and palm._fall_fires.size() >= 3, "a palm hit by a weapon falls as a rigid body, on fire")
+	_check(palm.is_broken and is_instance_valid(palm._fall_body) and palm._fall_fires.any(func(f): return f is TmbFireGroup and (f as TmbFireGroup).on and (f as TmbFireGroup).sheets.size() >= 3), "a palm hit by a weapon falls as a rigid body, on fire (TMB flames)")
 	var fallen: RigidBody3D = palm._fall_body
 	await _frames(70)
 	_check(fallen.to_global(Vector3(0, palm.topple_height, 0)).y - palm.global_position.y < 2.5, "...and comes down flat")

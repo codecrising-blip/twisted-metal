@@ -77,6 +77,7 @@ const FREEZE_BREAK := 15.0 # a single hit this big shatters the ice
 const GRIT_TIME := 3.0 # immune to full disables after one ends
 const SPAWN_SHIELD := 2.0
 const WRECK_SOLID_TIME := 5.0 # wrecks stop blocking the road after this
+const PYRE_TIME := 3.0 # the wreck's pyre burns full this long, then dies down
 const RAM_MIN_CLOSING := 8.0
 const RAM_PER_MS := 0.9
 const RAM_MAX := 45.0
@@ -220,8 +221,9 @@ var _squish_vel := Vector3.ZERO
 var _wobble_t := 0.0 # homing hit: the steering twitches
 var _wobble_dir := 1.0
 var _smoke: CPUParticles3D
-var _fire: CPUParticles3D
-var _burn_fx: CPUParticles3D
+var _fire: TmbFireGroup # badly damaged: a fire at the engine
+var _burn_fx: TmbFireGroup # burning (round 17: TMB flames streaming back off the car)
+var _pyre: TmbFireGroup # the wreck burning like a pyre, then dying down
 var _ice: MeshInstance3D
 # Sound loops (the owner's TM2 recordings, session 6): engine by weight class, guns and tire skid
 # while they happen. Null when a file is missing.
@@ -350,15 +352,24 @@ func setup(id: String, player: bool) -> void:
 	_smoke.position = top
 	_smoke.emitting = false
 	_visual.add_child(_smoke)
-	_fire = FxKit.fire(1.0, 30)
-	_fire.position = top
-	_fire.emitting = false
+	# Fire the TMB way (round 17, the owner's standard): streaky flame sheets, not soft blobs.
+	_fire = TmbFireGroup.new() # badly damaged: flames licking up from the engine
+	_fire.add(Vector2(size.x * 0.55, 1.5), top + Vector3(0.15, -0.3, 0.0))
+	_fire.add(Vector2(size.x * 0.4, 1.0), top + Vector3(-0.3, -0.3, 0.25))
+	_fire.level = 0.85
 	_visual.add_child(_fire)
-	_burn_fx = FxKit.fire(1.3, 36)
-	_burn_fx.position = Vector3(0, size.y * 0.6, 0)
-	_burn_fx.emission_sphere_radius = size.x * 0.5
-	_burn_fx.emitting = false
+	_burn_fx = TmbFireGroup.new() # set on fire: flames over the whole car, streaming back as it drives
+	for z: float in [-0.3, 0.0, 0.3]:
+		_burn_fx.add(Vector2(size.x * 0.85, 1.7), Vector3(0, size.y * 0.55, size.z * z))
+	_burn_fx.lean_scale = 0.08
 	_visual.add_child(_burn_fx)
+	_pyre = TmbFireGroup.new() # destroyed: a pyre the size of the car that burns down
+	for x: float in [-0.22, 0.22]:
+		for z: float in [-0.33, 0.0, 0.33]:
+			_pyre.add(Vector2(size.x * 0.8, 2.8 + randf() * 0.8), Vector3(size.x * x, size.y * 0.25, size.z * z))
+	_pyre.rise = 6.0
+	_pyre.fall = 0.35 # dies down over about three seconds
+	_visual.add_child(_pyre)
 
 	_ice = MeshInstance3D.new()
 	var ice_mesh := BoxMesh.new()
@@ -393,7 +404,8 @@ func _physics_process(delta: float) -> void:
 		if _wreck_time > WRECK_SOLID_TIME and collision_layer != 0:
 			collision_layer = 0 # other cars drive through the burnt shell
 			collision_mask = 1
-			_fire.emitting = false
+		if _wreck_time > PYRE_TIME and _pyre.on:
+			_pyre.on = false # the pyre burns down (owner's TMB clips: ~3 s full, then it shrinks away)
 		return
 	if controller:
 		controller.drive(self, delta)
@@ -477,7 +489,7 @@ func _tick(delta: float) -> void:
 			_burn_tick -= 0.5
 			take_damage(WeaponData.BURN_DPS * 0.5 * WeaponData.DAMAGE_SCALE, _burn_source)
 		if burn_time <= 0.0:
-			_burn_fx.emitting = false
+			_burn_fx.on = false
 	# Specials recharge one charge at a time; the slot comes back with the first one.
 	var laughing: bool = stats.get("last_laugh", false) and health < max_health * LAST_LAUGH_AT and not is_dead
 	if laughing != _last_laugh:
@@ -778,7 +790,7 @@ func _turbo_step(dir: float, dt: float) -> bool:
 		_turbo_rest = 0.0
 		if _turbo_run >= TURBO_PUTS_OUT_FIRE and burn_time > 0.0: # the rush of air blows the flames out
 			burn_time = 0.0
-			_burn_fx.emitting = false
+			_burn_fx.on = false
 			if is_player:
 				notice.emit(self, "FIRE OUT")
 	else:
@@ -1857,13 +1869,13 @@ func ignite(seconds: float, by: Vehicle) -> void:
 		GameFeel.play("ignite", global_position + Vector3.UP, get_parent(), -3.0)
 	burn_time = maxf(burn_time, seconds)
 	_burn_source = by
-	_burn_fx.emitting = true
+	_burn_fx.on = true
 
 
 func _update_damage_fx() -> void:
 	var r := health / max_health
 	_smoke.emitting = r < 0.5
-	_fire.emitting = r < 0.25
+	_fire.on = r < 0.25
 
 
 func _die() -> void:
@@ -1871,7 +1883,7 @@ func _die() -> void:
 	is_dead = true
 	frozen_time = 0.0
 	burn_time = 0.0
-	_burn_fx.emitting = false
+	_burn_fx.on = false
 	_fx.stop()
 	_ice.visible = false
 	_visual.visible = true
@@ -1887,7 +1899,8 @@ func _die() -> void:
 	_charge_fx = null
 	_char(model)
 	_smoke.emitting = true
-	_fire.emitting = true
+	_fire.on = false
+	_pyre.on = true
 	destroyed.emit(self, last_attacker)
 
 

@@ -40,7 +40,7 @@ var hit_burns := false
 var _fall_body: RigidBody3D
 var _fall_t := 0.0
 var _fall_landed := false
-var _fall_fires: Array[CPUParticles3D] = []
+var _fall_fires: Array = [] # flames (TmbFireGroup) and smoke on a burning palm
 var _fall_sound: AudioStreamPlayer3D
 
 const FALL_GONE := 4.5 # seconds a fallen trunk or pole lies there before it is cleared away
@@ -231,13 +231,12 @@ func _set_alight(body: RigidBody3D) -> void:
 	for node in visual.find_children("*", "MeshInstance3D", true, false):
 		(node as MeshInstance3D).material_overlay = soot
 	# Round 12 (perf): two flames and a thinner smoke (three emitters cost too much overdraw on HIGH).
-	for h: float in [0.45, 0.92]:
-		var f := FxKit.fire(1.5 if h > 0.8 else 1.0, 12 if h > 0.8 else 7)
-		f.position = Vector3(0, topple_height * h, 0)
-		f.emission_sphere_radius = 0.9 if h > 0.8 else 0.35
-		body.add_child(f)
-		f.emitting = true
-		_fall_fires.append(f)
+	var fire := TmbFireGroup.new() # TMB flames along the trunk and in the crown (round 17)
+	for h: float in [0.3, 0.6, 0.92]:
+		fire.add(Vector2(1.4 if h > 0.8 else 0.7, 2.2 if h > 0.8 else 1.4), Vector3(0, topple_height * h, 0))
+	body.add_child(fire)
+	fire.on = true
+	_fall_fires.append(fire)
 	var smoke := FxKit.smoke(1.3, 6)
 	smoke.position = Vector3(0, topple_height * 0.8, 0)
 	body.add_child(smoke)
@@ -271,7 +270,10 @@ func _physics_process(delta: float) -> void:
 	var gone := FALL_BURN_GONE if hit_burns and kind == "palm" else FALL_GONE
 	if _fall_t > gone - 1.2:
 		for f in _fall_fires:
-			f.emitting = false
+			if f is TmbFireGroup:
+				(f as TmbFireGroup).on = false
+			else:
+				(f as CPUParticles3D).emitting = false
 		if is_instance_valid(_fall_sound):
 			_fall_sound.volume_db -= 30.0 * delta
 	if _fall_t > gone:

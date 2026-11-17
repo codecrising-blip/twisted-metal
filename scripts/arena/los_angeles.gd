@@ -1245,21 +1245,23 @@ func _fire_pit() -> void:
 	# Round 5 (frames at the pit): on LOW the pit is one column of fewer flames, two side fires and
 	# light smoke (was ~110 big see-through quads stacked on each other; now ~45).
 	var high := GraphicsSettings.high
-	var column := FxKit.fire(4.5 if high else 3.9, 45 if high else 26) # amount is cut again by particles()
-	column.position = bottom + Vector3.UP * 0.8
-	column.emission_sphere_radius = 1.6
-	column.initial_velocity_max = 7.0
-	column.lifetime = 1.4
-	add_child(column)
-	column.emitting = true
+	# Round 17 (owner: TMB fire everywhere): the pit burns with TMB flame sheets: a tall heart in the
+	# middle and a ring of lower tongues round it, plus two side fires (fewer sheets on LOW).
+	var pit := TmbFireGroup.new()
+	pit.position = bottom + Vector3.UP * 0.4
+	for k in (5 if high else 4):
+		var a := TAU * k / (5.0 if high else 4.0)
+		pit.add(Vector2(6.0, 13.0 + _rng.randf() * 3.5), Vector3(cos(a) * 1.6, 0.0, sin(a) * 1.6))
+	pit.scatter(4.0, 9 if high else 6, Vector2(3.6, 7.5), _rng)
+	add_child(pit)
+	pit.on = true
 	for k in (3 if high else 2):
 		var a := k * TAU / 3.0 + 0.5
-		var f := FxKit.fire(2.4, 18 if high else 12)
-		f.position = ground(cos(a) * 3.5, sin(a) * 3.5, 0.3)
-		f.emission_sphere_radius = 1.0
-		f.visibility_range_end = 150.0
-		add_child(f)
-		f.emitting = true
+		var side := TmbFireGroup.new()
+		side.position = ground(cos(a) * 6.0, sin(a) * 6.0, 0.2)
+		side.scatter(1.5, 3, Vector2(2.6, 5.0), _rng)
+		add_child(side)
+		side.on = true
 	var smoke := FxKit.smoke(3.0, 16 if high else 10)
 	smoke.position = bottom + Vector3.UP * 7.0
 	add_child(smoke)
@@ -1307,10 +1309,11 @@ func _burnt_building(c: Vector3) -> void:
 	smoke.position = c + Vector3(2, h + 1.0, 0)
 	add_child(smoke)
 	smoke.emitting = true
-	var embers := FxKit.fire(1.2, 24)
-	embers.position = c + Vector3(-6, 7.0, 0)
+	var embers := TmbFireGroup.new() # still burning on the first floor (TMB flames, round 17)
+	embers.position = c + Vector3(-6, 6.6, 0)
+	embers.scatter(1.5, 3, Vector2(1.4, 2.4), _rng)
 	add_child(embers)
-	embers.emitting = true
+	embers.on = true
 	var glow := FlickerLight.new()
 	glow.light_color = Color(1.0, 0.45, 0.15)
 	glow.base_energy = 2.0

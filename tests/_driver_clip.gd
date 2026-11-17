@@ -45,6 +45,16 @@ func _run() -> void:
 			e.take_damage(9999.0, player)
 			cam_at = base + Vector3(2, 6, 16)
 			look = base + Vector3(-6, 0.5, 0)
+		"burn": # a car set on fire, driving: the flames stream back off it
+			e.ignite(30.0, player)
+			e.freeze = false
+			var keep_b := func() -> void:
+				if is_instance_valid(e) and not e.is_dead:
+					e.linear_velocity = Vector3(-14, e.linear_velocity.y, 0)
+					e.burn_time = 20.0
+			physics_frame.connect(keep_b)
+			cam_at = base + Vector3(4, 4, 12)
+			look = base + Vector3(-6, 1.0, 0)
 		"air":
 			e.global_position = base + Vector3(0, 6, 0)
 			for i in 3:
@@ -78,6 +88,9 @@ func _run() -> void:
 	var n := 0
 	var follow: Node3D = null
 	for i in frames:
+		if scenario == "burn" and is_instance_valid(e):
+			cam_at = e.global_position + Vector3(3.5, 3.0, 8.0)
+			look = e.global_position + Vector3(0, 1.0, 0)
 		if scenario in ["close", "windshield", "under", "air"]:
 			if follow == null or not is_instance_valid(follow) or (follow is BurningDriver and (follow as BurningDriver).state == BurningDriver.DEAD and scenario == "windshield"):
 				var ds := get_nodes_in_group(&"drivers")
