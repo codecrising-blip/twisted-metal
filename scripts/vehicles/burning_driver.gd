@@ -15,10 +15,11 @@ extends StaticBody3D
 ## The camera never follows a driver (owner): it stays on the wreck.
 
 const LAYER := 64 # physics layer 7: projectiles hit it, cars and the world ignore it
-const EXIT_DELAY := 0.9 # the wreck hops on its death blast; the driver gets out once it is down
-const WRECK_WAIT := 4.0 # ...or after this long whatever it is doing
+const EXIT_DELAY := 0.55 # the wreck hops on its death blast; the driver gets out once it is down
+const WRECK_WAIT := 1.2 # ...or after this long whatever it is doing (owner: 3-4 s was far too long)
 const RUN_TIME := 5.0 # owner: they run for 5 seconds
-const RUN_SPEED := 3.9 # a stumbling run, slowed further by stumbles
+const RUN_SPEED := 6.25 # a stumbling run, slowed further by stumbles (owner: x1.6, it looked like slow motion)
+const RUN_ANIM := 1.6 # the run clip plays this much faster to match
 const KNEEL_TIME := 1.0
 const CRAWL_TIME := 2.6
 const CRAWL_SPEED := 0.7 # about two metres of crawling
@@ -73,13 +74,13 @@ static func spawn_for(car: Vehicle, airborne: bool) -> void:
 static func _wait_for_wreck(world: Node, car: Vehicle, female: bool, killer: Vehicle, waited: float) -> void:
 	if not is_instance_valid(world) or not is_instance_valid(car) or not world.is_inside_tree():
 		return
-	var settled := waited >= EXIT_DELAY and car.linear_velocity.length() < 2.5 \
-		and car.global_position.y - Specials.ground_below(world, car.global_position + Vector3.UP).y < 1.6
+	var settled := waited >= EXIT_DELAY and car.linear_velocity.length() < 4.5 \
+		and car.global_position.y - Specials.ground_below(world, car.global_position + Vector3.UP).y < 1.8
 	if settled or waited >= WRECK_WAIT:
 		_climb_out(world, car, female, killer)
 		return
-	car.get_tree().create_timer(0.15, false).timeout.connect(func() -> void:
-		BurningDriver._wait_for_wreck(world, car, female, killer, waited + 0.15))
+	car.get_tree().create_timer(0.1, false).timeout.connect(func() -> void:
+		BurningDriver._wait_for_wreck(world, car, female, killer, waited + 0.1))
 
 
 static func _climb_out(world: Node, car: Vehicle, female: bool, killer: Vehicle) -> void:
@@ -90,12 +91,15 @@ static func _climb_out(world: Node, car: Vehicle, female: bool, killer: Vehicle)
 	var ahead := Vector3(-b.z.x, 0.0, -b.z.z)
 	ahead = ahead.normalized() if ahead.length() > 0.1 else Vector3.FORWARD
 	var base := car.global_position
+	# Measured from the ground under the wreck: it may still be hopping when the driver gets out.
+	var floor_y := Specials.ground_below(world, base + Vector3.UP).y
 	var at := Vector3.ZERO
 	var found := false
 	for side: float in [-1.0, 1.0]: # the driver's door (left), else the other side
 		var door := base + right * side * (size.x * 0.5 + 0.5) + ahead * size.z * 0.1
+		door.y = floor_y
 		var g := Specials.ground_below(world, door + Vector3.UP * 2.0)
-		if absf(g.y - base.y) < 2.5:
+		if absf(g.y - floor_y) < 2.5:
 			at = g
 			found = true
 			break
@@ -152,10 +156,11 @@ func _ready() -> void:
 	_mat = _model.get_meta("mat")
 	_anim.play("run_burn")
 	_anim.seek(randf() * 1.3)
-	_anim.speed_scale = randf_range(0.92, 1.08)
+	_anim.speed_scale = RUN_ANIM * randf_range(0.92, 1.08)
 	_flames = TmbFire.on_body(_model)
 	TmbFire.set_all(_flames, 1.0)
 	_next_stumble = randf_range(0.8, 1.6)
+	# The scream starts the moment they are out (its cry peaks 0.3 s in).
 	_scream = GameFeel.play("death_female" if female else "death_male", global_position + Vector3.UP * 1.5, self, -1.0, randf_range(0.95, 1.05))
 	_wander = randf() * TAU
 	look_at(global_position + _heading, Vector3.UP)
@@ -176,7 +181,7 @@ func _physics_process(delta: float) -> void:
 				_stumble -= delta
 				_speed *= 0.35
 			_speed *= lerpf(1.0, 0.75, _t / RUN_TIME)
-			_anim.speed_scale = lerpf(1.05, 0.85, _t / RUN_TIME) * (0.6 if _stumble > 0.0 else 1.0)
+			_anim.speed_scale = RUN_ANIM * lerpf(1.05, 0.85, _t / RUN_TIME) * (0.6 if _stumble > 0.0 else 1.0)
 			_move(_speed, delta)
 			if _t >= RUN_TIME:
 				_enter(KNEEL)

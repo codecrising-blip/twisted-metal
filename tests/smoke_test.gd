@@ -1233,13 +1233,13 @@ func _run() -> void:
 	await _frames(20)
 	var drivers_before := get_nodes_in_group(&"drivers").size()
 	ol17.take_damage(99999.0, me)
-	var climbed := false
+	var climbed := -1
 	for k in 300:
 		await physics_frame
 		if get_nodes_in_group(&"drivers").size() > drivers_before:
-			climbed = true
+			climbed = k
 			break
-	_check(climbed, "destroyed on the ground: the driver climbs out burning once the wreck is down")
+	_check(climbed > 0 and climbed <= 90, "destroyed on the ground: the driver climbs out burning within 1.5 s (owner: 3-4 s was too long; %.2f s)" % (climbed / 60.0))
 	me.shield_time = 0.0
 	me.invulnerable_time = 0.0
 	_place(me, -20, 40, 0)
