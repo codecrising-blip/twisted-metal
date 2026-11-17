@@ -190,10 +190,14 @@ var shield_time := 0.0 # energy shield up: no damage, no states; guns only
 var invisible_time := 0.0 # energy invisibility: no locks on you, AI loses you past 12 m
 var revealed_time := 0.0 # seen anyway for a moment: hit, or caught in headlights
 var headlights_on := false
+var bot: SweetBot # round 19: Sweet Tooth's robot while it stands (R L U orders it to fire)
 var clamped_time := 0.0 # round 18: Outlaw's wheel clamp on a front wheel: no turbo, steering dragged aside
 var _clamp_side := 1.0
 var _clamp_boot: Node3D
 var _clamp_spark := 0.0
+var _clamp_hurt := 0.0
+var _clamp_by: Vehicle
+var _clamp_snd: AudioStreamPlayer3D
 var _energy_mines: Array = []
 var _shield_mat: ShaderMaterial # round 17: a forest-green force-field shell hovering round the whole car
 var _shield_flare := 0.0 # a hit brightens the whole field for a moment
@@ -1831,14 +1835,14 @@ func _secondary() -> void:
 	var cost := int(WeaponData.SECONDARY_COST.get(id, 1))
 	if shield_time > 0.0:
 		return # shield up: no attacks but the guns
+	if id == "sweet_bot" and is_instance_valid(bot): # round 19: the robot is out: R L U orders the barrage
+		if not bot.fire_again() and is_player:
+			notice.emit(self, "SWEET BOT RELOADING")
+			GameFeel.ui("not_available", get_tree())
+		return
 	if ammo.get(special_id, 0) < cost:
 		if is_player:
 			notice.emit(self, "SECONDARY NEEDS %d SPECIAL CHARGE%s" % [cost, "S" if cost > 1 else ""])
-			GameFeel.ui("not_available", get_tree())
-		return
-	if id == "sweet_bot" and has_live_special():
-		if is_player:
-			notice.emit(self, "ONE THING OUT AT A TIME")
 			GameFeel.ui("not_available", get_tree())
 		return
 	ammo[special_id] -= cost
@@ -1853,8 +1857,12 @@ func _secondary() -> void:
 	_refresh_slots()
 
 
-## Hit by a wheel clamp (round 18): the front wheel on the side it struck is locked for `seconds`.
-func clamp_for(seconds: float, hit_at: Vector3) -> bool:
+## Hit by a wheel clamp (round 19, the owner's rules): the wheels on the side it struck lock. While the
+## car moves it is dragged round toward the free side: hit on the left, it can only turn right (steering
+## the other way does nothing); the only way not to turn is to stop. No turbo, no reverse. The clamp
+## wears off after `seconds` of MOVING (standing still doesn't count) and scrapes WheelClamp.SCRAPE_DPS
+## damage while it moves (25 over the 5 s), then it breaks off.
+func clamp_for(seconds: float, hit_at: Vector3, by: Vehicle = null) -> bool:
 	if is_dead or invulnerable_time > 0.0 or shield_time > 0.0:
 		return false
 	var side := signf(global_basis.x.dot(hit_at - global_position))
@@ -1865,33 +1873,51 @@ func clamp_for(seconds: float, hit_at: Vector3) -> bool:
 		if is_instance_valid(_clamp_boot):
 			_clamp_boot.queue_free()
 		_clamp_boot = WheelClamp.attach(self, side)
+		_clamp_snd = GameFeel.loop("skid_loop", self, -6.0, 9.0)
+		if _clamp_snd:
+			_clamp_snd.pitch_scale = 1.75 # steel on tarmac, not rubber
 	clamped_time = maxf(clamped_time, seconds)
-	GameFeel.play("metal_fall", global_position, self, -4.0, 1.4)
+	_clamp_by = by
+	WheelClamp.hit_feel(self, _clamp_boot)
 	if is_player:
-		notice.emit(self, "CLAMPED - STEER AGAINST IT")
+		notice.emit(self, "CLAMPED %s - YOU CAN ONLY TURN %s" % ["LEFT" if side < 0.0 else "RIGHT", "RIGHT" if side < 0.0 else "LEFT"])
 	return true
 
 
 func _clamp_step(delta: float) -> void:
-	clamped_time -= delta
-	in_steer = clampf(in_steer + WheelClamp.PULL * _clamp_side, -1.0, 1.0) # the locked wheel drags
+	var free := -_clamp_side # the way it is dragged: away from the locked wheels
 	in_turbo = false
+	in_throttle = maxf(in_throttle, 0.0) # no reverse
+	in_steer = free * maxf(WheelClamp.MIN_TURN, in_steer * free) # only ever toward the free side
+	var moving := linear_velocity.length() > WheelClamp.MOVING_SPEED
+	if is_instance_valid(_clamp_snd):
+		if moving and not _clamp_snd.playing:
+			_clamp_snd.play()
+		elif not moving and _clamp_snd.playing:
+			_clamp_snd.stop()
+	if not moving:
+		return
+	clamped_time -= delta # only moving time counts (owner)
+	_clamp_hurt += WheelClamp.SCRAPE_DPS * delta
+	if _clamp_hurt >= 1.25:
+		take_damage(_clamp_hurt * WeaponData.DAMAGE_SCALE, _clamp_by)
+		_clamp_hurt = 0.0
 	_clamp_spark -= delta
-	if _clamp_spark <= 0.0 and absf(speed) > 4.0 and is_instance_valid(_clamp_boot):
-		_clamp_spark = 0.12
-		var p := _clamp_boot.global_position + Vector3.DOWN * 0.4
-		FxKit.spark(get_parent(), p, (global_basis.x * _clamp_side + Vector3.UP * 0.6 - flat_forward() * 0.6).normalized())
+	if _clamp_spark <= 0.0 and is_instance_valid(_clamp_boot):
+		_clamp_spark = 0.06
+		WheelClamp.scrape(self, _clamp_boot)
 	if clamped_time <= 0.0:
 		_release_clamp()
 
 
 func _release_clamp() -> void:
 	clamped_time = 0.0
+	_clamp_hurt = 0.0
+	if is_instance_valid(_clamp_snd):
+		_clamp_snd.queue_free()
+	_clamp_snd = null
 	if is_instance_valid(_clamp_boot):
-		var at := _clamp_boot.global_position
-		GameFeel.play("metal_fall", at, get_parent(), -6.0, 1.2)
-		FxKit.puff(get_parent(), at, 0.3)
-		_clamp_boot.queue_free()
+		WheelClamp.break_off(self, _clamp_boot)
 	_clamp_boot = null
 
 

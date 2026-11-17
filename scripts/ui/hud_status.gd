@@ -71,7 +71,10 @@ func _draw() -> void:
 	if player.frozen_time > 0.0:
 		chips.append(["FROZEN", Color(0.55, 0.85, 1.0)])
 	if player.clamped_time > 0.0:
-		chips.append(["CLAMPED", Color(0.95, 0.75, 0.15)])
+		chips.append(["CLAMPED %.1f" % player.clamped_time, Color(0.95, 0.75, 0.15)])
+	if is_instance_valid(player.bot): # round 19: Sweet Bot's state
+		var left := player.bot.reload_left()
+		chips.append(["BOT READY" if left <= 0.0 else "BOT %.0f" % ceilf(left), Color(0.6, 1.0, 0.5) if left <= 0.0 else Color(0.8, 0.8, 0.75)])
 	if player.invulnerable_time > 0.0:
 		chips.append(["PROTECTED", Color(0.95, 0.9, 0.5)])
 	if player.shield_time > 0.0:

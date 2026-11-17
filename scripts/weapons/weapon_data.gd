@@ -99,11 +99,13 @@ const DEFS := {
 		"trail": Color(0.97, 0.97, 0.95), "trail_len": 0.5, "trail_w": 0.38, "push": 0.5,
 		"squish": 0.02, "squish_classes": ["light", "medium"], "shake": 0.08, "hits_owner": true,
 	},
-	# Wheel Clamp (Outlaw, design 2.3): an iron boot thrown forward, slow-ish and visible, light
-	# homing, 50 m. A hit: 10 damage and for 4 s no turbo and the steering pulled to one side (Clamped).
+	# Wheel Clamp (Outlaw, design 2.3; round 19, the owner's rules): a big bright boot thrown forward with
+	# light homing, 50 m. A hit: 15, the wheels on that side lock until the car has MOVED "clamp" seconds:
+	# it can only turn the other way, no turbo, no reverse, and the scraping costs 25 more (WheelClamp).
 	"wheel_clamp": {
-		"label": "Wheel Clamp", "kind": "clamp", "color": Color(0.95, 0.72, 0.08),
-		"speed": 60.0, "damage": 10.0, "homing": 1.2, "seek": 30.0, "life": 0.85, "clamp": 4.0, "push": 1.0, "shake": 0.25,
+		"label": "Wheel Clamp", "kind": "clamp", "color": Color(1.0, 0.78, 0.05),
+		"speed": 60.0, "damage": 15.0, "homing": 1.2, "seek": 30.0, "life": 0.85, "clamp": 5.0, "push": 1.4, "shake": 0.35,
+		"trail": Color(1.0, 0.8, 0.12), "trail_len": 0.45, "trail_w": 0.9,
 	},
 	# Energy move only (front / rear freeze), never a pickup.
 	"freeze": {

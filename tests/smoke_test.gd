@@ -1183,9 +1183,10 @@ func _run() -> void:
 		"Sweet Tooth's Last Laugh: under 30%% health the special recharges 1.5x faster, roof fire blue (%.2f vs %.2f)" % [laugh_t, calm_t])
 	st15.ammo["napalm_cone"] = 2
 
-	# Round 18: secondary weapons (combo R L U, paid in special charges). Sweet Bot: dropped behind Sweet
-	# Tooth for 2 charges, the special's fire button sends its 20 missiles, then it is gone; destroyed it goes
-	# up like a Remote. Outlaw's wheel clamp: 1 charge; a hit drags the steering and blocks turbo for 4 s.
+	# Round 18/19: secondary weapons (combo R L U, paid in special charges). Sweet Bot (round 19, owner): it
+	# slides out of the back for 2 charges and stays; R L U again sends its 20 missiles, then it reloads 5 s
+	# and can fire again; it only goes when an opponent destroys it (like a Remote). Outlaw's wheel clamp:
+	# 1 charge (its own checks below).
 	_park(main)
 	for e: Vehicle in main.enemies: # out of the way: a car running into the robot would crush it
 		if not e.is_dead:
@@ -1197,28 +1198,29 @@ func _run() -> void:
 	await _frames(5)
 	st.ammo[st.special_id] = 3
 	st.energy_move("secondary")
-	var bot := st.live_special() as SweetBot
-	_check(bot != null and st.ammo[st.special_id] == 1, "Sweet Bot drops behind Sweet Tooth for two special charges")
-	await _frames(40)
-	_check(is_instance_valid(bot) and bot.state == "wait", "Sweet Bot lands and waits for the order")
+	var bot := st.bot
+	_check(bot != null and st.ammo[st.special_id] == 1 and not st.has_live_special(),
+		"Sweet Bot slides out behind Sweet Tooth for two special charges (the special stays free)")
+	await _frames(50)
+	_check(is_instance_valid(bot) and bot.state == "wait" and bot.reload_left() == 0.0, "Sweet Bot lands and waits for the order")
 	var shots0 := Projectile.spawned_total
-	st.selected = st.weapon_order.find(st.special_id)
-	st.want_fire_weapon = true
-	st._combat(0.016)
-	await _frames(170)
-	_check(Projectile.spawned_total - shots0 >= WeaponData.BOT_MISSILES and not st.has_live_special(),
-		"the special's fire button sends its %d missiles; then the special fires as normal again" % WeaponData.BOT_MISSILES)
-	await _frames(100)
-	_check(not is_instance_valid(bot), "the spent robot is gone")
-	st.ammo[st.special_id] = 3
 	st.energy_move("secondary")
-	var bot2 := st.live_special() as SweetBot
-	await _frames(40)
-	bot2.projectile_hit(45.0, null)
-	var standing := is_instance_valid(bot2) and not bot2._dead
-	bot2.projectile_hit(14.0, null)
+	_check(st.ammo[st.special_id] == 1 and bot.state == "fire", "R L U again orders the barrage, at no cost")
+	await _frames(170)
+	_check(Projectile.spawned_total - shots0 >= WeaponData.BOT_MISSILES and is_instance_valid(bot) and bot.state == "reload",
+		"it fires its %d missiles and stays, reloading" % WeaponData.BOT_MISSILES)
+	var shots1 := Projectile.spawned_total
+	st.energy_move("secondary")
+	await _frames(5)
+	_check(bot.state == "reload" and Projectile.spawned_total == shots1, "no second barrage while it reloads")
+	bot._t = SweetBot.COOLDOWN - 0.05
+	await _frames(10)
+	_check(bot.state == "wait", "after %.0f s it is ready again" % SweetBot.COOLDOWN)
+	bot.projectile_hit(45.0, null)
+	var standing := is_instance_valid(bot) and not bot._dead
+	bot.projectile_hit(14.0, null)
 	await _frames(3)
-	_check(standing and not is_instance_valid(bot2), "a power missile alone leaves the robot standing; power + fire (59) blow it up")
+	_check(standing and not is_instance_valid(bot) and st.bot == null, "a power missile alone leaves the robot standing; power + fire (59) blow it up")
 	var outlaws: Array = main.enemies.filter(func(e: Vehicle): return e.car_id == "outlaw" and not e.is_dead)
 	if not outlaws.is_empty():
 		var ol18: Vehicle = outlaws[0]
@@ -1230,13 +1232,26 @@ func _run() -> void:
 			"Outlaw throws the wheel clamp for one special charge")
 	st.shield_time = 0.0
 	st.invulnerable_time = 0.0
-	_check(st.clamp_for(4.0, st.global_position + st.global_basis.x * 2.0), "a wheel clamp hit locks a front wheel")
-	await _frames(2)
-	_check(st.clamped_time > 3.5 and not st.in_turbo and absf(st.in_steer) > 0.4 and is_instance_valid(st._clamp_boot),
-		"clamped: the steering is dragged to the locked side, no turbo, the boot on the wheel")
+	# Round 19 (owner's rules): hit on the right, the right wheels lock: while moving it can only turn left,
+	# no turbo, no reverse; it wears off after 5 s of MOVING, scraping 25 on the way.
+	_place(st, -30, 30, 0)
+	await _frames(3)
+	_check(st.clamp_for(5.0, st.global_position + st.global_basis.x * 2.0), "a wheel clamp hit on the right locks the right wheels")
+	await _frames(30)
+	_check(is_equal_approx(st.clamped_time, 5.0) and is_instance_valid(st._clamp_boot), "standing still doesn't wear the clamp off")
+	_check(st.in_steer <= -WheelClamp.MIN_TURN + 0.01 and not st.in_turbo and st.in_throttle >= 0.0,
+		"clamped on the right: it can only turn left (%.2f), no turbo, no reverse" % st.in_steer)
+	var hp0 := st.health
+	for k in 60: # one second of driving
+		st.linear_velocity = -st.global_basis.z * 8.0
+		await physics_frame
+	_check(st.clamped_time < 4.2 and st.clamped_time > 3.8 and hp0 - st.health > 3.5,
+		"moving wears it down (%.2f s left) and the scraping hurts (%.1f a second)" % [st.clamped_time, hp0 - st.health])
 	st.clamped_time = 0.05
-	await _frames(10)
-	_check(st.clamped_time <= 0.0 and not is_instance_valid(st._clamp_boot), "the clamp lets go after its time")
+	for k in 10:
+		st.linear_velocity = -st.global_basis.z * 8.0
+		await physics_frame
+	_check(st.clamped_time <= 0.0 and not is_instance_valid(st._clamp_boot), "after its moving time the clamp breaks off")
 
 	# Round 17: burning drivers (owner, from Twisted Metal: Black). Shot, they die and the shooter gets
 	# energy; run down fast and head-on they go over the hood into the windshield and are thrown off;

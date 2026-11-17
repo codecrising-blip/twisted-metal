@@ -1,24 +1,25 @@
 class_name SweetBot
 extends StaticBody3D
-## Sweet Tooth's secondary weapon (round 18; the owner's design from round 16): a small walker robot
-## the truck drops behind it, planted and waiting. The next press of the special's fire button (like a
-## Remote's detonation) orders the barrage: WeaponData.BOT_MISSILES Zoomy-like missiles from the two
+## Sweet Tooth's secondary weapon (round 18; the owner's design from rounds 16 and 19): a robot that slides
+## down out of the truck's back door and stays planted. R L U again orders the barrage (round 19: so the
+## Napalm Cone still fires while it stands): WeaponData.BOT_MISSILES Zoomy-like missiles from the two
 ## shoulder pods, 4 each, homing on Sweet Tooth's target (or the nearest car it can see). They can hit
 ## Sweet Tooth too if he is in the line of fire. The idea: traps and nerves; Sweet Tooth rams you while
 ## the robot waits behind you.
 ## It takes hits (projectiles, blasts): BOT_HEALTH 59, a power missile and a fire missile, and a car
 ## that runs into it crushes it. Destroyed, it goes up like a Remote (it hurts whoever is near, Sweet
-## Tooth included). Spent, left waiting BOT_WAIT seconds, or its owner dead: it blows itself apart,
-## harmlessly. Costs two special charges (design 1.6). Model: tools/blender/build_sweet_bot.py.
+## Tooth included). Round 19 (owner): it never goes on its own: after a barrage it reloads COOLDOWN 5 s and
+## can fire again, until an opponent destroys it; if its truck is destroyed the next one takes it over.
+## Costs two special charges to drop (design 1.6). Model: tools/blender/build_sweet_bot.py.
 
-const DROP_TIME := 0.35
+const DROP_TIME := 0.6 # sliding down out of the back door
+const COOLDOWN := 5.0 # owner, round 19: after a barrage it reloads this long, then fires again
 const STAND_TIME := 0.4
 const TURN_RATE := 3.2 # rad/s the upper body turns toward its target
-const SPENT_DELAY := 1.4
 
 var owner_car: Vehicle
 var health := WeaponData.BOT_HEALTH
-var state := "drop" # drop -> wait -> fire -> spent
+var state := "drop" # drop -> wait -> fire -> reload -> wait ... until an opponent destroys it
 var _t := 0.0
 var _model: Node3D
 var _upper: Node3D
@@ -44,15 +45,18 @@ static func deploy(car: Vehicle) -> SweetBot:
 	b.owner_car = car
 	world.add_child(b)
 	var size: Vector3 = car.stats.get("size", Vector3(2.5, 2.8, 6.6))
-	var back := car.global_position - car.flat_forward() * (size.z * 0.5 + 2.2) + Vector3.UP
+	# Round 19 (owner): it slides down out of the truck's back door: from the floor of the box at the
+	# back, down and out onto the road behind.
+	var back := car.global_position - car.flat_forward() * (size.z * 0.5 + 2.6) + Vector3.UP
 	b._ground = Specials.ground_below(world, back)
-	b._drop_from = b._ground + Vector3.UP * 1.4
+	b._drop_from = car.global_position - car.flat_forward() * (size.z * 0.5 - 0.6) + Vector3.UP * 0.65
 	b.global_position = b._drop_from
 	b.rotation = Vector3(0.0, car.global_rotation.y + PI, 0.0)
-	car.set_live_special(b, car.special_id)
+	car.bot = b
 	GameFeel.play("mine_drop", b._drop_from, world, -2.0, 0.8)
+	GameFeel.play("metal_fall", b._drop_from, world, -6.0, 0.7)
 	if car.is_player:
-		car.notice.emit(car, "SWEET BOT OUT - FIRE SPECIAL TO LAUNCH")
+		car.notice.emit(car, "SWEET BOT OUT - R L U AGAIN TO LAUNCH")
 	return b
 
 
@@ -100,14 +104,41 @@ func _ready() -> void:
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 
-func fire_again() -> void:
+## Ordered to fire (its owner's R L U while it stands): only when it is ready (not mid-barrage, not reloading).
+func fire_again() -> bool:
 	if _dead:
-		return
+		return false
 	match state:
 		"drop":
 			_queued = true
+			return true
 		"wait":
 			_start_barrage()
+			return true
+	return false
+
+
+## Seconds until it can fire again (0 = ready).
+func reload_left() -> float:
+	match state:
+		"reload":
+			return maxf(0.0, COOLDOWN - _t)
+		"fire":
+			return COOLDOWN
+	return 0.0
+
+
+## Its truck was destroyed: the same driver's next truck takes it over.
+func _adopt() -> void:
+	var was := owner_car if is_instance_valid(owner_car) else null
+	for node in get_tree().get_nodes_in_group("vehicles"):
+		var o := node as Vehicle
+		if o.is_dead or o == was:
+			continue
+		if (was == null or (o.car_id == was.car_id and o.is_player == was.is_player)) and not is_instance_valid(o.bot):
+			owner_car = o
+			o.bot = self
+			return
 
 
 func _physics_process(delta: float) -> void:
@@ -115,13 +146,12 @@ func _physics_process(delta: float) -> void:
 		return
 	_t += delta
 	if not is_instance_valid(owner_car) or owner_car.is_dead:
-		_fold_up() # its owner is gone: it blows itself apart (harmless)
-		return
+		_adopt() # its truck was destroyed: it waits for the next one (owner: only an opponent ends it)
 	_hit_flash = maxf(0.0, _hit_flash - delta)
 	match state:
-		"drop": # falls out of the back, lands with a thump, stands up
+		"drop": # slides down out of the back door onto the road, lands with a thump, stands up
 			var k := clampf(_t / DROP_TIME, 0.0, 1.0)
-			global_position = _drop_from.lerp(_ground, k * k)
+			global_position = _drop_from.lerp(_ground, k) + Vector3.UP * 0.25 * sin(k * PI)
 			if k >= 1.0:
 				_land()
 		"wait":
@@ -129,12 +159,10 @@ func _physics_process(delta: float) -> void:
 			_scan += delta
 			var want := _pick_target()
 			_turn_to(want, delta)
-			if not owner_car.is_player and _t > 1.0: # an AI owner: it fires on its own once someone is in reach
-				if (want and _sees(want) and global_position.distance_to(want.global_position) < 50.0) or _t > 8.0:
+			var ai_owner := is_instance_valid(owner_car) and not owner_car.is_dead and not owner_car.is_player
+			if ai_owner and _t > 1.0: # an AI owner: it fires on its own once someone is in reach
+				if want and _sees(want) and global_position.distance_to(want.global_position) < 50.0:
 					_start_barrage()
-			if _t > WeaponData.BOT_WAIT:
-				_fold_up()
-				return
 		"fire":
 			_stand(delta)
 			if not is_instance_valid(_lock) or _lock.is_dead:
@@ -144,11 +172,15 @@ func _physics_process(delta: float) -> void:
 			if _gap <= 0.0:
 				_gap = WeaponData.BOT_GAP
 				_launch_one()
-		"spent":
+		"reload":
 			_stand(delta)
-			if _t > SPENT_DELAY:
-				_fold_up()
-				return
+			_scan += delta
+			_turn_to(_pick_target(), delta)
+			if _t >= COOLDOWN:
+				state = "wait"
+				_t = STAND_TIME # already standing
+				if is_instance_valid(owner_car) and owner_car.is_player:
+					owner_car.notice.emit(owner_car, "SWEET BOT READY")
 	_recoil = move_toward(_recoil, 0.0, delta * 0.6)
 	_upper.position = _waist + _upper.basis.z * _recoil # kicked back a little per shot
 	_check_cars()
@@ -225,10 +257,8 @@ func _start_barrage() -> void:
 
 func _launch_one() -> void:
 	if _shots >= WeaponData.BOT_MISSILES:
-		state = "spent"
+		state = "reload"
 		_t = 0.0
-		if is_instance_valid(owner_car) and owner_car.live_special() == self:
-			owner_car.set_live_special(null) # the special fires as normal again
 		return
 	var tube: Vector3 = _tubes[_shots % _tubes.size()]
 	var from := _upper.to_global(tube)
@@ -295,19 +325,7 @@ func _destroyed(by: Vehicle) -> void:
 	_gone()
 
 
-## Spent, timed out or its owner gone: it blows itself apart in a small harmless pop.
-func _fold_up() -> void:
-	if _dead:
-		return
-	_dead = true
-	var world := get_parent()
-	FxKit.explosion(world, global_position + Vector3.UP * 1.3, 1.1, Color(1.0, 0.5, 0.15))
-	for k in 3:
-		FxKit.spark(world, global_position + Vector3.UP * 1.5, Vector3(randf_range(-1, 1), 1.0, randf_range(-1, 1)).normalized())
-	_gone()
-
-
 func _gone() -> void:
-	if is_instance_valid(owner_car) and owner_car.live_special() == self:
-		owner_car.set_live_special(null)
+	if is_instance_valid(owner_car) and owner_car.bot == self:
+		owner_car.bot = null
 	queue_free()

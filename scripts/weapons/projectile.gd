@@ -383,7 +383,7 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 		if def.has("freeze"):
 			v.freeze_for(float(def["freeze"]))
 		if def.has("clamp"):
-			v.clamp_for(float(def["clamp"]), pos)
+			v.clamp_for(float(def["clamp"]), pos, shooter)
 		if def.has("burn"):
 			v.ignite(float(def["burn"]), shooter)
 	elif collider is Breakable: # falls away from the shot; explosive and fire shots set wood alight

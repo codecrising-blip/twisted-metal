@@ -203,7 +203,7 @@ func _energy_moves(v: Vehicle, delta: float) -> void:
 			and randf() < 0.3 * aggression:
 		v.want_move = "secondary"
 		return
-	if second == "sweet_bot" and charges >= 3 and not v.has_live_special() and to.length() > 12.0 and to.length() < 45.0 \
+	if second == "sweet_bot" and charges >= 3 and not is_instance_valid(v.bot) and to.length() > 12.0 and to.length() < 45.0 \
 			and randf() < 0.2 * aggression:
 		v.want_move = "secondary" # the robot fires by itself for an AI owner
 		return
