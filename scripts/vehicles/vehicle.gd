@@ -1867,6 +1867,7 @@ func _update_damage_fx() -> void:
 
 
 func _die() -> void:
+	var airborne := not is_on_floor() # owner, round 17: died in the air = the driver is blasted out
 	is_dead = true
 	frozen_time = 0.0
 	burn_time = 0.0
@@ -1875,7 +1876,7 @@ func _die() -> void:
 	_ice.visible = false
 	_visual.visible = true
 	FxKit.explosion(get_parent(), global_position + Vector3.UP * 1.5, 2.6)
-	GameFeel.play("death_female" if stats.get("female", false) else "death_male", global_position + Vector3.UP, get_parent())
+	BurningDriver.spawn_for(self, airborne) # the driver gets out burning (or is thrown out); they scream
 	for snd: AudioStreamPlayer3D in [_gun_snd, _skid_snd]:
 		if snd:
 			snd.stop()

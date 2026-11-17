@@ -109,6 +109,10 @@ static func blast_props(world: Node, pos: Vector3, radius: float, damage: float,
 		if Vector2(rel.x, rel.z).length() > radius + 0.5 or rel.y > radius + 1.0 or rel.y < -(radius + b.topple_height):
 			continue
 		b.weapon_hit(damage * WeaponData.DAMAGE_SCALE, shooter, pos, true)
+	for node in world.get_tree().get_nodes_in_group(&"drivers"): # burning drivers are thrown, dead
+		var d := node as BurningDriver
+		if d and d.global_position.distance_to(pos) < radius + 1.0:
+			d.blast(pos, shooter)
 
 
 ## Where a napalm can bursts: a fireball, everything near takes the hit and burns, a pool of fire stays.

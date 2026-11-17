@@ -5,7 +5,7 @@ extends Node3D
 ## projectile_hit(damage, shooter) (stands, glass, sign letters) takes the hit too.
 ## Napalm cans are thrown (gravity) and wait for the next fire press: fire_again() drops them.
 
-const HIT_MASK := 1 | 2 | Breakable.COVER_LAYER # world + vehicles + cover around palms and street lights
+const HIT_MASK := 1 | 2 | Breakable.COVER_LAYER | BurningDriver.LAYER # world, vehicles, cover round palms and street lights, burning drivers
 const LOB_GRAVITY := 30.0
 
 static var spawned_total := 0 # used by tests

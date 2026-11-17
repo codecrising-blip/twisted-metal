@@ -34,7 +34,7 @@ All files: mono Ogg Vorbis, peak -1 dB, converted from the owner's TM1 / TM2 / T
 
 **Peaks:** `python3 tests/sound_peaks.py` writes `scripts/fx/sound_peaks.gd` (each file's loudest moment). Run it after
 adding or replacing any sound: `GameFeel.play(..., sync = true)` uses it to put that moment on the impact frame.
-| `death_male`, `death_female` | a driver dies (`"female": true` in `Roster`) |
+| `death_male`, `death_female` | a burning driver screams as they run from the wreck (TMB screams, owner round 17; the TM2 voices are gone); `"female": true` in `Roster` |
 | `ignite`, `fire_loop` | a car catches fire; fire pools and the pit of fire |
 | `mine_drop` | the Remote mine is planted (TM4 SFX 37, owner's pick) |
 | `sat_launch`, `sat_scan_loop`, `sat_incoming`, `sat_strike` | SAT: launch at the shooter, scan hum while locked, warning 1.4 s before, the beam (+ big blast layers) (TM 2012) |

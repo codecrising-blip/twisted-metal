@@ -450,6 +450,22 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   plus `FxKit.shield_sparks` (no white flash while shielded). Screenshot `shield_close <out> <frames> [hit frames]`; a moving clip: `tests/_shield_clip.gd` with `--fixed-fps 30`
   (one run, so the shader's TIME runs on; separate screenshot runs each restart the clock).
   `tests/_spot_shot.gd -- x,y,z,yaw out.png` shoots the chase camera at an F3 position.
+  **Driver deaths (owner, from TMB's burning drivers, made our own):** `BurningDriver` (StaticBody3D on layer 64,
+  in `Projectile.HIT_MASK`, group "drivers") + `DriverCorpse` (RigidBody3D, world only) + `BloodFx` + the Blender
+  dummies `driver_m/f.glb` (`tools/blender/build_drivers.py`: one man, one woman, clips run_burn / kneel / crawl /
+  prone / limp; `burnt_body.gdshader` = charcoal with glowing ember cracks, `heat` 1 -> 0). `Vehicle._die` ->
+  `BurningDriver.spawn_for(car, airborne)`: died on the ground = once the wreck has landed (`_wait_for_wreck`) the
+  driver climbs out of the driver's door burning, screams (TMB screams replaced TM2's `death_male/female`), runs
+  away from the killer `RUN_TIME` 5 s beating at the flames, kneels, crawls ~2 m, dies; died in the air = thrown out
+  dead and burning (`DriverCorpse.fling`). Finish them off: any projectile or blast (`projectile_hit`, `blast` via
+  `Specials.blast_props`) or a car; the killer gets `WeaponData.DRIVER_KILL_ENERGY` 10 (TMB gave health). Run down
+  head-on at >= 9 m/s within 40 deg: swept onto the hood and into the windshield (per-car `hood` / `glass` /
+  `glass_n` in `Roster`, measured on the models), blood on the glass, then thrown off; otherwise pressed under
+  (flat, black, a bump for the car). Rammed = fire out, black body, blood pool + a splash on the car that fades.
+  Camera never follows a driver. Gotchas: switch `CPUParticles3D.emitting` off BEFORE `add_child` or its first
+  particle freezes in place (a black ball); `continuous_cd` still let a fast thin body through the ground's
+  triangles, so `DriverCorpse._integrate_forces` rays from the last position; flames on a lying body must point up
+  in world space. `tests/_driver_clip.gd` films ground / close / air / windshield / under.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -473,6 +489,7 @@ tools/blender/              Blender asset pipeline (round 10): tmlib.py + build_
                             build_outlaw / build_la_backdrop; output in assets/models/ (.glb + _albedo/_normal/_orm)
 scripts/core/model_lib.gd   loads the Blender models and their baked materials
 scripts/vehicles/blender_cars.gd  assembles a Blender car (body, wheels, spinners, markers) with the usual metadata
+scripts/vehicles/burning_driver.gd + driver_corpse.gd  burning drivers out of wrecks (round 17); fx/blood_fx.gd
 scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (simple primitives),
                             MeshBuilder (detailed models merged per material: chamfered boxes, lofts, lathes),
                             MatKit (generated paint/rust/chrome/rubber textures; world-mapped ground: pavement,
@@ -525,7 +542,8 @@ docs/juice-guide.md         how every interaction should look and sound (round 8
 
 ## Conventions
 - Units are meters. Cars face **-Z**, Y up, wheels touch y = 0.
-- Physics layers: 1 world, 2 vehicles, 3 projectiles (unused for bodies), 4 pickups.
+- Physics layers: 1 world, 2 vehicles, 3 projectiles (unused for bodies), 4 pickups, 5 (16) cars-only barrier, 6 (32)
+  cover round palms/lights, 7 (64) burning drivers (projectiles only).
 - Controllers fill `Vehicle.in_*` fields; one-shot actions use `want_*` flags. No controller = car coasts.
 - New car: stats in `Roster.CARS`, builder in `VehicleModels.build()`, special weapon in `WeaponData.DEFS`.
 - New stage: a script like `LosAngelesArena` that exposes `build()` (adds its own WorldEnvironment and sun),

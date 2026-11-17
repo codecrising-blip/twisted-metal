@@ -58,6 +58,9 @@ const CARS := {
 		"special": "napalm_cone", "freeze_cost": 35.0, # energy perk: Brain Freeze (design 5.5)
 		"last_laugh": true, # perk (design 2.1): under 30% health the special recharges 50% faster, the roof fire burns blue
 		"size": Vector3(2.5, 2.8, 6.6), "camera": [6.4, 13.0],
+		# Where a run-down driver lands (round 17, measured on the model): hood top (y, z) and the
+		# windshield where the head hits (y, z) with its outward normal.
+		"hood": Vector2(1.5, -2.4), "glass": Vector2(2.2, -1.95), "glass_n": Vector3(0, 0.3, -0.95),
 		"tagline": "He laughs louder than the engine.",
 	},
 	"outlaw": {
@@ -68,6 +71,7 @@ const CARS := {
 		# Round 11 (owner): she U-turns like a light car, and her turbo tank holds 1.4x (7 s instead of 5).
 		"uturn": "light", "turbo_tank": 1.4,
 		"size": Vector3(2.2, 1.6, 5.0),
+		"hood": Vector2(1.2, -1.3), "glass": Vector2(1.38, -0.45), "glass_n": Vector3(0, 0.75, -0.66),
 		"tagline": "She stopped telling them it was about justice.",
 	},
 	"junkyard_dog": {

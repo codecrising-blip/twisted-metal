@@ -166,6 +166,9 @@ const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "
 ## Round 14 (owner): specials recharge slower the fewer a car can hold (they pile up to 3/4/5):
 ## x2 for the 3-slot cars (easy to land), x1.75 for 4 slots, x1.5 for 5 (hard to land), of the
 ## original "recharge" times. Roster.special_recharge(id) applies it.
+## Finishing off a burning driver (shot, blasted or run down) pays the killer this much energy
+## (owner, round 17: Twisted Metal: Black gave health, ours gives energy).
+const DRIVER_KILL_ENERGY := 10.0
 const SPECIAL_RECHARGE_BY_SLOTS := {3: 2.0, 4: 1.75, 5: 1.5}
 
 const HEALTH_PICKUP_RATIO := 0.30

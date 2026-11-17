@@ -1181,6 +1181,70 @@ func _run() -> void:
 		"Sweet Tooth's Last Laugh: under 30%% health the special recharges 1.5x faster, roof fire blue (%.2f vs %.2f)" % [laugh_t, calm_t])
 	st15.ammo["napalm_cone"] = 2
 
+	# Round 17: burning drivers (owner, from Twisted Metal: Black). Shot, they die and the shooter gets
+	# energy; run down fast and head-on they go over the hood into the windshield and are thrown off;
+	# run down slowly they are pressed under (the fire out, a black body); a car destroyed on the ground
+	# lets its driver climb out burning once the wreck is down; destroyed in the air, it throws them out.
+	var spot := LosAngelesArena.ground(-20, 20)
+	var me: Vehicle = main.player
+	me.shield_time = 0.0
+	var dr := BurningDriver.new()
+	dr.position = spot
+	main.add_child(dr)
+	await _frames(3)
+	_check(dr.state == BurningDriver.RUN and dr.is_in_group(&"drivers"), "a burning driver runs")
+	me.energy = 50.0
+	dr.projectile_hit(1.0, me)
+	_check(dr.state == BurningDriver.DEAD and is_equal_approx(me.energy, 50.0 + WeaponData.DRIVER_KILL_ENERGY),
+		"shooting a burning driver kills them and pays %d energy (now %.0f)" % [int(WeaponData.DRIVER_KILL_ENERGY), me.energy])
+	var size: Vector3 = me.stats.size
+	var count_corpses := func() -> int: return main.get_children().filter(func(n: Variant) -> bool: return n is DriverCorpse).size()
+	var dr2 := BurningDriver.new()
+	dr2.position = spot
+	main.add_child(dr2)
+	await _frames(2)
+	_place(me, -20, 24, 0) # 4 m south of them, facing north: they are right ahead
+	me.speed = 15.0
+	me.linear_velocity = Vector3(0, 0, -15)
+	var bodies0: int = count_corpses.call()
+	dr2._run_down(me, me.global_transform.affine_inverse() * (dr2.global_position + Vector3.UP * 0.6), size)
+	await _frames(1)
+	_check(count_corpses.call() == bodies0 + 1 and not is_instance_valid(dr2), "run down fast head-on: thrown into the windshield (a body flies)")
+	_place(me, -60, 60, 0) # out of the way, or it runs the next one down before the test does
+	var dr3 := BurningDriver.new()
+	dr3.position = spot
+	main.add_child(dr3)
+	await _frames(2)
+	_place(me, -20, 24, 0)
+	me.speed = 5.0
+	me.linear_velocity = Vector3(0, 0, -5)
+	dr3._run_down(me, me.global_transform.affine_inverse() * (dr3.global_position + Vector3.UP * 0.6), size)
+	_check(is_instance_valid(dr3) and dr3.state == BurningDriver.DEAD and dr3._heat == 0.0 and not dr3._fire.emitting,
+		"run down slowly: pressed under, the fire out on a black body")
+	_place(me, -60, 60, 0)
+	var ol17: Vehicle = main.enemies.filter(func(e: Vehicle): return e.car_id == "outlaw")[0]
+	ol17.shield_time = 0.0
+	ol17.invulnerable_time = 0.0
+	_place(ol17, -20, 60, 0)
+	await _frames(20)
+	var drivers_before := get_nodes_in_group(&"drivers").size()
+	ol17.take_damage(99999.0, me)
+	var climbed := false
+	for k in 300:
+		await physics_frame
+		if get_nodes_in_group(&"drivers").size() > drivers_before:
+			climbed = true
+			break
+	_check(climbed, "destroyed on the ground: the driver climbs out burning once the wreck is down")
+	me.shield_time = 0.0
+	me.invulnerable_time = 0.0
+	_place(me, -20, 40, 0)
+	me.global_position += Vector3.UP * 8.0
+	await _frames(2)
+	bodies0 = count_corpses.call()
+	me.take_damage(99999.0, ol17)
+	_check(me.is_dead and count_corpses.call() == bodies0 + 1, "destroyed in the air: the driver is thrown out of the car")
+
 	print("")
 	if _failures.is_empty():
 		print("ALL TESTS PASSED")
