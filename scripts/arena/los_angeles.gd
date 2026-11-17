@@ -1245,21 +1245,28 @@ func _fire_pit() -> void:
 	# Round 5 (frames at the pit): on LOW the pit is one column of fewer flames, two side fires and
 	# light smoke (was ~110 big see-through quads stacked on each other; now ~45).
 	var high := GraphicsSettings.high
-	# Round 17 (owner: TMB fire everywhere): the pit burns with TMB flame sheets: a tall heart in the
-	# middle and a ring of lower tongues round it, plus two side fires (fewer sheets on LOW).
-	var pit := TmbFireGroup.new()
-	pit.position = bottom + Vector3.UP * 0.4
-	for k in (5 if high else 4):
-		var a := TAU * k / (5.0 if high else 4.0)
-		pit.add(Vector2(6.0, 13.0 + _rng.randf() * 3.5), Vector3(cos(a) * 1.6, 0.0, sin(a) * 1.6))
-	pit.scatter(4.0, 9 if high else 6, Vector2(3.6, 7.5), _rng)
+	# Round 18 (owner's pick): the pit burns with the game's fire, a tall rolling column of hair-strand
+	# puffs in the middle and two or three lower fires round it (fewer puffs on LOW).
+	var pit := FoamFire.new()
+	pit.position = bottom + Vector3.UP * 0.3
+	pit.box = Vector3(3.0, 0.1, 3.0)
+	pit.size = 3.6
+	pit.rate = 40.0 if high else 28.0
+	pit.life = 1.6
+	pit.rise = 5.8
+	pit.inherit = 0.0
 	add_child(pit)
 	pit.on = true
 	for k in (3 if high else 2):
 		var a := k * TAU / 3.0 + 0.5
-		var side := TmbFireGroup.new()
-		side.position = ground(cos(a) * 6.0, sin(a) * 6.0, 0.2)
-		side.scatter(1.5, 3, Vector2(2.6, 5.0), _rng)
+		var side := FoamFire.new()
+		side.position = ground(cos(a) * 6.0, sin(a) * 6.0, 0.1)
+		side.box = Vector3(1.0, 0.05, 1.0)
+		side.size = 1.6
+		side.rate = 14.0
+		side.life = 0.9
+		side.rise = 2.4
+		side.inherit = 0.0
 		add_child(side)
 		side.on = true
 	var smoke := FxKit.smoke(3.0, 16 if high else 10)
@@ -1309,9 +1316,13 @@ func _burnt_building(c: Vector3) -> void:
 	smoke.position = c + Vector3(2, h + 1.0, 0)
 	add_child(smoke)
 	smoke.emitting = true
-	var embers := TmbFireGroup.new() # still burning on the first floor (TMB flames, round 17)
+	var embers := FoamFire.new() # still burning on the first floor (the game's fire, round 18)
 	embers.position = c + Vector3(-6, 6.6, 0)
-	embers.scatter(1.5, 3, Vector2(1.4, 2.4), _rng)
+	embers.box = Vector3(1.4, 0.05, 1.0)
+	embers.size = 1.2
+	embers.rate = 14.0
+	embers.life = 0.8
+	embers.inherit = 0.0
 	add_child(embers)
 	embers.on = true
 	var glow := FlickerLight.new()

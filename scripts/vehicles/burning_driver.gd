@@ -6,8 +6,8 @@ extends StaticBody3D
 ## beyond recognition and on fire, screaming, and runs away from whoever killed them for RUN_TIME
 ## seconds, stumbling and beating at the flames with no hope, then drops to the knees, crawls a few
 ## metres and crumples dead, curled up as burnt bodies do. Died in the air: the driver is blasted out
-## of the car and lands dead and burning (DriverCorpse). The flames are the TMB kind (TmbFire): streaky
-## sheets on every limb that trail behind as they run; no smoke. The body sinks away after BODY_STAYS.
+## of the car and lands dead and burning (DriverCorpse). The flames are the game's fire (FoamFire, round 18):
+## born all over the body and left behind in the air, so they trail as they run; no smoke. The body sinks away after BODY_STAYS.
 ## While alive they can be finished off: shot (any projectile, blasts too) or run down. Run down hard
 ## and head-on they go over the hood into the windshield and off (DriverCorpse); otherwise they are
 ## pressed under the car. Either way the fire goes out, the body is black, blood pools on the ground
@@ -27,6 +27,7 @@ const RAM_MIN_SPEED := 3.0 # slower than this a car only shoves them aside
 const WINDSHIELD_SPEED := 9.0 # m/s (~32 km/h) and head-on: over the hood into the windshield
 const WINDSHIELD_ANGLE := 40.0 # degrees off the car's line of travel
 const MAX_BODIES := 8
+const SCREAM_DB := -0.2 # -1 dB x1.1 (owner, round 18: 20 log10 1.1 = +0.83 dB)
 const HEAD_ON_PART := 0.55 # the front this share of the half length counts as the car's front
 
 enum { RUN, KNEEL, CRAWL, DEAD }
@@ -43,7 +44,7 @@ var _fall := 0.0
 var _model: Node3D
 var _anim: AnimationPlayer
 var _mat: ShaderMaterial
-var _flames: Array = [] # TmbFire sheets on the limbs
+var _ff: FoamFire # the fire on the body; its box follows the pose (set_pose)
 var _burn := 1.0 # how strongly they burn (0 = out)
 var _burn_rate := 0.0 # how fast the fire dies once they are dead
 var _speed := 0.0
@@ -107,6 +108,35 @@ static func _keep(node: Node3D) -> void:
 		(_bodies.pop_front() as Node).queue_free()
 
 
+## The fire on a burning body (round 18): small puffs born over the body, left behind as it moves.
+static func body_fire(parent: Node3D) -> FoamFire:
+	var f := FoamFire.new()
+	f.size = 0.55
+	f.rate = 42.0
+	f.life = 0.45
+	f.rise = 2.0
+	f.inherit = 0.7 # a runner trails about a metre and a half of flame
+	f.drag = 2.0
+	f.rise_in = 8.0
+	parent.add_child(f)
+	return f
+
+
+## Where on the body the flames are born (driver space, the feet at 0): upright, kneeling, or low
+## (crawling, lying).
+static func set_pose(f: FoamFire, pose: String) -> void:
+	match pose:
+		"stand":
+			f.position = Vector3(0, 0.95, 0)
+			f.box = Vector3(0.18, 0.7, 0.12)
+		"kneel":
+			f.position = Vector3(0, 0.6, 0)
+			f.box = Vector3(0.2, 0.45, 0.15)
+		_:
+			f.position = Vector3(0, 0.22, 0)
+			f.box = Vector3(0.22, 0.12, 0.75)
+
+
 ## A burnt body (the Blender dummy, driver_m / driver_f) with its clips set to loop. Returns the model;
 ## its AnimationPlayer and ShaderMaterial are in the metas "anim" and "mat".
 static func make_body(female: bool) -> Node3D:
@@ -141,11 +171,12 @@ func _ready() -> void:
 	_anim.play("run_burn")
 	_anim.seek(randf() * 1.3)
 	_anim.speed_scale = RUN_ANIM * randf_range(0.92, 1.08)
-	_flames = TmbFire.on_body(_model)
-	TmbFire.set_all(_flames, 1.0)
+	_ff = body_fire(self)
+	set_pose(_ff, "stand")
+	_ff.on = true
 	_next_stumble = randf_range(0.8, 1.6)
-	# The scream starts the moment they are out (its cry peaks 0.3 s in).
-	_scream = GameFeel.play("death_female" if female else "death_male", global_position + Vector3.UP * 1.5, self, -1.0, randf_range(0.95, 1.05))
+	# The scream starts the moment they are out (its cry peaks 0.3 s in); owner, round 18: x1.1 louder.
+	_scream = GameFeel.play("death_female" if female else "death_male", global_position + Vector3.UP * 1.5, self, SCREAM_DB, randf_range(0.95, 1.05))
 	_wander = randf() * TAU
 	look_at(global_position + _heading, Vector3.UP)
 
@@ -184,14 +215,14 @@ func _physics_process(delta: float) -> void:
 			_heat = maxf(0.0, _heat - _cool * delta)
 			_mat.set_shader_parameter("heat", _heat)
 			_burn = maxf(0.0, _burn - _burn_rate * delta)
-			TmbFire.set_all(_flames, _burn)
+			_ff.level = _burn
+			_ff.on = _burn > 0.02
 			if _t > BODY_STAYS:
 				position.y -= delta * 0.4 # sinks away
 				if _t > BODY_STAYS + 1.5:
 					queue_free()
 			return
-	# Running, the tips of the flames stream back against the way they go.
-	TmbFire.set_all(_flames, _burn, -_heading * minf(_speed, 5.0) * 0.12)
+	_ff.level = _burn # running, the flames trail behind by themselves (they are left in the air)
 	_check_cars()
 
 
@@ -240,10 +271,12 @@ func _enter(s: int) -> void:
 	_t = 0.0
 	match s:
 		KNEEL:
+			set_pose(_ff, "kneel")
 			_anim.play("kneel", 0.35)
 			_box.size = Vector3(0.9, 1.3, 0.9)
 			_shape.position = Vector3(0, 0.65, 0)
 		CRAWL:
+			set_pose(_ff, "low")
 			_anim.play("crawl", 0.45)
 			_box.size = Vector3(0.9, 0.8, 1.6)
 			_shape.position = Vector3(0, 0.4, 0)
@@ -265,6 +298,7 @@ func _die(by: Vehicle, how: String) -> void:
 		var tw := _scream.create_tween()
 		tw.tween_property(_scream, "volume_db", -40.0, 0.12)
 		tw.tween_callback(_scream.stop)
+	set_pose(_ff, "low")
 	match how:
 		"burns": # crumples where they are; the fire burns down on the body
 			_anim.play("prone", 0.8)
@@ -286,7 +320,8 @@ func _die(by: Vehicle, how: String) -> void:
 func _put_out() -> void:
 	_burn = 0.0
 	_burn_rate = 0.0
-	TmbFire.set_all(_flames, 0.0)
+	_ff.on = false
+	_ff.level = 0.0
 	_heat = 0.0
 	_cool = 0.0
 	_mat.set_shader_parameter("heat", 0.0)

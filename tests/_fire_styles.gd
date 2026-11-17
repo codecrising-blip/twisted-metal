@@ -1,6 +1,6 @@
 extends SceneTree
-## Scratch (round 18): film the four foam-fire looks (FoamFire.LOOKS) for the owner to pick from.
-## Run with --fixed-fps 30. args: look(0-3) scene out_dir frames every
+## Scratch (round 18): film the game's fire (FoamFire, the owner's pick "hair strands").
+## Run with --fixed-fps 30. args: look(any number; ignored now) scene out_dir frames every
 ##   park   Sweet Tooth parked, seen from the front three-quarter, fire on the engine cover
 ##   drive  Outlaw driving an S-curve, seen from behind (the TMB view): the fire swings through the turns
 ##   spot   the fire left on the ground where a car blew apart
@@ -24,25 +24,31 @@ func _run() -> void:
 	cam.target = null
 	var player: Vehicle = main.player
 	var e: Vehicle = main.enemies[0]
-	var car: Vehicle = player if scene == "park" else e
+	var car: Vehicle = player if scene in ["park", "side"] else e
 	for v: Vehicle in [player] + main.enemies:
 		v.controller = null
 		v.invulnerable_time = 0.0 # no spawn-protection blinking
-		if v != car or scene == "spot":
+		if v != car or scene in ["spot", "pit"]:
 			v.global_position = Vector3(30, 80, 30)
 			v.freeze = true
 	var base := LosAngelesArena.ground(-40, 40)
 	var start := base if scene != "drive" else base + Vector3(40, 0, 0)
-	if scene != "spot":
+	if scene not in ["spot", "pit"]:
 		car.global_transform = Transform3D(Basis(Vector3.UP, deg_to_rad(90)), start + Vector3(0, 0.05, 0)) # faces -X
 	for i in 20:
 		await physics_frame
 	car._visual.visible = true # it may have been caught in a spawn-protection blink
 	var fire: FoamFire
-	if scene == "spot":
-		fire = FoamFire.spot(main, base, Vector3(2.2, 1.6, 5.0), look)
+	if scene == "pit":
+		fire = FoamFire.new()
+		main.add_child(fire)
+	elif scene == "spot":
+		var holder := Node3D.new()
+		main.add_child(holder)
+		holder.global_position = base
+		fire = FoamFire.pyre(holder, Vector3(2.2, 1.6, 5.0))
 	else:
-		fire = FoamFire.on_hood(car, look)
+		fire = FoamFire.on_hood(car.get_node("Visual"), car.stats)
 	fire.on = true
 	var clock := [0.0]
 	if scene == "drive":
@@ -59,7 +65,7 @@ func _run() -> void:
 		physics_frame.connect(drive)
 	var layer := CanvasLayer.new()
 	var label := Label.new()
-	label.text = FoamFire.LOOKS[look].name
+	label.text = "HAIR STRANDS" if look >= 0 else ""
 	label.position = Vector2(24, 18)
 	label.add_theme_font_size_override("font_size", 40)
 	label.add_theme_color_override("font_color", Color(1, 1, 1))
@@ -77,6 +83,12 @@ func _run() -> void:
 		if scene == "park":
 			cam.global_position = p + Vector3(-7.5, 3.0, 5.5)
 			cam.look_at(p + Vector3(-1.2, 1.8, 0))
+		elif scene == "side": # close and low from the side: is the fire sitting on the hood or floating?
+			cam.global_position = p + Vector3(-1.5, 2.2, 6.5)
+			cam.look_at(p + Vector3(-2.0, 1.7, 0))
+		elif scene == "pit": # the stage's pit of fire, as the player sees it coming up the battleground
+			cam.global_position = Vector3(-4, 9, 34)
+			cam.look_at(Vector3(0, 4, 0))
 		elif scene == "spot":
 			cam.global_position = base + Vector3(-6, 3.2, 9)
 			cam.look_at(base + Vector3(0, 1.6, 0))

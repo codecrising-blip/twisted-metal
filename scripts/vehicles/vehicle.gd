@@ -220,9 +220,9 @@ var _squish_vel := Vector3.ZERO
 var _wobble_t := 0.0 # homing hit: the steering twitches
 var _wobble_dir := 1.0
 var _smoke: CPUParticles3D
-var _fire: TmbFireGroup # badly damaged: a fire at the engine
-var _burn_fx: TmbFireGroup # burning (round 17: TMB flames streaming back off the car)
-var _pyre: TmbFireGroup # the wreck burning like a pyre, then dying down
+var _fire: FoamFire # badly damaged: a smaller fire on the engine cover
+var _burn_fx: FoamFire # set on fire: the engine cover burns, streaming back as it drives (round 18)
+var _pyre: FoamFire # blown apart: the heap of fire left on the ground, then dying down
 var _ice: MeshInstance3D
 # Sound loops (the owner's TM2 recordings, session 6): engine by weight class, guns and tire skid
 # while they happen. Null when a file is missing.
@@ -351,24 +351,12 @@ func setup(id: String, player: bool) -> void:
 	_smoke.position = top
 	_smoke.emitting = false
 	_visual.add_child(_smoke)
-	# Fire the TMB way (round 17, the owner's standard): streaky flame sheets, not soft blobs.
-	_fire = TmbFireGroup.new() # badly damaged: flames licking up from the engine
-	_fire.add(Vector2(size.x * 0.55, 1.5), top + Vector3(0.15, -0.3, 0.0))
-	_fire.add(Vector2(size.x * 0.4, 1.0), top + Vector3(-0.3, -0.3, 0.25))
-	_fire.level = 0.85
-	_visual.add_child(_fire)
-	_burn_fx = TmbFireGroup.new() # set on fire: flames over the whole car, streaming back as it drives
-	for z: float in [-0.3, 0.0, 0.3]:
-		_burn_fx.add(Vector2(size.x * 0.85, 1.7), Vector3(0, size.y * 0.55, size.z * z))
-	_burn_fx.lean_scale = 0.08
-	_visual.add_child(_burn_fx)
-	_pyre = TmbFireGroup.new() # destroyed: a pyre the size of the car that burns down
-	for x: float in [-0.22, 0.22]:
-		for z: float in [-0.33, 0.0, 0.33]:
-			_pyre.add(Vector2(size.x * 0.8, 2.8 + randf() * 0.8), Vector3(size.x * x, 0.05, size.z * z)) # on the ground
-	_pyre.rise = 6.0
-	_pyre.fall = 0.35 # dies down over about three seconds
-	_visual.add_child(_pyre)
+	# The game's fire (round 18, the owner's pick): FoamFire, only on the engine cover, never over the
+	# whole car or inside it; it streams back and swings through turns on its own.
+	_fire = FoamFire.on_hood(_visual, stats) # badly damaged: smaller, lazier
+	_fire.level = 0.55
+	_burn_fx = FoamFire.on_hood(_visual, stats) # set on fire
+	_pyre = FoamFire.pyre(_visual, size) # blown apart: the heap of fire left where it stood
 
 	_ice = MeshInstance3D.new()
 	var ice_mesh := BoxMesh.new()
@@ -1908,7 +1896,8 @@ func _die() -> void:
 	set_deferred("freeze", true)
 	set_deferred("collision_layer", 0)
 	set_deferred("collision_mask", 0)
-	set_deferred("global_position", spot)
+	var yaw := global_rotation.y # upright where it died, whatever way it was tumbling: the fire stands up
+	set_deferred("global_transform", Transform3D(Basis(Vector3.UP, yaw), spot))
 	destroyed.emit(self, last_attacker)
 
 

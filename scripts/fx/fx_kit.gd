@@ -60,6 +60,10 @@ static func ghost_guard(node: Node) -> void:
 			p.explosiveness = 1.0
 	elif p.preprocess < p.lifetime:
 		p.preprocess = p.lifetime
+	# One added already emitting would be drawn once before its first update: every slot black, for a
+	# frame (the black dot inside explosions). A restart updates it at once.
+	if p.emitting:
+		p.restart.call_deferred()
 
 
 static func _ramp(colors: Array) -> Gradient:

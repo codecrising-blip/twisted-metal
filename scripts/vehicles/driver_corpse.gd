@@ -13,7 +13,7 @@ var burning := true
 var bloody := false
 var _model: Node3D
 var _mat: ShaderMaterial
-var _flames: Array = [] # TmbFire sheets on the limbs
+var _ff: FoamFire # the fire along the body (it turns with the body as it tumbles)
 var _burn := 1.0
 var _t := 0.0
 var _settled := false
@@ -91,8 +91,9 @@ func _ready() -> void:
 	_mat = _model.get_meta("mat")
 	(_model.get_meta("anim") as AnimationPlayer).play("limp")
 	if burning:
-		_flames = TmbFire.on_body(_model) # TMB flames on the limbs; they rise whichever way it lies
-		TmbFire.set_all(_flames, 1.0)
+		_ff = BurningDriver.body_fire(self) # along the body in its own space: it rises whichever way it lies
+		_ff.box = Vector3(0.18, 0.75, 0.12)
+		_ff.on = true
 	else:
 		_heat = 0.0
 		_mat.set_shader_parameter("heat", 0.0)
@@ -134,7 +135,8 @@ func _physics_process(delta: float) -> void:
 		_heat = maxf(0.0, _heat - delta * 0.25)
 		_mat.set_shader_parameter("heat", _heat)
 		_burn = maxf(0.0, _burn - delta / BurningDriver.FIRE_DIES)
-		TmbFire.set_all(_flames, _burn)
+		_ff.level = _burn
+		_ff.on = _burn > 0.02
 	if _t > BurningDriver.BODY_STAYS:
 		position.y -= delta * 0.4
 		if _t > BurningDriver.BODY_STAYS + 1.5:

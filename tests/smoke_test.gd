@@ -55,10 +55,8 @@ func _run() -> void:
 	var player: Vehicle = main.player
 	_check(main.arena is LosAngelesArena, "stage 1 is Los Angeles")
 	_check(player != null and player.car_id == "sweet_tooth", "Sweet Tooth spawned as the player")
-	var lit: Array = []
-	for g: TmbFireGroup in [player._fire, player._burn_fx, player._pyre]:
-		lit.append_array(g.sheets.filter(func(m): return (m as MeshInstance3D).visible))
-	_check(lit.is_empty(), "a healthy car shows no flames (fire sheets start out)")
+	var lit: Array = [player._fire, player._burn_fx, player._pyre].filter(func(g: FoamFire): return g.on or g.burning())
+	_check(lit.is_empty(), "a healthy car shows no flames")
 	_check(main.enemies.size() == 4, "four AI enemies in stage 1 (%d)" % main.enemies.size())
 	_check(get_nodes_in_group("pickups").size() >= 20, "weapon and health pickups placed (%d)" % get_nodes_in_group("pickups").size())
 	_check(player.is_on_floor(), "player rests on the ground")
@@ -990,7 +988,7 @@ func _run() -> void:
 	var palm := palms[0] as Breakable
 	palm.weapon_hit(50.0, main.player, palm.global_position + Vector3(4, 0, 0), true)
 	await _frames(3)
-	_check(palm.is_broken and is_instance_valid(palm._fall_body) and palm._fall_fires.any(func(f): return f is TmbFireGroup and (f as TmbFireGroup).on and (f as TmbFireGroup).sheets.size() >= 3), "a palm hit by a weapon falls as a rigid body, on fire (TMB flames)")
+	_check(palm.is_broken and is_instance_valid(palm._fall_body) and palm._fall_fires.any(func(f): return f is FoamFire and (f as FoamFire).on), "a palm hit by a weapon falls as a rigid body, on fire")
 	var fallen: RigidBody3D = palm._fall_body
 	await _frames(70)
 	_check(fallen.to_global(Vector3(0, palm.topple_height, 0)).y - palm.global_position.y < 2.5, "...and comes down flat")

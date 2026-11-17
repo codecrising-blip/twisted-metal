@@ -12,7 +12,7 @@ var show_flames := true # false: the stage draws its own fire there (the pit of 
 
 var _tick := 0.0
 var _light: OmniLight3D
-var _flames: TmbFireGroup # TMB flame sheets over the pool (round 17)
+var _flames: FoamFire # the game's fire over the pool (round 18)
 
 
 static func spawn(parent: Node, pos: Vector3, pool_radius: float, seconds: float, burn_seconds: float, by: Vehicle, flames := true) -> FirePool:
@@ -44,12 +44,15 @@ func _ready() -> void:
 	glow.albedo_color = Color(1.0, 0.4, 0.05, 0.7)
 	MeshKit.cylinder(self, radius, 0.05, Vector3.UP * 0.06, glow, Vector3.ZERO, 16)
 	if show_flames:
-		_flames = TmbFireGroup.new()
-		_flames.scatter(radius * 0.85, clampi(int(radius * 2.2), 3, 10), Vector2(0.5 + radius * 0.3, 1.3 + radius * 0.25))
+		_flames = FoamFire.new()
+		_flames.box = Vector3(radius * 0.72, 0.03, radius * 0.72)
 		_flames.position = Vector3.UP * 0.05
+		_flames.size = clampf(0.7 + radius * 0.3, 0.8, 2.2)
+		_flames.rate = clampf(radius * radius * 7.0, 14.0, 70.0)
+		_flames.life = 0.8
+		_flames.rise = 2.0
+		_flames.rise_in = 8.0
 		add_child(_flames)
-		_flames.rise = 8.0
-		_flames.fall = 1.0
 		_flames.on = true
 	_light = OmniLight3D.new()
 	_light.light_color = Color(1.0, 0.5, 0.15)
