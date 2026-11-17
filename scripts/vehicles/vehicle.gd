@@ -76,8 +76,7 @@ const HEADLIGHT_CONE := deg_to_rad(26.0)
 const FREEZE_BREAK := 15.0 # a single hit this big shatters the ice
 const GRIT_TIME := 3.0 # immune to full disables after one ends
 const SPAWN_SHIELD := 2.0
-const WRECK_SOLID_TIME := 5.0 # wrecks stop blocking the road after this
-const PYRE_TIME := 3.0 # the wreck's pyre burns full this long, then dies down
+const PYRE_TIME := 3.0 # the fire where the car blew apart burns full this long, then dies down
 const RAM_MIN_CLOSING := 8.0
 const RAM_PER_MS := 0.9
 const RAM_MAX := 45.0
@@ -366,7 +365,7 @@ func setup(id: String, player: bool) -> void:
 	_pyre = TmbFireGroup.new() # destroyed: a pyre the size of the car that burns down
 	for x: float in [-0.22, 0.22]:
 		for z: float in [-0.33, 0.0, 0.33]:
-			_pyre.add(Vector2(size.x * 0.8, 2.8 + randf() * 0.8), Vector3(size.x * x, size.y * 0.25, size.z * z))
+			_pyre.add(Vector2(size.x * 0.8, 2.8 + randf() * 0.8), Vector3(size.x * x, 0.05, size.z * z)) # on the ground
 	_pyre.rise = 6.0
 	_pyre.fall = 0.35 # dies down over about three seconds
 	_visual.add_child(_pyre)
@@ -401,9 +400,6 @@ func _physics_process(delta: float) -> void:
 	_sat_preview_step()
 	if is_dead:
 		_wreck_time += delta
-		if _wreck_time > WRECK_SOLID_TIME and collision_layer != 0:
-			collision_layer = 0 # other cars drive through the burnt shell
-			collision_mask = 1
 		if _wreck_time > PYRE_TIME and _pyre.on:
 			_pyre.on = false # the pyre burns down (owner's TMB clips: ~3 s full, then it shrinks away)
 		return
@@ -1887,34 +1883,33 @@ func _die() -> void:
 	_fx.stop()
 	_ice.visible = false
 	_visual.visible = true
-	FxKit.explosion(get_parent(), global_position + Vector3.UP * 1.5, 2.6)
-	BurningDriver.spawn_for(self, airborne) # the driver gets out burning (or is thrown out); they scream
+	# Owner, round 18: the car blows apart completely. Nothing is left but a patch of fire on the ground
+	# and a scorch; the driver runs out of the fire at once (no waiting for a wreck to settle).
+	var world := get_parent()
+	var spot := Specials.ground_below(world, global_position + Vector3.UP)
+	FxKit.explosion(world, global_position + Vector3.UP * 1.2, 3.4)
+	BurningDriver.spawn_for(self, airborne) # the driver runs out burning (or is thrown out); they scream
+	GameFeel.scorch(world, spot, maxf(stats.size.x, 2.0) * 1.1)
 	for snd: AudioStreamPlayer3D in [_gun_snd, _skid_snd]:
 		if snd:
 			snd.stop()
 	for layer: String in _eng:
 		(_eng[layer] as AudioStreamPlayer3D).stop()
-	linear_velocity += Vector3(randf_range(-3, 3), 11.0, randf_range(-3, 3))
-	angular_velocity += Vector3(randf_range(-1, 1), randf_range(-0.3, 0.3), randf_range(-1, 1)).normalized() * randf_range(2.5, 4.5)
 	_charge_fx = null
-	_char(model)
-	_smoke.emitting = true
+	model.visible = false
+	_blob.visible = false
+	_blob.remove_from_group(GraphicsSettings.BLOB_GROUP) # a graphics switch must not bring it back
+	_smoke.emitting = false
 	_fire.on = false
 	_pyre.on = true
+	# The body stays only as the place the camera watches (round 12: on the wreck for the 6 s): frozen on
+	# the ground under where it died, touching nothing.
+	set_deferred("freeze_mode", RigidBody3D.FREEZE_MODE_STATIC)
+	set_deferred("freeze", true)
+	set_deferred("collision_layer", 0)
+	set_deferred("collision_mask", 0)
+	set_deferred("global_position", spot)
 	destroyed.emit(self, last_attacker)
-
-
-## Burnt-out wreck look: everything goes black, lights go out.
-func _char(node: Node) -> void:
-	var burnt := MeshKit.mat(Color(0.05, 0.045, 0.04), 1.0)
-	for child in node.get_children():
-		if child is MeshInstance3D:
-			(child as MeshInstance3D).material_override = burnt
-		elif child is Light3D and not (child is FlickerLight):
-			(child as Light3D).visible = false
-		elif child is Blinker:
-			child.process_mode = Node.PROCESS_MODE_DISABLED
-		_char(child)
 
 
 # ---------------------------------------------------------------- visuals

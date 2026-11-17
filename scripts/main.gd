@@ -39,6 +39,7 @@ var _respawn_timer := -1.0
 
 
 func _ready() -> void:
+	get_tree().node_added.connect(FxKit.ghost_guard) # Compatibility's black particle bug (round 18)
 	InputSetup.setup()
 	GraphicsSettings.load_saved()
 	AudioSettings.setup()

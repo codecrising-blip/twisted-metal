@@ -2,7 +2,7 @@ class_name BurningDriver
 extends StaticBody3D
 ## The driver of a destroyed car (round 17, the owner's idea from Twisted Metal: Black, made our own).
 ##
-## Died on the ground: once the wreck has landed the driver stumbles out of the driver's door, burnt
+## Died on the ground: the car blows apart (round 18, owner: no wreck left) and the driver runs out of the fire at once, burnt
 ## beyond recognition and on fire, screaming, and runs away from whoever killed them for RUN_TIME
 ## seconds, stumbling and beating at the flames with no hope, then drops to the knees, crawls a few
 ## metres and crumples dead, curled up as burnt bodies do. Died in the air: the driver is blasted out
@@ -15,8 +15,6 @@ extends StaticBody3D
 ## The camera never follows a driver (owner): it stays on the wreck.
 
 const LAYER := 64 # physics layer 7: projectiles hit it, cars and the world ignore it
-const EXIT_DELAY := 0.55 # the wreck hops on its death blast; the driver gets out once it is down
-const WRECK_WAIT := 1.2 # ...or after this long whatever it is doing (owner: 3-4 s was far too long)
 const RUN_TIME := 5.0 # owner: they run for 5 seconds
 const RUN_SPEED := 6.25 # a stumbling run, slowed further by stumbles (owner: x1.6, it looked like slow motion)
 const RUN_ANIM := 1.6 # the run clip plays this much faster to match
@@ -66,21 +64,7 @@ static func spawn_for(car: Vehicle, airborne: bool) -> void:
 		var out := car.linear_velocity * 0.6 + Vector3(randf_range(-4.0, 4.0), 8.5, randf_range(-4.0, 4.0))
 		DriverCorpse.fling(world, car.global_position + Vector3.UP * 1.4, out, female, true, null)
 		return
-	_wait_for_wreck(world, car, female, car.last_attacker, 0.0)
-
-
-## The wreck hops and tumbles on its death blast: the driver gets out once it has come down and
-## nearly stopped (at least EXIT_DELAY after the blast, at most WRECK_WAIT).
-static func _wait_for_wreck(world: Node, car: Vehicle, female: bool, killer: Vehicle, waited: float) -> void:
-	if not is_instance_valid(world) or not is_instance_valid(car) or not world.is_inside_tree():
-		return
-	var settled := waited >= EXIT_DELAY and car.linear_velocity.length() < 4.5 \
-		and car.global_position.y - Specials.ground_below(world, car.global_position + Vector3.UP).y < 1.8
-	if settled or waited >= WRECK_WAIT:
-		_climb_out(world, car, female, killer)
-		return
-	car.get_tree().create_timer(0.1, false).timeout.connect(func() -> void:
-		BurningDriver._wait_for_wreck(world, car, female, killer, waited + 0.1))
+	_climb_out(world, car, female, car.last_attacker) # round 18: at once, out of the fire (no wreck)
 
 
 static func _climb_out(world: Node, car: Vehicle, female: bool, killer: Vehicle) -> void:
@@ -91,7 +75,7 @@ static func _climb_out(world: Node, car: Vehicle, female: bool, killer: Vehicle)
 	var ahead := Vector3(-b.z.x, 0.0, -b.z.z)
 	ahead = ahead.normalized() if ahead.length() > 0.1 else Vector3.FORWARD
 	var base := car.global_position
-	# Measured from the ground under the wreck: it may still be hopping when the driver gets out.
+	# Measured from the ground under the car (it may be off the ground a little when it blows).
 	var floor_y := Specials.ground_below(world, base + Vector3.UP).y
 	var at := Vector3.ZERO
 	var found := false

@@ -41,6 +41,27 @@ static func particle_mesh(additive: bool) -> QuadMesh:
 	return q
 
 
+## Round 18: Godot 4.3's Compatibility renderer draws every particle slot that has not been emitted yet
+## as an opaque black quad at the emitter while the system runs (godotengine/godot#107978, #124655):
+## the "black ball" in smoke, explosions and burning drivers. Called for every node added to the tree
+## (main.gd): a running emitter pre-fills its slots (preprocess one lifetime), a one-shot fires them all
+## at once (explosiveness 1, the old spread kept as lifetime randomness). Additive ones are left alone:
+## black adds nothing.
+static func ghost_guard(node: Node) -> void:
+	var p := node as CPUParticles3D
+	if p == null:
+		return
+	var mat: Material = (p.mesh as PrimitiveMesh).material if p.mesh is PrimitiveMesh else null
+	if mat is BaseMaterial3D and (mat as BaseMaterial3D).blend_mode == BaseMaterial3D.BLEND_MODE_ADD:
+		return
+	if p.one_shot:
+		if p.explosiveness < 1.0:
+			p.lifetime_randomness = clampf(maxf(p.lifetime_randomness, (1.0 - p.explosiveness) * 0.8), 0.0, 1.0)
+			p.explosiveness = 1.0
+	elif p.preprocess < p.lifetime:
+		p.preprocess = p.lifetime
+
+
 static func _ramp(colors: Array) -> Gradient:
 	var offsets := PackedFloat32Array()
 	var cols := PackedColorArray()

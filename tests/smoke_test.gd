@@ -1234,12 +1234,18 @@ func _run() -> void:
 	var drivers_before := get_nodes_in_group(&"drivers").size()
 	ol17.take_damage(99999.0, me)
 	var climbed := -1
+	if get_nodes_in_group(&"drivers").size() > drivers_before:
+		climbed = 0
 	for k in 300:
+		if climbed >= 0:
+			break
 		await physics_frame
 		if get_nodes_in_group(&"drivers").size() > drivers_before:
-			climbed = k
-			break
-	_check(climbed > 0 and climbed <= 90, "destroyed on the ground: the driver climbs out burning within 1.5 s (owner: 3-4 s was too long; %.2f s)" % (climbed / 60.0))
+			climbed = k + 1
+	_check(climbed >= 0 and climbed <= 6, "destroyed on the ground: the driver runs out of the fire at once (round 18; %.2f s)" % (climbed / 60.0))
+	await _frames(3)
+	_check(is_instance_valid(ol17) and not ol17.model.visible and ol17.collision_layer == 0 and ol17.freeze and ol17._pyre.on,
+		"the car blows apart: no wreck left (hidden, blocks nothing), a fire burns where it was")
 	me.shield_time = 0.0
 	me.invulnerable_time = 0.0
 	_place(me, -20, 40, 0)
