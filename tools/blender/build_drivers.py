@@ -40,25 +40,34 @@ def reset():
 # ------------------------------------------------------------------ skeleton
 
 def joints(female):
-    """Bone (head, tail, parent) in metres for a ~1.80 m man / ~1.69 m woman."""
-    k = 0.94 if female else 1.0
-    sh = 0.175 if female else 0.205  # shoulder half width
-    hp = 0.1 if female else 0.092  # hip joint half width
+    """Bone (head, tail, parent) in metres. Owner, round 17: men taller with broad shoulders and a long
+    reach (chest about as wide as the hips); women shorter, narrow shoulders (a small reach)."""
+    h = 1.68 if female else 1.82  # standing height
+    k = h / 1.8
+    sh = 0.158 if female else 0.215  # shoulder joint half width
+    hp = 0.09 if female else 0.092  # hip joint half width
+    ua = (0.27 if female else 0.305) * k  # upper arm, forearm, hand lengths
+    fa = (0.245 if female else 0.27) * k
+    hd = 0.1 * k
+    z = lambda v: v * k  # noqa: E731
     j = {
-        "hips": ((0, 0, 0.95), (0, 0, 1.08), None),
-        "spine": ((0, 0, 1.08), (0, 0, 1.28), "hips"),
-        "chest": ((0, 0, 1.28), (0, 0, 1.47), "spine"),
-        "neck": ((0, 0, 1.47), (0, 0, 1.57), "chest"),
-        "head": ((0, 0, 1.57), (0, 0.01, 1.8), "neck"),
+        "hips": ((0, 0, z(0.95)), (0, 0, z(1.08)), None),
+        "spine": ((0, 0, z(1.08)), (0, 0, z(1.28)), "hips"),
+        "chest": ((0, 0, z(1.28)), (0, 0, z(1.47)), "spine"),
+        "neck": ((0, 0, z(1.47)), (0, 0, z(1.57)), "chest"),
+        "head": ((0, 0, z(1.57)), (0, 0.01, z(1.8)), "neck"),
     }
     for side, sx in (("L", 1.0), ("R", -1.0)):
-        j["upper_arm." + side] = ((sx * sh, 0, 1.43), (sx * (sh + 0.05), 0, 1.15), "chest")
-        j["forearm." + side] = ((sx * (sh + 0.05), 0, 1.15), (sx * (sh + 0.075), 0.02, 0.9), "upper_arm." + side)
-        j["hand." + side] = ((sx * (sh + 0.075), 0.02, 0.9), (sx * (sh + 0.085), 0.03, 0.79), "forearm." + side)
-        j["thigh." + side] = ((sx * hp, 0, 0.93), (sx * (hp + 0.008), 0.01, 0.5), "hips")
-        j["shin." + side] = ((sx * (hp + 0.008), 0.01, 0.5), (sx * (hp + 0.008), -0.01, 0.09), "thigh." + side)
-        j["foot." + side] = ((sx * (hp + 0.008), -0.01, 0.09), (sx * (hp + 0.012), 0.17, 0.03), "shin." + side)
-    return {n: (Vector(h) * k, Vector(t) * k, p) for n, (h, t, p) in j.items()}
+        s0 = Vector((sx * sh, 0, z(1.43)))
+        e = s0 + Vector((sx * 0.045, 0, -ua))
+        w = e + Vector((sx * 0.025, 0.02, -fa))
+        j["upper_arm." + side] = (tuple(s0), tuple(e), "chest")
+        j["forearm." + side] = (tuple(e), tuple(w), "upper_arm." + side)
+        j["hand." + side] = (tuple(w), tuple(w + Vector((sx * 0.01, 0.01, -hd))), "forearm." + side)
+        j["thigh." + side] = ((sx * hp, 0, z(0.93)), (sx * (hp + 0.008), 0.01, z(0.5)), "hips")
+        j["shin." + side] = ((sx * (hp + 0.008), 0.01, z(0.5)), (sx * (hp + 0.008), -0.01, z(0.09)), "thigh." + side)
+        j["foot." + side] = ((sx * (hp + 0.008), -0.01, z(0.09)), (sx * (hp + 0.012), 0.17 * k, z(0.03)), "shin." + side)
+    return {n: (Vector(hh), Vector(t), p) for n, (hh, t, p) in j.items()}
 
 
 def make_armature(J):
@@ -144,36 +153,44 @@ class Body:
 
 
 def build_body(J, female, rig):
+    """Plain bodies told apart by build, not by hair or clothes (owner, round 17): the woman (Jamie
+    Roberts's build: skinny) has narrow shoulders, a thin waist, slightly wider hips and backside and
+    a small chest; the man is broad in the shoulders with a chest about as wide as his hips."""
     b = Body()
-    k = 0.94 if female else 1.0
-    P = lambda *v: Vector(v) * k  # noqa: E731
-    hipw = 0.17 if female else 0.155
-    # torso
-    b.ell("hips", P(0, -0.005, 0.99), (hipw * k, 0.115 * k, 0.12 * k), 12)
-    b.seg("spine", P(0, 0, 1.04), P(0, 0, 1.3), (0.125 if female else 0.135) * k, (0.13 if female else 0.15) * k, 0.72, 12)
-    b.ell("chest", P(0, 0.0, 1.37), ((0.165 if female else 0.19) * k, 0.115 * k, 0.15 * k), 12)
+    k = (1.68 if female else 1.82) / 1.8
+    z = lambda v: v * k  # noqa: E731
+    P = lambda x, y, zz: Vector((x, y, z(zz)))  # noqa: E731
     if female:
-        for sx in (1, -1):
-            b.ell("chest", P(sx * 0.07, 0.085, 1.33), (0.062 * k, 0.05 * k, 0.055 * k), 8)
-    b.seg("neck", P(0, 0, 1.45), P(0, 0.005, 1.6), 0.052 * k, 0.047 * k, 1.0, 8)
-    b.ell("head", P(0, 0.012, 1.685), (0.088 * k, 0.103 * k, 0.118 * k), 12)
-    if female:
-        b.ell("head", P(0, -0.085, 1.72), (0.05 * k, 0.045 * k, 0.05 * k), 8)  # what is left of tied-up hair
-    # limbs (+ joint balls so the bends do not open gaps)
+        b.ell("hips", P(0, -0.012, 0.975), (0.165, 0.112, 0.118), 12)
+        for sx in (1, -1): # backside, merging into the hips (not two balls)
+            b.ell("hips", P(sx * 0.055, -0.05, 0.925), (0.088, 0.072, 0.092), 10)
+        b.seg("spine", P(0, 0, 1.05), P(0, 0, 1.3), 0.112, 0.118, 0.7, 12) # thin waist
+        b.ell("chest", P(0, 0.0, 1.37), (0.148, 0.102, 0.14), 12)
+        for sx in (1, -1): # small chest (B)
+            b.ell("chest", P(sx * 0.062, 0.08, 1.335), (0.056, 0.048, 0.05), 8)
+        b.seg("neck", P(0, 0, 1.45), P(0, 0.005, 1.6), 0.045, 0.041, 1.0, 8)
+        b.ell("head", P(0, 0.012, 1.685), (0.084, 0.098, 0.112), 12)
+        arm_r, thigh_r, shin_r, ball = (0.05, 0.039, 0.039, 0.03), (0.093, 0.058), (0.056, 0.04), 0.056
+    else:
+        b.ell("hips", P(0, -0.005, 0.98), (0.158, 0.112, 0.12), 12)
+        b.seg("spine", P(0, 0, 1.04), P(0, 0, 1.3), 0.142, 0.158, 0.74, 12)
+        b.ell("chest", P(0, 0.005, 1.37), (0.19, 0.125, 0.158), 12) # broad, about as wide as the hips
+        b.seg("neck", P(0, 0, 1.45), P(0, 0.005, 1.6), 0.058, 0.052, 1.0, 8)
+        b.ell("head", P(0, 0.012, 1.69), (0.09, 0.104, 0.12), 12)
+        arm_r, thigh_r, shin_r, ball = (0.062, 0.049, 0.049, 0.037), (0.094, 0.064), (0.064, 0.045), 0.07
     for side in ("L", "R"):
         ua, fa, hd = J["upper_arm." + side], J["forearm." + side], J["hand." + side]
         th, sn, ft = J["thigh." + side], J["shin." + side], J["foot." + side]
-        b.ell("chest", ua[0], (0.066 * k,) * 3, 8)
-        b.seg("upper_arm." + side, ua[0], ua[1], 0.058 * k, 0.045 * k, 1.0, 8)
-        b.ell("forearm." + side, fa[0], (0.045 * k,) * 3, 8)
-        b.seg("forearm." + side, fa[0], fa[1], 0.044 * k, 0.034 * k, 1.0, 8)
-        b.seg("hand." + side, hd[0], hd[1], 0.04 * k, 0.03 * k, 0.55, 6)
-        b.ell("hips", th[0], (0.088 * k,) * 3, 8)
-        b.seg("thigh." + side, th[0], th[1], (0.092 if female else 0.088) * k, 0.06 * k, 1.0, 10)
-        b.ell("shin." + side, sn[0], (0.062 * k,) * 3, 8)
-        b.seg("shin." + side, sn[0], sn[1], 0.06 * k, 0.042 * k, 1.0, 8)
-        fh = ft[0]
-        b.seg("foot." + side, fh + Vector((0, -0.04, -0.02)) * k, ft[1] + Vector((0, 0.02, 0)) * k, 0.045 * k, 0.04 * k, 0.75, 6)
+        b.ell("chest", ua[0], (ball,) * 3, 8)
+        b.seg("upper_arm." + side, ua[0], ua[1], arm_r[0], arm_r[1], 1.0, 8)
+        b.ell("forearm." + side, fa[0], (arm_r[1] * 0.95,) * 3, 8)
+        b.seg("forearm." + side, fa[0], fa[1], arm_r[2], arm_r[3], 1.0, 8)
+        b.seg("hand." + side, hd[0], hd[1], arm_r[3] * 1.1, arm_r[3] * 0.8, 0.55, 6)
+        b.ell("hips", th[0], (thigh_r[0] * 0.98,) * 3, 8)
+        b.seg("thigh." + side, th[0], th[1], thigh_r[0], thigh_r[1], 1.0, 10)
+        b.ell("shin." + side, sn[0], (thigh_r[1],) * 3, 8)
+        b.seg("shin." + side, sn[0], sn[1], shin_r[0], shin_r[1], 1.0, 8)
+        b.seg("foot." + side, ft[0] + Vector((0, -0.04, -0.02)), ft[1] + Vector((0, 0.02, 0)), 0.045 * k, 0.04 * k, 0.75, 6)
     mat = bpy.data.materials.new("body")
     mat.diffuse_color = (0.05, 0.035, 0.03, 1.0)
     return b.finish(rig, mat)
@@ -229,65 +246,100 @@ def clip(rig, name, frames):
 
 
 def run_poses():
-    lean = {"spine": (-12, 0, 0), "chest": (-6, 0, 0)}
-    # a: right foot planted in front, left arm up beating at the burning head, right hand at the chest
-    a = dict(lean, **{
-        "loc": (0, -0.035, 0), "hips": (0, 8, 0), "chest": (-6, -10, 0), "head": (14, 18, 6),
-        "thigh.R": (38, 0, 0), "shin.R": (-12, 0, 0), "foot.R": (8, 0, 0),
-        "thigh.L": (-28, 0, 0), "shin.L": (-62, 0, 0), "foot.L": (-20, 0, 0),
-        "upper_arm.L": (150, 0, -25), "forearm.L": (95, 0, 0), "hand.L": (20, 0, 0),
-        "upper_arm.R": (55, 0, 25), "forearm.R": (115, 0, 0), "hand.R": (10, 0, 0),
-    })
-    # b: passing, the right foot under the body, the left knee coming through; arms swapping over
-    b = dict(lean, **{
-        "loc": (0, 0.03, 0), "hips": (0, 2, 0), "chest": (-8, -2, 0), "head": (6, -10, -8),
-        "thigh.R": (-2, 0, 0), "shin.R": (-18, 0, 0),
-        "thigh.L": (22, 0, 0), "shin.L": (-95, 0, 0), "foot.L": (-15, 0, 0),
-        "upper_arm.L": (95, 0, -40), "forearm.L": (120, 0, 0),
-        "upper_arm.R": (110, 0, 35), "forearm.R": (100, 0, 0),
-    })
-    return a, b
+    """The burning run (owner, round 17, after Twisted Metal: Black): no clean jog. Hunched over,
+    stumbling on bent knees, the head thrown back and jerking, the arms flailing and beating at the
+    flames, never the same twice in the two strides of the loop."""
+    hunch = {"spine": (-20, 0, 0), "chest": (-10, 0, 0)}
+    k1 = dict(hunch, **{ # right foot down, left arm thrashing over the head, right fist at the chest
+        "loc": (0, -0.07, 0), "hips": (0, 10, 4), "spine": (-22, 0, -5), "chest": (-10, -16, 0), "neck": (8, 0, 0), "head": (22, 25, 8),
+        "thigh.R": (30, 0, 0), "shin.R": (-14, 0, 0), "foot.R": (6, 0, 0),
+        "thigh.L": (-24, 0, 0), "shin.L": (-58, 0, 0), "foot.L": (-25, 0, 0),
+        "upper_arm.L": (160, 0, -38), "forearm.L": (40, 0, 0), "hand.L": (25, 0, 0),
+        "upper_arm.R": (70, 0, 18), "forearm.R": (112, 0, 0)})
+    k2 = dict(hunch, **{ # passing: the arm comes down sweeping, the other beats at the face
+        "loc": (0, 0.0, 0), "hips": (0, 4, -2), "chest": (-14, -4, 4), "head": (8, -8, -6),
+        "thigh.R": (-6, 0, 0), "shin.R": (-24, 0, 0),
+        "thigh.L": (22, 0, 0), "shin.L": (-84, 0, 0), "foot.L": (-20, 0, 0),
+        "upper_arm.L": (95, 0, -62), "forearm.L": (25, 0, 0),
+        "upper_arm.R": (132, 0, 14), "forearm.R": (122, 0, 0), "hand.R": (30, 0, 0)})
+    k3 = dict(hunch, **{ # left foot down: arms swap, one flung out wide, one waving high
+        "loc": (0, -0.08, 0), "hips": (0, -12, -5), "spine": (-24, 0, 6), "chest": (-8, 18, 0), "neck": (10, 0, 0), "head": (14, -30, -12),
+        "thigh.L": (28, 0, 0), "shin.L": (-16, 0, 0), "foot.L": (6, 0, 0),
+        "thigh.R": (-22, 0, 0), "shin.R": (-60, 0, 0), "foot.R": (-25, 0, 0),
+        "upper_arm.L": (42, 0, -72), "forearm.L": (38, 0, 0),
+        "upper_arm.R": (172, 0, 34), "forearm.R": (28, 0, 0), "hand.R": (-20, 0, 0)})
+    k4 = dict(hunch, **{ # a stumble: a short, deep step, both hands clawing at the head
+        "loc": (0, -0.12, 0.03), "hips": (0, 2, 6), "spine": (-30, 0, -8), "chest": (-14, 6, 0), "neck": (-6, 0, 0), "head": (-14, 10, 10),
+        "thigh.L": (-4, 0, 0), "shin.L": (-34, 0, 0),
+        "thigh.R": (38, 0, 0), "shin.R": (-102, 0, 0), "foot.R": (-15, 0, 0),
+        "upper_arm.L": (150, 0, -10), "forearm.L": (112, 0, 0),
+        "upper_arm.R": (146, 0, 12), "forearm.R": (106, 0, 0)})
+    k5 = dict(hunch, **{ # right foot down again, off balance, the head thrown back screaming
+        "loc": (0, -0.06, 0), "hips": (0, 8, 2), "spine": (-18, 0, -3), "chest": (-6, -12, 0), "neck": (14, 0, 0), "head": (32, 12, 4),
+        "thigh.R": (34, 0, 0), "shin.R": (-12, 0, 0), "foot.R": (8, 0, 0),
+        "thigh.L": (-26, 0, 0), "shin.L": (-62, 0, 0), "foot.L": (-25, 0, 0),
+        "upper_arm.L": (22, 0, -48), "forearm.L": (50, 0, 0), "hand.L": (-25, 0, 0),
+        "upper_arm.R": (82, 0, -18), "forearm.R": (96, 0, 0)})
+    k6 = dict(hunch, **{ # passing: one arm across the body, the other swinging back
+        "loc": (0, -0.01, 0), "hips": (0, 0, -3), "chest": (-12, 10, -4), "head": (6, 20, 0),
+        "thigh.R": (-4, 0, 0), "shin.R": (-22, 0, 0),
+        "thigh.L": (24, 0, 0), "shin.L": (-88, 0, 0), "foot.L": (-18, 0, 0),
+        "upper_arm.L": (165, 0, -22), "forearm.L": (60, 0, 0),
+        "upper_arm.R": (12, 0, 40), "forearm.R": (35, 0, 0)})
+    k7 = dict(hunch, **{ # left foot down, beating at the chest with both fists
+        "loc": (0, -0.07, 0), "hips": (0, -8, -3), "spine": (-20, 0, 4), "chest": (-10, 12, 0), "neck": (6, 0, 0), "head": (18, -14, -8),
+        "thigh.L": (30, 0, 0), "shin.L": (-12, 0, 0), "foot.L": (6, 0, 0),
+        "thigh.R": (-24, 0, 0), "shin.R": (-58, 0, 0), "foot.R": (-24, 0, 0),
+        "upper_arm.L": (75, 0, -12), "forearm.L": (118, 0, 0),
+        "upper_arm.R": (150, 0, 30), "forearm.R": (60, 0, 0)})
+    k8 = dict(hunch, **{ # passing, the arms flung up and out
+        "loc": (0, 0.0, 0), "hips": (0, -2, 2), "chest": (-12, -6, 0), "head": (24, -6, 6),
+        "thigh.L": (-6, 0, 0), "shin.L": (-24, 0, 0),
+        "thigh.R": (22, 0, 0), "shin.R": (-86, 0, 0), "foot.R": (-20, 0, 0),
+        "upper_arm.L": (128, 0, -55), "forearm.L": (30, 0, 0),
+        "upper_arm.R": (118, 0, 50), "forearm.R": (45, 0, 0)})
+    return [k1, k2, k3, k4, k5, k6, k7, k8]
 
 
 def build_clips(rig):
-    a, b = run_poses()
-    clip(rig, "run_burn", [(1, a), (6, b), (11, mirror(a)), (16, mirror(b)), (21, a)])
+    ks = run_poses()
+    clip(rig, "run_burn", [(1 + i * 5, k) for i, k in enumerate(ks)] + [(41, ks[0])])
+    # On the knees, rocking in agony, clawing at the head.
     kneel = {
-        "loc": (0, -0.45, 0.04), "spine": (-24, 0, 0), "chest": (-16, 0, 0), "neck": (-10, 0, 0), "head": (-12, 0, 8),
-        "thigh.L": (8, 0, -6), "shin.L": (-92, 0, 0), "foot.L": (-40, 0, 0),
-        "thigh.R": (12, 0, 6), "shin.R": (-95, 0, 0), "foot.R": (-40, 0, 0),
-        "upper_arm.L": (40, 0, -12), "forearm.L": (55, 0, 0),
-        "upper_arm.R": (85, 0, 10), "forearm.R": (70, 0, 0),
-    }
-    kneel2 = dict(kneel, **{"spine": (-30, 4, 0), "head": (-18, -6, -6), "upper_arm.R": (75, 0, 14)})
-    clip(rig, "kneel", [(1, kneel), (16, kneel2), (31, kneel)])
-    # crawl: the body pitched forward almost flat on hands and knees, dragging along
+        "loc": (0, -0.47, 0.04), "spine": (-30, 0, 0), "chest": (-18, 0, 0), "neck": (-8, 0, 0), "head": (24, 0, 6),
+        "thigh.L": (6, 0, -6), "shin.L": (-94, 0, 0), "foot.L": (-40, 0, 0),
+        "thigh.R": (10, 0, 6), "shin.R": (-96, 0, 0), "foot.R": (-40, 0, 0),
+        "upper_arm.L": (150, 0, -12), "forearm.L": (115, 0, 0),
+        "upper_arm.R": (60, 0, 20), "forearm.R": (100, 0, 0)}
+    kneel2 = dict(kneel, **{"spine": (-42, 6, 0), "chest": (-22, 0, 0), "head": (-20, -10, -8),
+                            "upper_arm.L": (95, 0, -30), "forearm.L": (90, 0, 0), "upper_arm.R": (150, 0, 15), "forearm.R": (118, 0, 0)})
+    clip(rig, "kneel", [(1, kneel), (12, kneel2), (24, kneel), (36, kneel2), (45, kneel)])
+    # A last desperate crawl: low, one arm reaching and dragging, the legs barely helping.
     c0 = {
-        "loc": (0, -0.43, 0.0), "hips": (-78, 0, 4), "spine": (-6, 0, 0), "chest": (-2, 0, 0), "neck": (20, 0, 0), "head": (28, 0, 0),
-        "thigh.L": (92, 0, -4), "shin.L": (-92, 0, 0), "foot.L": (-30, 0, 0),
-        "thigh.R": (68, 0, 4), "shin.R": (-80, 0, 0), "foot.R": (-30, 0, 0),
-        "upper_arm.L": (62, 0, -6), "forearm.L": (10, 0, 0), "hand.L": (-40, 0, 0),
-        "upper_arm.R": (98, 0, 6), "forearm.R": (18, 0, 0), "hand.R": (-50, 0, 0),
-    }
-    c1 = dict(c0, **{"hips": (-80, 0, 0), "loc": (0, -0.46, 0.0), "thigh.L": (80, 0, -4), "thigh.R": (80, 0, 4),
-                     "upper_arm.L": (80, 0, -6), "upper_arm.R": (80, 0, 6), "head": (22, 0, 0)})
-    clip(rig, "crawl", [(1, c0), (8, c1), (16, mirror(c0)), (23, mirror(c1)), (31, c0)])
-    prone = {
-        "loc": (0, -0.84, -0.05), "hips": (-90, 0, 0), "spine": (-2, 0, 0), "neck": (0, 0, 0), "head": (6, 70, 0),
-        "thigh.L": (-4, 0, -10), "shin.L": (-28, 0, 0), "foot.L": (-50, 0, 0),
-        "thigh.R": (2, 0, 6), "shin.R": (-6, 0, 0), "foot.R": (-60, 0, 0),
-        "upper_arm.L": (165, 0, -25), "forearm.L": (25, 0, 0),
-        "upper_arm.R": (15, 0, 30), "forearm.R": (35, 0, 0), "hand.R": (-30, 0, 0),
-    }
-    prone2 = dict(prone, **{"forearm.L": (32, 0, 0), "hand.R": (-20, 0, 0)})
-    clip(rig, "prone", [(1, prone), (20, prone2), (40, prone)])
+        "loc": (0, -0.5, 0.0), "hips": (-80, 0, 5), "spine": (-8, 0, 0), "chest": (-6, 0, 0), "neck": (14, 0, 0), "head": (14, 0, 6),
+        "thigh.L": (86, 0, -6), "shin.L": (-98, 0, 0), "foot.L": (-30, 0, 0),
+        "thigh.R": (62, 0, 6), "shin.R": (-84, 0, 0), "foot.R": (-30, 0, 0),
+        "upper_arm.L": (128, 0, -8), "forearm.L": (8, 0, 0), "hand.L": (-30, 0, 0),
+        "upper_arm.R": (64, 0, 10), "forearm.R": (30, 0, 0), "hand.R": (-50, 0, 0)}
+    c1 = dict(c0, **{"loc": (0, -0.56, -0.05), "hips": (-84, 0, 0), "head": (4, 0, 0),
+                     "thigh.L": (76, 0, -6), "thigh.R": (70, 0, 6),
+                     "upper_arm.L": (96, 0, -8), "forearm.L": (40, 0, 0), "upper_arm.R": (88, 0, 10)})
+    clip(rig, "crawl", [(1, c0), (12, c1), (24, mirror(c0)), (36, mirror(c1)), (47, c0)])
+    # Dead: crumpled on its side, curled up as burnt bodies do: knees drawn up, fists to the face.
+    curl = {
+        "loc": (0.0, -0.8, 0.12), "hips": (-20, 0, 82), "spine": (-24, 0, 0), "chest": (-18, 0, 0), "neck": (-14, 0, 0), "head": (-20, 0, 10),
+        "thigh.L": (78, 0, 0), "shin.L": (-112, 0, 0), "foot.L": (-30, 0, 0),
+        "thigh.R": (62, 0, 8), "shin.R": (-98, 0, 0), "foot.R": (-35, 0, 0),
+        "upper_arm.L": (70, 0, -10), "forearm.L": (125, 0, 0), "hand.L": (-40, 0, 0),
+        "upper_arm.R": (95, 0, 14), "forearm.R": (118, 0, 0), "hand.R": (-40, 0, 0)}
+    clip(rig, "prone", [(1, curl), (30, dict(curl, **{"forearm.L": (128, 0, 0)})), (60, curl)])
+    # Thrown: stiff and burnt, bent the same way (the physics turns the body).
     limp = {
-        "head": (10, 25, 10), "neck": (8, 0, 0), "spine": (4, 0, 0),
-        "upper_arm.L": (10, 0, -38), "forearm.L": (25, 0, 0), "upper_arm.R": (-5, 0, 32), "forearm.R": (35, 0, 0),
-        "thigh.L": (6, 0, -10), "shin.L": (-18, 0, 0), "thigh.R": (-4, 0, 8), "shin.R": (-8, 0, 0),
-        "foot.L": (-30, 0, 0), "foot.R": (-35, 0, 0),
-    }
-    clip(rig, "limp", [(1, limp), (30, dict(limp, **{"head": (12, 22, 12)})), (60, limp)])
+        "head": (-12, 20, 8), "neck": (-8, 0, 0), "spine": (-12, 0, 0),
+        "upper_arm.L": (55, 0, -25), "forearm.L": (110, 0, 0), "upper_arm.R": (75, 0, 25), "forearm.R": (100, 0, 0),
+        "thigh.L": (45, 0, -10), "shin.L": (-80, 0, 0), "thigh.R": (25, 0, 8), "shin.R": (-60, 0, 0),
+        "foot.L": (-30, 0, 0), "foot.R": (-35, 0, 0)}
+    clip(rig, "limp", [(1, limp), (30, dict(limp, **{"head": (-14, 22, 10)})), (60, limp)])
     rig.animation_data.action = bpy.data.actions["run_burn"]
 
 
@@ -333,7 +385,7 @@ def shape_sheet(rig, path):
     s.collection.objects.link(bpy.data.objects.new("floor", floor))
     shots = []
     tiles = []
-    for act, frames in (("run_burn", (1, 6, 11, 16)), ("kneel", (1, 16)), ("crawl", (1, 8, 16)), ("prone", (1,)), ("limp", (1,))):
+    for act, frames in (("run_burn", (1, 6, 11, 16, 21, 26, 31, 36)), ("kneel", (1, 12)), ("crawl", (1, 12, 24)), ("prone", (1,)), ("limp", (1,))):
         rig.animation_data.action = bpy.data.actions[act]
         for f in frames:
             for view in ("side", "34"):

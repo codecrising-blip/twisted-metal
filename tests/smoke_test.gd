@@ -1219,7 +1219,7 @@ func _run() -> void:
 	me.speed = 5.0
 	me.linear_velocity = Vector3(0, 0, -5)
 	dr3._run_down(me, me.global_transform.affine_inverse() * (dr3.global_position + Vector3.UP * 0.6), size)
-	_check(is_instance_valid(dr3) and dr3.state == BurningDriver.DEAD and dr3._heat == 0.0 and not dr3._fire.emitting,
+	_check(is_instance_valid(dr3) and dr3.state == BurningDriver.DEAD and dr3._heat == 0.0 and dr3._burn == 0.0,
 		"run down slowly: pressed under, the fire out on a black body")
 	_place(me, -60, 60, 0)
 	var ol17: Vehicle = main.enemies.filter(func(e: Vehicle): return e.car_id == "outlaw")[0]

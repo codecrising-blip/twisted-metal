@@ -13,7 +13,8 @@ var burning := true
 var bloody := false
 var _model: Node3D
 var _mat: ShaderMaterial
-var _fx: Array = []
+var _flames: Array = [] # TmbFire sheets on the limbs
+var _burn := 1.0
 var _t := 0.0
 var _settled := false
 var _heat := 1.0
@@ -90,7 +91,7 @@ func _ready() -> void:
 	_mat = _model.get_meta("mat")
 	(_model.get_meta("anim") as AnimationPlayer).play("limp")
 	if burning:
-		_fx = BurningDriver.flames(self, 0.9) # "lying": along the body's length, which is the box's Y
+		_flames = TmbFire.on_body(_model) # TMB flames on the limbs; they rise whichever way it lies
 	else:
 		_heat = 0.0
 		_mat.set_shader_parameter("heat", 0.0)
@@ -131,9 +132,11 @@ func _physics_process(delta: float) -> void:
 	if burning:
 		_heat = maxf(0.0, _heat - delta * 0.25)
 		_mat.set_shader_parameter("heat", _heat)
+		_burn = maxf(0.0, _burn - delta / BurningDriver.FIRE_DIES)
+		TmbFire.set_all(_flames, _burn)
 	if _t > BurningDriver.BODY_STAYS:
-		position.y -= delta * 0.25
-		if _t > BurningDriver.BODY_STAYS + 3.0:
+		position.y -= delta * 0.4
+		if _t > BurningDriver.BODY_STAYS + 1.5:
 			queue_free()
 
 
@@ -170,19 +173,4 @@ func _settle() -> void:
 	freeze = true
 	if bloody:
 		BloodFx.pool(get_parent(), global_position, 1.0)
-	if burning and _fx.size() == 2:
-		var fire: CPUParticles3D = _fx[0]
-		var smoke: CPUParticles3D = _fx[1]
-		# The body lies however it landed: point the flames and smoke up in the world, not along the
-		# body (sideways smoke along the ground bunched into a black ball beside the head).
-		var up := global_basis.inverse() * Vector3.UP
-		fire.direction = up
-		smoke.direction = up
-		smoke.global_position = global_position + Vector3.UP * 0.4
-		smoke.emitting = true
-		get_tree().create_timer(2.5, false).timeout.connect(func() -> void:
-			if is_instance_valid(fire):
-				fire.emitting = false)
-		get_tree().create_timer(9.0, false).timeout.connect(func() -> void:
-			if is_instance_valid(smoke):
-				smoke.emitting = false)
+

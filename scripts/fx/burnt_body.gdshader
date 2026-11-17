@@ -31,7 +31,9 @@ void fragment() {
 	ALBEDO = mix(vec3(0.025, 0.02, 0.018), vec3(0.12, 0.075, 0.05), n); // charcoal with burnt-brown patches
 	ROUGHNESS = 0.92;
 	SPECULAR = 0.2;
-	float cracks = smoothstep(0.6, 0.7, vnoise(opos * 15.0 + vec3(0.0, TIME * 0.25, 0.0)));
+	// Thin glowing veins (ridges of the noise), not spots: a black body with fire in its cracks.
+	float ridge = 1.0 - abs(vnoise(opos * 11.0) * 2.0 - 1.0);
+	float cracks = smoothstep(0.9, 0.97, ridge);
 	float flicker = 0.55 + 0.45 * sin(TIME * 13.0 + opos.y * 21.0 + opos.x * 9.0);
-	EMISSION = ember.rgb * cracks * heat * flicker * 2.6;
+	EMISSION = ember.rgb * cracks * heat * flicker * 1.8;
 }
