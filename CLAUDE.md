@@ -490,10 +490,17 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   four car-fire previews were rejected; TMB fire = a rounded "foamy" heap of crossed thin strands (pyre) / hair strands
   (burning car), streaming back and swinging with turns. `FoamFire` (`scripts/fx/foam_fire.gd(shader)`): world-space
   puffs born in `box` with `inherit` of the emitter's velocity, losing it at `drag` (physics swing for free), one
-  ImmediateMesh draw call, premultiplied blend (`glow` < 1 adds light). Four `LOOKS` sent to the owner to pick;
-  on cars it sits ONLY on the engine cover (`FoamFire.on_hood`, Roster "hood"), never inside the body; `FoamFire.spot`
-  = the fire where a car blew apart. Not wired into the game until the owner picks (then: cars, driver, spot, pools,
-  palms, pit). `tests/_fire_styles.gd -- look scene(park|drive|spot) out frames every`.
+  ArrayMesh draw call (38 us a frame for the pit), premultiplied blend (`glow` < 1 adds light). **Owner picked look 2,
+  "hair strands" (fine vertical strands), the only look now; it is THE fire of the game** (TmbFire/TmbFireGroup are
+  gone): car engine fire `_fire` (level 0.55) and burning `_burn_fx` sit ONLY on the engine cover (`FoamFire.on_hood`,
+  Roster "hood", emitter 0.14 m under the measured point: the owner saw a gap), `inherit` 0.8 / `drag` 1.2 so at speed
+  it trails ~a car length; `FoamFire.pyre` = the heap where a car blew apart (the dead body is set upright at its yaw);
+  drivers `BurningDriver.body_fire` + `set_pose` (stand / kneel / low), corpses in body space; fire pools, burning
+  palms (falls with the trunk), the pit (box 3, size 3.6, rise 5.8, LOW rate 28) and the burnt building. Puffs are
+  drawn from birth with the root on the surface (fade-in 5% of life). Scream `SCREAM_DB` -0.2 (owner: x1.1). Draw calls
+  centre 257 -> 232, worst 407 -> 369. `FxKit.ghost_guard` also restarts an emitter added already emitting (else it
+  is drawn black for one frame: the dot inside explosions). `tests/_fire_styles.gd -- 1 scene(park|side|drive|spot|pit)
+  out frames every`. **Next (owner):** test this build; then model Roadkill, Darkside and Mr. Grimm.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -518,8 +525,7 @@ tools/blender/              Blender asset pipeline (round 10): tmlib.py + build_
 scripts/core/model_lib.gd   loads the Blender models and their baked materials
 scripts/vehicles/blender_cars.gd  assembles a Blender car (body, wheels, spinners, markers) with the usual metadata
 scripts/vehicles/burning_driver.gd + driver_corpse.gd  burning drivers out of wrecks (round 17); fx/blood_fx.gd
-scripts/fx/tmb_fire.gd(shader) + tmb_fire_group.gd  TMB flame sheets (round 17; being replaced by FoamFire, round 18)
-scripts/fx/foam_fire.gd(shader)  fire as world-space streaky puffs, 4 looks (round 18, owner to pick)
+scripts/fx/foam_fire.gd(shader)  THE fire of the game (round 18, owner's pick "hair strands"): world-space puffs
 scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (simple primitives),
                             MeshBuilder (detailed models merged per material: chamfered boxes, lofts, lathes),
                             MatKit (generated paint/rust/chrome/rubber textures; world-mapped ground: pavement,
