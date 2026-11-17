@@ -1,6 +1,6 @@
 extends SceneTree
 ## Scratch: frames of the shield field on Outlaw in ONE run (the shader's TIME runs on), for a GIF.
-## Run with --fixed-fps 30 so every frame is 1/30 s. args: out_dir frames [hit_at] [shader path to try]
+## Run with --fixed-fps 30 so every frame is 1/30 s. args: out_dir frames [hit_at] [shader path to try instead]
 func _initialize() -> void:
 	_run.call_deferred()
 func _run() -> void:

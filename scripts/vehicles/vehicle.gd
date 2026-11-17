@@ -191,7 +191,7 @@ var invisible_time := 0.0 # energy invisibility: no locks on you, AI loses you p
 var revealed_time := 0.0 # seen anyway for a moment: hit, or caught in headlights
 var headlights_on := false
 var _energy_mines: Array = []
-var _shield_mat: ShaderMaterial # round 17: a living forest-green magnetic field around the whole car
+var _shield_mat: ShaderMaterial # round 17: a forest-green force-field shell hovering round the whole car
 var _shield_flare := 0.0 # a hit brightens the whole field for a moment
 var _shield_hit_age := 9.0 # seconds since the field last blocked a hit (the hot patch fades)
 var _shield_spark_cd := 0.0 # sparks at most this often (a gatling burst would bury the car)
@@ -1353,6 +1353,7 @@ func _show_shield(on: bool) -> void:
 	if on and _shield_mat == null:
 		_shield_mat = ShaderMaterial.new()
 		_shield_mat.shader = SHIELD_SHADER
+		_shield_mat.set_shader_parameter("half_size", (stats.get("size", Vector3(2.2, 1.8, 5.0)) as Vector3) * 0.5)
 	if _shield_mat:
 		_shield_hit_age = 9.0
 		_shield_mat.set_shader_parameter("strength", 0.0)

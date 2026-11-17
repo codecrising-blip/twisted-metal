@@ -439,13 +439,13 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 - **Round 17, full text `docs/design/22-owner-round-17.md`:** top container of the stack at (-74, 46) is solid now;
   the hit flash only overlays body meshes (`_apply_overlays`): flashing every mesh left the soft ground shadow white
   for good ("bright square under my car"); Napalm Cone melts down `meltdown_after` 2 s past the full charge
-  (`Vehicle.meltdown_at`). **Shield (owner, after a wrong first try: "not green paint") = a living forest-green
-  MAGNETIC FIELD around the whole car, wheels included** (Head-On leaving the tyres out was a flaw):
-  `scripts/fx/shield_field.gdshader` as the overlay on every car mesh without a material_override, unshaded alpha,
-  4.5 cm off the car: faint aura + rim, glowing lines running tail to nose (like round 16's stripes) bent by two
-  drifting value-noise fields (bounded warp, never TIME x a varying speed: that shears apart), a finer faster set
-  overtaking them, flickering patches and surges. Colour forest green (nudged blue: LA's warm light turned #228B22
-  olive). Bright pulse on switch-on, 3 bright/dim blinks in the last `SHIELD_BLINK` 0.6 s; a blocked hit (`hit_react`
+  (`Vehicle.meltdown_at`). **Shield = variant D of four the owner compared side by side ("PERFECT, 20/10"; a green
+  coat, a lines field and two others were rejected or passed over): a forest-green force-field SHELL hovering
+  `gap` 0.17 m off the whole car, wheels included** (`scripts/fx/shield_field.gdshader`, overlay on every car mesh
+  without a material_override): the meshes are redrawn scaled about the car's centre in car space (`half_size` from
+  `stats.size`; pushing along normals would crack at hard edges), unshaded alpha, bright rim, faint body, slow broad
+  waves tail to nose + finer lines bent by drifting noise. Colour nudged blue (LA's warm light turned #228B22 olive).
+  When the owner can't name what is wrong with a look, render 3-4 variants side by side and let them pick. Bright pulse on switch-on, 3 bright/dim blinks in the last `SHIELD_BLINK` 0.6 s; a blocked hit (`hit_react`
   -> `_shield_hit`) lights a hot yellow-lime patch at the hit point on the car's box that spreads and cools in ~0.5 s,
   plus `FxKit.shield_sparks` (no white flash while shielded). Screenshot `shield_close <out> <frames> [hit frames]`; a moving clip: `tests/_shield_clip.gd` with `--fixed-fps 30`
   (one run, so the shader's TIME runs on; separate screenshot runs each restart the clock).
