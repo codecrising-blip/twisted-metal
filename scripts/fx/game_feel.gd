@@ -63,6 +63,8 @@ static func shake(pos: Vector3, amount: float, reach := 45.0) -> void:
 const SOUND_ALIAS := {
 	"wall_slam": ["crash", 1.0, 0.0],
 	"ram": ["crash", 0.9, 0.0],
+	"launch_bot_missile": ["launch_zoomy", 1.12, -3.0], # round 18: Sweet Bot's barrage, a little higher
+	"launch_wheel_clamp": ["launch_freeze", 0.7, -2.0], # a heavy iron boot leaving the tube
 }
 
 

@@ -1183,6 +1183,61 @@ func _run() -> void:
 		"Sweet Tooth's Last Laugh: under 30%% health the special recharges 1.5x faster, roof fire blue (%.2f vs %.2f)" % [laugh_t, calm_t])
 	st15.ammo["napalm_cone"] = 2
 
+	# Round 18: secondary weapons (combo R L U, paid in special charges). Sweet Bot: dropped behind Sweet
+	# Tooth for 2 charges, the special's fire button sends its 20 missiles, then it is gone; destroyed it goes
+	# up like a Remote. Outlaw's wheel clamp: 1 charge; a hit drags the steering and blocks turbo for 4 s.
+	_park(main)
+	for e: Vehicle in main.enemies: # out of the way: a car running into the robot would crush it
+		if not e.is_dead:
+			_place(e, 60, -60, 0)
+	var st: Vehicle = main.player
+	st.shield_time = 0.0
+	st.invulnerable_time = 0.0
+	_place(st, -30, 30, 0)
+	await _frames(5)
+	st.ammo[st.special_id] = 3
+	st.energy_move("secondary")
+	var bot := st.live_special() as SweetBot
+	_check(bot != null and st.ammo[st.special_id] == 1, "Sweet Bot drops behind Sweet Tooth for two special charges")
+	await _frames(40)
+	_check(is_instance_valid(bot) and bot.state == "wait", "Sweet Bot lands and waits for the order")
+	var shots0 := Projectile.spawned_total
+	st.selected = st.weapon_order.find(st.special_id)
+	st.want_fire_weapon = true
+	st._combat(0.016)
+	await _frames(170)
+	_check(Projectile.spawned_total - shots0 >= WeaponData.BOT_MISSILES and not st.has_live_special(),
+		"the special's fire button sends its %d missiles; then the special fires as normal again" % WeaponData.BOT_MISSILES)
+	await _frames(100)
+	_check(not is_instance_valid(bot), "the spent robot is gone")
+	st.ammo[st.special_id] = 3
+	st.energy_move("secondary")
+	var bot2 := st.live_special() as SweetBot
+	await _frames(40)
+	bot2.projectile_hit(45.0, null)
+	var standing := is_instance_valid(bot2) and not bot2._dead
+	bot2.projectile_hit(14.0, null)
+	await _frames(3)
+	_check(standing and not is_instance_valid(bot2), "a power missile alone leaves the robot standing; power + fire (59) blow it up")
+	var outlaws: Array = main.enemies.filter(func(e: Vehicle): return e.car_id == "outlaw" and not e.is_dead)
+	if not outlaws.is_empty():
+		var ol18: Vehicle = outlaws[0]
+		_place(ol18, -30, 0, 0)
+		await _frames(3)
+		ol18.ammo[ol18.special_id] = 2
+		ol18.energy_move("secondary")
+		_check(ol18.ammo[ol18.special_id] == 1 and get_nodes_in_group("projectiles").any(func(q): return (q as Projectile).weapon_id == "wheel_clamp"),
+			"Outlaw throws the wheel clamp for one special charge")
+	st.shield_time = 0.0
+	st.invulnerable_time = 0.0
+	_check(st.clamp_for(4.0, st.global_position + st.global_basis.x * 2.0), "a wheel clamp hit locks a front wheel")
+	await _frames(2)
+	_check(st.clamped_time > 3.5 and not st.in_turbo and absf(st.in_steer) > 0.4 and is_instance_valid(st._clamp_boot),
+		"clamped: the steering is dragged to the locked side, no turbo, the boot on the wheel")
+	st.clamped_time = 0.05
+	await _frames(10)
+	_check(st.clamped_time <= 0.0 and not is_instance_valid(st._clamp_boot), "the clamp lets go after its time")
+
 	# Round 17: burning drivers (owner, from Twisted Metal: Black). Shot, they die and the shooter gets
 	# energy; run down fast and head-on they go over the hood into the windshield and are thrown off;
 	# run down slowly they are pressed under (the fire out, a black body); a car destroyed on the ground

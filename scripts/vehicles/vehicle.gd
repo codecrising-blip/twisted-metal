@@ -190,6 +190,10 @@ var shield_time := 0.0 # energy shield up: no damage, no states; guns only
 var invisible_time := 0.0 # energy invisibility: no locks on you, AI loses you past 12 m
 var revealed_time := 0.0 # seen anyway for a moment: hit, or caught in headlights
 var headlights_on := false
+var clamped_time := 0.0 # round 18: Outlaw's wheel clamp on a front wheel: no turbo, steering dragged aside
+var _clamp_side := 1.0
+var _clamp_boot: Node3D
+var _clamp_spark := 0.0
 var _energy_mines: Array = []
 var _shield_mat: ShaderMaterial # round 17: a forest-green force-field shell hovering round the whole car
 var _shield_flare := 0.0 # a hit brightens the whole field for a moment
@@ -398,6 +402,8 @@ func _physics_process(delta: float) -> void:
 		controller.drive(self, delta)
 	else:
 		_clear_inputs()
+	if clamped_time > 0.0:
+		_clamp_step(delta)
 	_tick(delta)
 	_combat(delta)
 	_animate(delta)
@@ -1176,8 +1182,7 @@ func energy_move(move: String) -> void:
 		want_jump = true # done by the physics step (needs the wheels on the ground)
 		return
 	if move == "secondary":
-		if is_player:
-			notice.emit(self, "SECONDARY WEAPON: NOT BUILT YET")
+		_secondary()
 		return
 	if not costs.has(move):
 		return
@@ -1817,6 +1822,79 @@ func heal(amount: float) -> void:
 
 
 ## Full disable. Fails while Grit (after a disable) or spawn protection is on.
+## The secondary weapon (round 18, combo R L U): paid in charges of the special (design 1.6: Sweet
+## Bot two, the rest one), not in energy.
+func _secondary() -> void:
+	var id := String(stats.get("secondary", ""))
+	if id == "":
+		return
+	var cost := int(WeaponData.SECONDARY_COST.get(id, 1))
+	if shield_time > 0.0:
+		return # shield up: no attacks but the guns
+	if ammo.get(special_id, 0) < cost:
+		if is_player:
+			notice.emit(self, "SECONDARY NEEDS %d SPECIAL CHARGE%s" % [cost, "S" if cost > 1 else ""])
+			GameFeel.ui("not_available", get_tree())
+		return
+	if id == "sweet_bot" and has_live_special():
+		if is_player:
+			notice.emit(self, "ONE THING OUT AT A TIME")
+			GameFeel.ui("not_available", get_tree())
+		return
+	ammo[special_id] -= cost
+	match id:
+		"sweet_bot":
+			SweetBot.deploy(self)
+		"wheel_clamp":
+			_break_invisibility()
+			launch("wheel_clamp", target)
+			if is_player:
+				notice.emit(self, "WHEEL CLAMP")
+	_refresh_slots()
+
+
+## Hit by a wheel clamp (round 18): the front wheel on the side it struck is locked for `seconds`.
+func clamp_for(seconds: float, hit_at: Vector3) -> bool:
+	if is_dead or invulnerable_time > 0.0 or shield_time > 0.0:
+		return false
+	var side := signf(global_basis.x.dot(hit_at - global_position))
+	if side == 0.0:
+		side = 1.0 if randf() < 0.5 else -1.0
+	if clamped_time <= 0.0 or not is_instance_valid(_clamp_boot):
+		_clamp_side = side
+		if is_instance_valid(_clamp_boot):
+			_clamp_boot.queue_free()
+		_clamp_boot = WheelClamp.attach(self, side)
+	clamped_time = maxf(clamped_time, seconds)
+	GameFeel.play("metal_fall", global_position, self, -4.0, 1.4)
+	if is_player:
+		notice.emit(self, "CLAMPED - STEER AGAINST IT")
+	return true
+
+
+func _clamp_step(delta: float) -> void:
+	clamped_time -= delta
+	in_steer = clampf(in_steer + WheelClamp.PULL * _clamp_side, -1.0, 1.0) # the locked wheel drags
+	in_turbo = false
+	_clamp_spark -= delta
+	if _clamp_spark <= 0.0 and absf(speed) > 4.0 and is_instance_valid(_clamp_boot):
+		_clamp_spark = 0.12
+		var p := _clamp_boot.global_position + Vector3.DOWN * 0.4
+		FxKit.spark(get_parent(), p, (global_basis.x * _clamp_side + Vector3.UP * 0.6 - flat_forward() * 0.6).normalized())
+	if clamped_time <= 0.0:
+		_release_clamp()
+
+
+func _release_clamp() -> void:
+	clamped_time = 0.0
+	if is_instance_valid(_clamp_boot):
+		var at := _clamp_boot.global_position
+		GameFeel.play("metal_fall", at, get_parent(), -6.0, 1.2)
+		FxKit.puff(get_parent(), at, 0.3)
+		_clamp_boot.queue_free()
+	_clamp_boot = null
+
+
 func freeze_for(seconds: float) -> bool:
 	if is_dead or grit_time > 0.0 or invulnerable_time > 0.0 or shield_time > 0.0:
 		return false
@@ -1887,6 +1965,7 @@ func _die() -> void:
 	for layer: String in _eng:
 		(_eng[layer] as AudioStreamPlayer3D).stop()
 	_charge_fx = null
+	_release_clamp()
 	model.visible = false
 	_blob.visible = false
 	_blob.remove_from_group(GraphicsSettings.BLOB_GROUP) # a graphics switch must not bring it back

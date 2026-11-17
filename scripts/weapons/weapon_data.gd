@@ -90,6 +90,21 @@ const DEFS := {
 		"damage": 112.0, "radius": 7.5, "delay": 4.0, "ahead": 24.0, "cooldown": 1.0, "ammo": 1, "max_ammo": 3,
 		"flashbang": 1.0, "shake": 1.0,
 	},
+	# Round 18, secondary weapons (combo R L U, paid in special charges: SECONDARY_COST).
+	# Sweet Bot (owner, round 16): the robot's missiles, Zoomy-like, 4 each, twenty of them; they can
+	# hit Sweet Tooth himself if he is in the line of fire ("hits_owner").
+	"bot_missile": {
+		"label": "Sweet Bot", "kind": "missile", "color": Color(1.0, 0.55, 0.2),
+		"speed": 58.0, "damage": 4.0, "homing": 1.6, "seek": 35.0, "life": 2.6, "small": true, "model_scale": 0.55,
+		"trail": Color(0.97, 0.97, 0.95), "trail_len": 0.5, "trail_w": 0.38, "push": 0.5,
+		"squish": 0.02, "squish_classes": ["light", "medium"], "shake": 0.08, "hits_owner": true,
+	},
+	# Wheel Clamp (Outlaw, design 2.3): an iron boot thrown forward, slow-ish and visible, light
+	# homing, 50 m. A hit: 10 damage and for 4 s no turbo and the steering pulled to one side (Clamped).
+	"wheel_clamp": {
+		"label": "Wheel Clamp", "kind": "clamp", "color": Color(0.95, 0.72, 0.08),
+		"speed": 60.0, "damage": 10.0, "homing": 1.2, "seek": 30.0, "life": 0.85, "clamp": 4.0, "push": 1.0, "shake": 0.25,
+	},
 	# Energy move only (front / rear freeze), never a pickup.
 	"freeze": {
 		"label": "Freeze", "kind": "freeze", "color": Color(0.55, 0.9, 1.0),
@@ -161,6 +176,14 @@ const DEFS := {
 ## Turbo pickups have their own, more numerous spots (the most common item on every map).
 const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "power", "power",
 	"napalm", "napalm", "remote", "remote", "zoomy", "zoomy", "sat"]
+
+## Secondary weapons (design 1.6): paid in charges of the car's special, Sweet Bot two, the rest one.
+const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1}
+const BOT_HEALTH := 59.0 # owner, round 16: a power missile and a fire missile (45 + 14) take it down
+const BOT_MISSILES := 20
+const BOT_GAP := 0.1 # seconds between missiles: the barrage lasts two seconds
+const BOT_WAIT := 30.0 # left waiting this long, it blows itself up (harmless)
+const BOT_RANGE := 70.0 # how far it looks for a target
 
 ## Owner, session 3: a health pickup restores a share of max health, so armor matters all match.
 ## Round 14 (owner): specials recharge slower the fewer a car can hold (they pile up to 3/4/5):

@@ -196,6 +196,17 @@ func _energy_moves(v: Vehicle, delta: float) -> void:
 		return
 	var to := t.global_position - v.global_position
 	var behind := v.flat_forward().dot(to.normalized()) < -0.6
+	# Round 18: secondary weapons (paid in special charges; keep one charge for the special itself).
+	var second := String(v.stats.get("secondary", ""))
+	var charges := int(v.ammo.get(v.special_id, 0))
+	if second == "wheel_clamp" and charges >= 2 and to.length() < 35.0 and v.flat_forward().angle_to(to.normalized()) < deg_to_rad(12.0) \
+			and randf() < 0.3 * aggression:
+		v.want_move = "secondary"
+		return
+	if second == "sweet_bot" and charges >= 3 and not v.has_live_special() and to.length() > 12.0 and to.length() < 45.0 \
+			and randf() < 0.2 * aggression:
+		v.want_move = "secondary" # the robot fires by itself for an AI owner
+		return
 	# Only while driving on forward: never into its own mine while backing out of a corner.
 	if behind and to.length() < 30.0 and v.speed > 10.0 and _reverse <= 0.0 and randf() < 0.35 * aggression:
 		if v.energy >= Vehicle.REAR_ATTACK_COST + 25.0 and randf() < 0.5:

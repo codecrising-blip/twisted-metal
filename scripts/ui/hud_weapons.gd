@@ -58,6 +58,8 @@ func _draw() -> void:
 			verb = "DROP"
 		elif def.get("handler", "") == "taser":
 			verb = "MASH FIRE"
+		if player.live_special() is SweetBot: # round 18: the robot waits for the order
+			verb = "LAUNCH BOT"
 		var pulse := fmod(Time.get_ticks_msec() * 0.004, 1.0) < 0.6
 		draw_rect(Rect2(144, 80, 170, 22), Color(0.9, 0.15, 0.1, 0.35 if pulse else 0.18))
 		draw_string(font, Vector2(152, 97), "FIRE: " + verb, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(1.0, 0.9, 0.8))

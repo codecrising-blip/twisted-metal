@@ -25,6 +25,7 @@ var _wig_phase := 0.0
 var _halo: MeshInstance3D # cone: the fireball halo throbs in flight
 var _drop_mark: MeshInstance3D # napalm can: where it lands if you drop it now
 var _age := 0.0
+var ignore: Array[RID] = [] # bodies this shot passes through (the Sweet Bot that fired it)
 
 
 ## overrides: changes to the weapon's numbers for this one shot (a charged Napalm Cone).
@@ -146,6 +147,11 @@ func _build_visual() -> void:
 			_drop_mark = MeshKit.torus(self, pr - 0.18, pr, Vector3.ZERO, mark)
 			_drop_mark.top_level = true
 			_drop_mark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		"clamp":
+			_body = Node3D.new() # Outlaw's wheel clamp (round 18): a yellow iron boot tumbling end over end
+			add_child(_body)
+			WheelClamp.build_boot(_body)
+			_add_light(color, 1.2, 4.0)
 		"skull":
 			_skull_visual(color)
 		"ghost":
@@ -212,7 +218,7 @@ func _physics_process(delta: float) -> void:
 
 	_age += delta
 	if _body:
-		_body.rotate_object_local(Vector3.FORWARD, 14.0 * delta)
+		_body.rotate_object_local(Vector3.RIGHT if def.get("kind", "") == "clamp" else Vector3.FORWARD, 14.0 * delta)
 	if _wig: # corkscrew, opening up after launch
 		var a := _wig_phase + _age * 22.0
 		_wig.position = Vector3(cos(a), sin(a), 0.0) * minf(0.45, _age * 2.0)
@@ -250,8 +256,10 @@ func _physics_process(delta: float) -> void:
 		rotate_object_local(Vector3.RIGHT, delta * 6.0) # tumbling
 	var mask := 2 if def.get("through_walls", false) else HIT_MASK
 	var query := PhysicsRayQueryParameters3D.create(from, to, mask)
-	if is_instance_valid(shooter):
-		query.exclude = [shooter.get_rid()]
+	var skip: Array[RID] = ignore.duplicate()
+	if is_instance_valid(shooter) and not (def.get("hits_owner", false) and _age > 0.15):
+		skip.append(shooter.get_rid()) # Sweet Bot's missiles can hit Sweet Tooth (owner, round 16)
+	query.exclude = skip
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if def.get("kind", "bullet") == "bullet":
 		# Round 12 (owner): machine-gun rounds meet a car's box made 10% bigger than its body.
@@ -374,16 +382,24 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 			GameFeel.hitstop(get_tree(), 0.05 + minf(dmg, 90.0) / 1500.0)
 		if def.has("freeze"):
 			v.freeze_for(float(def["freeze"]))
+		if def.has("clamp"):
+			v.clamp_for(float(def["clamp"]), pos)
 		if def.has("burn"):
 			v.ignite(float(def["burn"]), shooter)
 	elif collider is Breakable: # falls away from the shot; explosive and fire shots set wood alight
-		(collider as Breakable).weapon_hit(dmg, shooter, pos - direction * 3.0, kind != "bullet" and kind != "freeze")
+		(collider as Breakable).weapon_hit(dmg, shooter, pos - direction * 3.0, kind != "bullet" and kind != "freeze" and kind != "clamp")
 	elif collider != null and collider.has_method("projectile_hit"):
 		collider.projectile_hit(dmg, shooter)
 	if kind == "bullet":
 		FxKit.spark(world, pos, normal)
 		if collider != null and not (collider is Vehicle) and randf() < 0.25:
 			GameFeel.play("ricochet", pos, world, -12.0) # TM 2012 ricochets off walls and ground
+	elif kind == "clamp": # iron on steel: a clank and a spray of sparks, no fireball
+		GameFeel.play("ram_impact", pos, world, -6.0, 1.5, true)
+		for k in 2:
+			FxKit.spark(world, pos, (normal + Vector3(randf_range(-0.6, 0.6), 0.8, randf_range(-0.6, 0.6))).normalized())
+		if not (collider is Vehicle):
+			FxKit.puff(world, pos, 0.3)
 	elif kind == "freeze": # an ice burst, not a fireball: crystals, frost mist, a cold flash
 		GameFeel.play("freeze_impact", pos, world, -2.0, 1.0, true)
 		GameFeel.flash(world, pos, 1.6, Color(0.75, 0.92, 1.0), 0.08)

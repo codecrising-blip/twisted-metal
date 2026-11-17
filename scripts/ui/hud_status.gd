@@ -70,6 +70,8 @@ func _draw() -> void:
 		chips.append(["BURNING", Color(1.0, 0.45, 0.1)])
 	if player.frozen_time > 0.0:
 		chips.append(["FROZEN", Color(0.55, 0.85, 1.0)])
+	if player.clamped_time > 0.0:
+		chips.append(["CLAMPED", Color(0.95, 0.75, 0.15)])
 	if player.invulnerable_time > 0.0:
 		chips.append(["PROTECTED", Color(0.95, 0.9, 0.5)])
 	if player.shield_time > 0.0:
