@@ -439,12 +439,16 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 - **Round 17, full text `docs/design/22-owner-round-17.md`:** top container of the stack at (-74, 46) is solid now;
   the hit flash only overlays body meshes (`_apply_overlays`): flashing every mesh left the soft ground shadow white
   for good ("bright square under my car"); Napalm Cone melts down `meltdown_after` 2 s past the full charge
-  (`Vehicle.meltdown_at`). **Shield = Head-On's** (`shield_headon_pick.mp4`; the TMB field lines are gone):
-  `scripts/fx/shield_coat.gdshader` as the body meshes' overlay (not the wheels: `_wheel_meshes`), a glossy **forest
-  green** coat (nudged blue: LA's warm light turned #228B22 olive) hiding 80% of the paint, bright pulse on switch-on,
-  blinks bright/dim 3 times in the last `SHIELD_BLINK` 0.6 s; a blocked hit (`hit_react` -> `_shield_hit`) lights a
-  hot yellow-lime patch at the hit point on the car's box that spreads and cools in ~0.5 s, plus
-  `FxKit.shield_sparks` (no white flash while shielded). Screenshot `shield_close <out> <frames> [hit frames]`.
+  (`Vehicle.meltdown_at`). **Shield (owner, after a wrong first try: "not green paint") = a living forest-green
+  MAGNETIC FIELD around the whole car, wheels included** (Head-On leaving the tyres out was a flaw):
+  `scripts/fx/shield_field.gdshader` as the overlay on every car mesh without a material_override, unshaded alpha,
+  4.5 cm off the car: faint aura + rim, glowing lines running tail to nose (like round 16's stripes) bent by two
+  drifting value-noise fields (bounded warp, never TIME x a varying speed: that shears apart), a finer faster set
+  overtaking them, flickering patches and surges. Colour forest green (nudged blue: LA's warm light turned #228B22
+  olive). Bright pulse on switch-on, 3 bright/dim blinks in the last `SHIELD_BLINK` 0.6 s; a blocked hit (`hit_react`
+  -> `_shield_hit`) lights a hot yellow-lime patch at the hit point on the car's box that spreads and cools in ~0.5 s,
+  plus `FxKit.shield_sparks` (no white flash while shielded). Screenshot `shield_close <out> <frames> [hit frames]`; a moving clip: `tests/_shield_clip.gd` with `--fixed-fps 30`
+  (one run, so the shader's TIME runs on; separate screenshot runs each restart the clock).
   `tests/_spot_shot.gd -- x,y,z,yaw out.png` shoots the chase camera at an F3 position.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:

@@ -168,13 +168,18 @@ func _run() -> void:
 	var shield_hp := player.health
 	player.take_damage(30.0, main.enemies[0])
 	_check(is_equal_approx(player.health, shield_hp) and not player.freeze_for(2.0), "the shield stops damage and freezes")
-	# Round 17 (Head-On): a green coat on the body, not on the wheels; a blocked hit lights a patch
-	# instead of the white flash.
-	var coated := player._flash_meshes.filter(func(mi: Variant) -> bool: return is_instance_valid(mi) and (mi as MeshInstance3D).material_overlay == player._shield_mat)
-	var wheels_bare := player._wheel_meshes.keys().all(func(mi: Variant) -> bool: return (mi as MeshInstance3D).material_overlay == null)
-	_check(not coated.is_empty() and not player._wheel_meshes.is_empty() and wheels_bare, "the shield coats the body, not the wheels")
+	# Round 17: a green magnetic field around the whole car, wheels included; a blocked hit lights a
+	# patch instead of the white flash.
+	var wheel_meshes: Array = []
+	for w: Node3D in player._wheels:
+		wheel_meshes.append_array(w.find_children("*", "MeshInstance3D", true, false))
+		if w is MeshInstance3D:
+			wheel_meshes.append(w)
+	var fielded := player._flash_meshes.filter(func(mi: Variant) -> bool: return is_instance_valid(mi) and (mi as MeshInstance3D).material_overlay == player._shield_mat)
+	var wheels_in := not wheel_meshes.is_empty() and wheel_meshes.all(func(mi: Variant) -> bool: return (mi as MeshInstance3D).material_overlay == player._shield_mat)
+	_check(not fielded.is_empty() and wheels_in, "the shield field covers the car, wheels included")
 	player.hit_react(Vector3.BACK, 30.0)
-	_check(player._shield_hit_age == 0.0 and player._flash_time <= 0.0, "a blocked hit lights the coat where it landed (no white flash)")
+	_check(player._shield_hit_age == 0.0 and player._flash_time <= 0.0, "a blocked hit lights the field where it landed (no white flash)")
 	await _frames(170)
 	_check(player.shield_time <= 0.0, "the shield drops after 2.5 s")
 	player.energy = 100.0

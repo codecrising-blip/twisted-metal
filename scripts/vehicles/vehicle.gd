@@ -191,12 +191,11 @@ var invisible_time := 0.0 # energy invisibility: no locks on you, AI loses you p
 var revealed_time := 0.0 # seen anyway for a moment: hit, or caught in headlights
 var headlights_on := false
 var _energy_mines: Array = []
-var _shield_mat: ShaderMaterial # round 17: Head-On's glossy forest-green coat over the body
-var _shield_flare := 0.0 # a hit brightens the whole coat for a moment
-var _shield_hit_age := 9.0 # seconds since the coat last blocked a hit (the hot patch fades)
+var _shield_mat: ShaderMaterial # round 17: a living forest-green magnetic field around the whole car
+var _shield_flare := 0.0 # a hit brightens the whole field for a moment
+var _shield_hit_age := 9.0 # seconds since the field last blocked a hit (the hot patch fades)
 var _shield_spark_cd := 0.0 # sparks at most this often (a gatling burst would bury the car)
-var _wheel_meshes := {} # the shield leaves the wheels uncovered (as in Head-On)
-const SHIELD_SHADER := preload("res://scripts/fx/shield_coat.gdshader")
+const SHIELD_SHADER := preload("res://scripts/fx/shield_field.gdshader")
 const SHIELD_BLINK := 0.6 # it blinks for this long before it ends (owner, round 17)
 var _cloak: CloakFx # round 16: TM2 sparks going invisible and coming back
 var _was_invisible := false
@@ -310,11 +309,6 @@ func setup(id: String, player: bool) -> void:
 		_wheel_rest[w] = w.position
 	for mi in model.find_children("*", "MeshInstance3D", true, false):
 		_flash_meshes.append(mi as MeshInstance3D)
-	for w: Node3D in _wheels:
-		for mi in w.find_children("*", "MeshInstance3D", true, false):
-			_wheel_meshes[mi] = true
-		if w is MeshInstance3D:
-			_wheel_meshes[w] = true
 	_cloak = CloakFx.new()
 	_cloak.car = self
 	_cloak.size = stats.get("size", Vector3(2.2, 1.8, 5.0))
@@ -1037,7 +1031,7 @@ func hit_react(dir: Vector3, amount: float) -> void:
 	var flat := Vector3(dir.x, 0.0, dir.z)
 	if flat.length() > 0.01:
 		_jolt += global_basis.inverse() * flat.normalized() * clampf(amount * 0.012, 0.05, 0.4)
-	if shield_time > 0.0: # the coat takes it: a hot patch and sparks instead of the white flash
+	if shield_time > 0.0: # the field takes it: a hot patch and sparks instead of the white flash
 		_shield_hit(dir)
 		return
 	if amount >= 4.0:
@@ -1374,7 +1368,7 @@ func _show_shield(on: bool) -> void:
 		_shield_hum.stop()
 
 
-## The shield coat's brightness (round 17, Head-On): switches on with a bright green pulse, holds,
+## The shield field's brightness (round 17): switches on with a bright green pulse, holds,
 ## then blinks brighter and dimmer in its last SHIELD_BLINK seconds (the warning) and is gone.
 func _shield_strength() -> float:
 	var t_on := SHIELD_TIME - shield_time
@@ -1386,7 +1380,7 @@ func _shield_strength() -> float:
 	return s * (1.0 + _shield_flare * 0.25)
 
 
-## A blocked hit (round 17, owner): the coat turns hot yellow-green where it landed and sparks fly
+## A blocked hit (round 17, owner): the field turns hot yellow-lime where it landed and sparks fly
 ## off that spot. `dir` is the way the hit was travelling.
 func _shield_hit(dir: Vector3) -> void:
 	_shield_flare = 1.0
@@ -1411,8 +1405,7 @@ func _shield_hit(dir: Vector3) -> void:
 		FxKit.shield_sparks(get_parent(), global_transform * p, global_basis * d)
 
 
-## The layer drawn over the car's own meshes: the white hit flash, else the shield's coat (not on
-## the wheels).
+## The layer drawn over the car's own meshes, wheels included: the white hit flash, else the shield.
 func _apply_overlays() -> void:
 	var over: Material = null
 	if _flash_time > 0.0:
@@ -1422,7 +1415,7 @@ func _apply_overlays() -> void:
 	for mi in _flash_meshes:
 		# Only the body: the soft ground shadow and the fake headlight beams carry their own override.
 		if is_instance_valid(mi) and mi.material_override == null:
-			mi.material_overlay = null if over == _shield_mat and _wheel_meshes.has(mi) else over
+			mi.material_overlay = over
 
 
 ## Headlights on/off (owner: Circle / H). They light the way and show invisible cars in the beam.
@@ -1799,7 +1792,7 @@ func take_damage(amount: float, attacker: Vehicle = null) -> void:
 		return
 	if shield_time > 0.0:
 		GameFeel.play("shield_impact", global_position + Vector3.UP, self, -4.0)
-		_shield_flare = 1.0 # the coat brightens (the hot patch and sparks come from hit_react)
+		_shield_flare = 1.0 # the field brightens (the hot patch and sparks come from hit_react)
 		return
 	if invisible_time > 0.0:
 		revealed_time = maxf(revealed_time, 0.5) # a hit shows where you are for a moment
