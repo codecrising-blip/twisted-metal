@@ -1,0 +1,15 @@
+uniform vec4 field : source_color = vec4(0.11, 0.53, 0.2, 1.0);
+uniform vec4 core : source_color = vec4(0.5, 1.0, 0.55, 1.0);
+uniform vec4 hit_tint : source_color = vec4(0.95, 1.0, 0.3, 1.0);
+uniform float strength = 1.0;
+uniform mat4 car_inv;
+uniform vec3 hit_pos = vec3(0.0, -100.0, 0.0);
+uniform float hit_age = 9.0;
+uniform float hit_radius = 1.4;
+varying vec3 local;
+float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+float vnoise(vec3 x) { vec3 i = floor(x); vec3 f = fract(x); f = f * f * (3.0 - 2.0 * f);
+	return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+		mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z); }
+float line(float phase, float width) { float b = fract(phase); return 1.0 - smoothstep(0.0, width, min(b, 1.0 - b)); }
+float hit_spot(vec3 p) { float r = hit_radius * (0.55 + hit_age * 2.0); return (1.0 - smoothstep(r * 0.3, r, distance(p, hit_pos))) * exp(-hit_age * 4.0); }

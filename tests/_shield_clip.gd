@@ -1,6 +1,6 @@
 extends SceneTree
 ## Scratch: frames of the shield field on Outlaw in ONE run (the shader's TIME runs on), for a GIF.
-## Run with --fixed-fps 30 so every frame is 1/30 s. args: out_dir frames [hit_at]
+## Run with --fixed-fps 30 so every frame is 1/30 s. args: out_dir frames [hit_at] [shader path to try]
 func _initialize() -> void:
 	_run.call_deferred()
 func _run() -> void:
@@ -23,6 +23,8 @@ func _run() -> void:
 		await process_frame
 	e.energy = 100.0
 	e.energy_move("shield")
+	if args.size() > 3 and args[3] != "":
+		e._shield_mat.shader = load(args[3])
 	cam.global_position = base + Vector3(-3.6, 2.4, 6.2)
 	cam.look_at(base + Vector3(0, 1.0, 0))
 	cam.fov = 60.0
