@@ -479,6 +479,21 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   motion) is the fire on burning cars (`_burn_fx`), badly damaged cars (`_fire`, under 25%), the wreck pyre (`_pyre`,
   `PYRE_TIME` 3 s), fire pools, burning palms, the pit of fire and the burnt building. Draw calls unchanged (each
   sheet is one call; centre view 257, worst 407).
+- **Round 18, full text `docs/design/23-owner-round-18.md`:** **No wrecks (owner's idea):** a destroyed car blows apart
+  (`Vehicle._die`: big explosion, model hidden, body frozen on the ground under it touching nothing, scorch, `_pyre` fire
+  spot on the ground); the driver runs out of the fire AT ONCE (`BurningDriver.spawn_for` -> `_climb_out`, no wreck
+  wait), scream with it; run `RUN_SPEED` 6.25 + clip x`RUN_ANIM` 1.6 (owner: x1.6, it looked like slow motion).
+  **Black ball found:** Godot 4.3 Compatibility draws not-yet-emitted CPUParticles3D slots as opaque black quads at the
+  emitter while it runs (godotengine/godot#107978): smoke, explosions, the old burning-driver smoke. `FxKit.ghost_guard`
+  on `node_added` (main.gd): running emitters pre-fill (`preprocess` = lifetime), one-shots fire all at once; additive
+  ones are immune. `tests/_particle_bug.gd` shows it. **Fire:** the sheet fire (`tmb_fire`) was "narrow", and the first
+  four car-fire previews were rejected; TMB fire = a rounded "foamy" heap of crossed thin strands (pyre) / hair strands
+  (burning car), streaming back and swinging with turns. `FoamFire` (`scripts/fx/foam_fire.gd(shader)`): world-space
+  puffs born in `box` with `inherit` of the emitter's velocity, losing it at `drag` (physics swing for free), one
+  ImmediateMesh draw call, premultiplied blend (`glow` < 1 adds light). Four `LOOKS` sent to the owner to pick;
+  on cars it sits ONLY on the engine cover (`FoamFire.on_hood`, Roster "hood"), never inside the body; `FoamFire.spot`
+  = the fire where a car blew apart. Not wired into the game until the owner picks (then: cars, driver, spot, pools,
+  palms, pit). `tests/_fire_styles.gd -- look scene(park|drive|spot) out frames every`.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -503,7 +518,8 @@ tools/blender/              Blender asset pipeline (round 10): tmlib.py + build_
 scripts/core/model_lib.gd   loads the Blender models and their baked materials
 scripts/vehicles/blender_cars.gd  assembles a Blender car (body, wheels, spinners, markers) with the usual metadata
 scripts/vehicles/burning_driver.gd + driver_corpse.gd  burning drivers out of wrecks (round 17); fx/blood_fx.gd
-scripts/fx/tmb_fire.gd(shader) + tmb_fire_group.gd  TMB flame sheets: the standard fire everywhere (round 17)
+scripts/fx/tmb_fire.gd(shader) + tmb_fire_group.gd  TMB flame sheets (round 17; being replaced by FoamFire, round 18)
+scripts/fx/foam_fire.gd(shader)  fire as world-space streaky puffs, 4 looks (round 18, owner to pick)
 scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (simple primitives),
                             MeshBuilder (detailed models merged per material: chamfered boxes, lofts, lathes),
                             MatKit (generated paint/rust/chrome/rubber textures; world-mapped ground: pavement,
