@@ -25,24 +25,24 @@ import tmlib as T
 
 V = Vector
 FS = V((0, 0.88, -0.47)).normalized()  # the face side: the seam is a plane across it, SEAM behind the centre
-SEAM = -0.2  # the white face takes a high smooth forehead up over the crown (reference)
+SEAM = 0.0  # owner: the fire's hairline comes forward over the forehead (the forehead keeps its curve)
 PITCH = -8.0  # the whole head leans nose-down like the reference: the face looks ahead and down, the fire rises
 _m = {}
 
 # tongues of flame: root, tip, metaball radius at the root. Each rises off the skull, bends back, and its
 # tip curls up again (a cubic path), thinning to a point.
 TONGUES = [
-    ((0.0, -0.27, 0.32), (0.0, -0.5, 1.02), 0.3),
+    ((0.0, -0.04, 0.37), (0.0, -0.46, 1.02), 0.3),
     ((0.0, -0.38, 0.24), (0.0, -0.84, 0.88), 0.29),
     ((0.0, -0.42, 0.1), (0.0, -1.0, 0.68), 0.27),
     ((0.0, -0.46, -0.06), (0.0, -1.08, 0.42), 0.25),
     ((0.0, -0.42, -0.2), (0.0, -1.0, 0.14), 0.22),
-    ((0.24, -0.36, 0.18), (0.38, -0.8, 0.82), 0.24),
-    ((-0.24, -0.36, 0.18), (-0.38, -0.8, 0.82), 0.24),
+    ((0.25, -0.26, 0.22), (0.38, -0.8, 0.82), 0.24),
+    ((-0.25, -0.26, 0.22), (-0.38, -0.8, 0.82), 0.24),
     ((0.26, -0.42, 0.0), (0.42, -0.96, 0.54), 0.22),
     ((-0.26, -0.42, 0.0), (-0.42, -0.96, 0.54), 0.22),
-    ((0.26, -0.26, 0.26), (0.34, -0.42, 0.78), 0.17),
-    ((-0.26, -0.26, 0.26), (-0.34, -0.42, 0.78), 0.17),
+    ((0.26, -0.12, 0.28), (0.34, -0.36, 0.78), 0.17),
+    ((-0.26, -0.12, 0.28), (-0.34, -0.36, 0.78), 0.17),
 ]
 
 
@@ -76,7 +76,14 @@ def _skull():
     for sx in (1, -1):
         ball((sx * 0.2, 0.27, -0.13), 0.26)                    # cheeks pushed up by the grin
     ball((0, 0.2, -0.24), 0.32)                                # jaw and chin
-    ball((0, -0.26, 0.1), 0.62, "ELLIPSOID", (0.92, 1.0, 0.96))  # the mass of fire behind
+    ball((0, -0.1, 0.13), 0.62, "ELLIPSOID", (0.92, 1.0, 0.96))  # the mass of fire, up to the hairline
+    # the smooth head without the tongues: the seam (the fire's hairline) is laid on this, one clean arc
+    dg = bpy.context.evaluated_depsgraph_get()
+    me0 = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
+    smooth = bpy.data.objects.new("clown_smooth", me0)
+    T._link(smooth)
+    bvh0 = _surface(smooth)
+    bpy.data.objects.remove(smooth)
     for root, tip, r0 in TONGUES:
         p0, p3 = V(root), V(tip)
         length = (p3 - p0).length
@@ -87,6 +94,7 @@ def _skull():
             t = i / n
             p = p0 * (1 - t) ** 3 + p1 * 3 * t * (1 - t) ** 2 + p2 * 3 * t * t * (1 - t) + p3 * t ** 3
             ball(tuple(p), r0 * (1.0 - t) ** 0.95 + 0.014)
+    bpy.context.view_layer.update()
     dg = bpy.context.evaluated_depsgraph_get()
     me = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
     bpy.data.objects.remove(ob)
@@ -98,7 +106,7 @@ def _skull():
     T.decimate(sk, 0.06)
     me = sk.data
     me.polygons.foreach_set("use_smooth", [True] * len(me.polygons))
-    return sk, bvh
+    return sk, bvh, bvh0
 
 
 def _surface(sk):
@@ -240,7 +248,7 @@ def build(c, s, parts, decals=None, regions=None, unbake=None):
     m = _mats()
     c = V(c)
     head = []
-    sk, bvh = _skull()
+    sk, bvh, bvh0 = _skull()
     head.append(sk)
     # the seam: a raised riveted band in the plane across the face side, laid on the surface from inside
     A = V((1, 0, 0))
@@ -249,7 +257,7 @@ def build(c, s, parts, decals=None, regions=None, unbake=None):
     for k in range(48):
         a = 2 * math.pi * k / 48
         d = (A * math.cos(a) + B * math.sin(a)).normalized()
-        hit = bvh.ray_cast(FS * SEAM + d * 0.02, d, 3.0)
+        hit = bvh0.ray_cast(FS * SEAM + d * 0.02, d, 3.0)
         if hit[0] is not None:
             seam.append(hit[0] + hit[1] * 0.006)
     if len(seam) > 8:

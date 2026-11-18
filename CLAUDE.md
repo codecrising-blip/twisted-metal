@@ -535,8 +535,21 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   reverse; wears off after 5 s of DRIVING = moving (`MOVING_SPEED` 2 m/s) OR gas held (`GAS_GRINDS`: against a wall
   counts, owner); 15 on hit + `SCRAPE_DPS` 5 while driving (25), then it breaks off; sparks, `Streak` from its foot,
   scratch marks, hit = flash + shockwave + scale pop. Clips: `tests/_secondary_clip.gd -- botdoor|clampcam ...`,
-  `tests/_clamp_lineup.gd` (`-- full`). Gotcha: AI cars may have a shield up at spawn (clamp refused). Later: the AI
-  must learn to hunt the robot.
+  `tests/_clamp_lineup.gd` (`-- full`). Gotcha: AI cars may have a shield up at spawn (clamp refused).
+  **Second pass (owner):** the robot is only its TOP half on the wheeled chassis (the truck box between was cut:
+  `build_sweet_bot.py` drops the upper body `DZ` 0.88 onto the chassis, ~1.75 m, ~16k tris; decals and markers move
+  with it); **AI hunts an enemy robot** (`AIDriver._bot_plan` / `_enemy_bot`: within `BOT_HUNT_RANGE` 50 m on its
+  level, when it is closer than the target, aims at it, or by chance; drives into it to crush it, guns + power on the
+  way; mode "bot"). **Sweet Tooth's clown head = the TM 2012 mascot** (owner's reference; the burnt cone sign is gone):
+  `tools/blender/clown_head.py`, shared by the truck roof (`mascot` node on a coil spring, `m_mascot`; `BlenderCars`
+  makes it the `bobble`, the roof fire `m_cone` rides on it) and the robot. Built like a sculpt: metaballs (skull,
+  cheeks, jaw, fire mass, 11 cubic tongues) melted into ONE surface, decimated to ~2.5k tris; the seam (fire hairline,
+  `FS`/`SEAM`) is laid on the tongue-less smooth head; eyes, lips, teeth and tooth gaps are PAINTED at the bake
+  (`_paint_face`: 3D distance to lines projected on the full-detail sculpt, even widths), fire colour by distance from
+  the seam (gold, yellow-orange, orange, orange-red), `PITCH` -8 deg. Owner rejected first: separate spheres/cones
+  ("goofy", "crayons"), round tube lips ("pipes"), big eyes, short forehead, then too much forehead (hairline brought
+  forward, `SEAM` 0). `build(c, s, parts, decals, regions, unbake)`: `unbake` maps bake points back when the caller
+  moves the meshes after building (the robot). Gotcha: `T.preview(tex=...)` needs `T._finish_materials` first.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
