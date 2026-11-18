@@ -267,7 +267,9 @@ for sx in (1, -1):
     dots(sh + V((sx * 0.27, 0, 0.05)), (sx, 0, 0), (0.6, 0.5), 5 + sx)
 for name, pos in tube_marks.items():
     markers.append(T.marker(name, tuple(pos)))
-clown_head.build(V((0, 0.14, 2.6)), 0.78, up)  # Sweet Tooth's own head, the TM 2012 fireball (owner)
+# Sweet Tooth's own head, the TM 2012 fireball (owner). Its paint is laid at the bake, after the upper body has
+# come down DZ and the robot was scaled: unbake maps those points back to where the head was built.
+clown_head.build(V((0, 0.14, 2.55)), 0.68, up, decals, regions, unbake=lambda P: P / S + np.array((0, 0, DZ), dtype=np.float32))
 markers.append(T.marker("m_head", (0, 0.1, 2.95)))
 stacks(V((0, -0.42, 1.64)), 0.72, up, gap=0.95)  # out to the sides: the head's flames stream back between them
 decals.append(T.Decal(T.holes_image(n=9, seed=7, size=(512, 256), r=(5, 9)), (0.66, 0.15, 1.95), (1, 0, 0), (0, 0, 1), (0.6, 0.3), depth=0.1, kinds=("paint",)))

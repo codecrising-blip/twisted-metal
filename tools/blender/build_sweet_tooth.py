@@ -235,11 +235,11 @@ helix = [tuple(SC + Vector((math.cos(i / 14 * 2 * math.pi) * 0.09, math.sin(i / 
 body.append(T.tube(helix, 0.016, mat=bare, n=5))
 HEAD_BASE = SC + Vector((0, 0, 0.04 + SPRING))
 mascot_parts = [T.cyl(0.13, 0.05, tuple(HEAD_BASE + Vector((0, 0, 0.02))), mat=armor, n=12)]
-HEAD_S = 1.1
+HEAD_S = 0.85  # the flame tips reach about as high as the old cone sign did (the chase camera sees over it)
 head_c = HEAD_BASE + Vector((0, 0.06, 0.4 * HEAD_S))
-clown_head.build(head_c, HEAD_S, mascot_parts)
+clown_head.build(head_c, HEAD_S, mascot_parts, decals, regions)
 markers.append(T.marker("m_mascot", tuple(HEAD_BASE)))
-markers.append(T.marker("m_cone", tuple(head_c + Vector((0, -0.42, 0.42)) * 1.0)))  # the roof fire (Last Laugh turns it blue)
+markers.append(T.marker("m_cone", tuple(head_c + Vector((0, -0.36, 0.36)) * HEAD_S)))  # the roof fire (Last Laugh turns it blue)
 markers.append(T.marker("m_top", (0.0, -1.0, ROOF + 0.3)))
 markers.append(T.marker("m_head", (0.0, NOSE + 0.2, 1.0)))
 
