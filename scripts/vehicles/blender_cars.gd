@@ -78,19 +78,31 @@ static func build(id: String) -> Node3D:
 		m.set_meta("top", (marks["m_top"] as Transform3D).origin)
 	if marks.has("m_head"):
 		HeroModels._headlight_beam(m, (marks["m_head"] as Transform3D).origin)
+	var cone_parent: Node3D = m
+	var cone_at := Vector3.ZERO
+	if marks.has("mascot") and marks.has("m_mascot"): # round 19: Sweet Tooth's head on its roof spring (bobs)
+		var spring := Node3D.new()
+		spring.name = "Mascot"
+		spring.position = (marks["m_mascot"] as Transform3D).origin
+		spring.add_child(ModelLib.instance(id, "mascot"))
+		m.add_child(spring)
+		m.set_meta("bobble", spring)
+		cone_parent = spring
+		cone_at = -spring.position
 	if marks.has("m_cone"):
-		_cone_fire(m, (marks["m_cone"] as Transform3D).origin)
+		_cone_fire(m, (marks["m_cone"] as Transform3D).origin + cone_at, cone_parent)
 	HeroModels._ground_shadow(m, SHADOW.get(id, Vector2(2.8, 5.8)))
 	return m
 
 
-## Sweet Tooth's roof sign still burns inside: a low flame and smoke out of the hole.
-static func _cone_fire(m: Node3D, at: Vector3) -> void:
-	var fire := FxKit.fire(0.34, 10)
+## Sweet Tooth's head burns on the roof (its sculpted flames catch a real fire, round 19): a low flame on
+## the crown that rides the spring with the head. `parent` = the model, or the head's spring.
+static func _cone_fire(m: Node3D, at: Vector3, parent: Node3D = null) -> void:
+	var fire := FxKit.fire(0.3, 10)
 	fire.position = at
 	fire.emission_sphere_radius = 0.13
 	fire.color_ramp = FxKit._ramp(CONE_FIRE)
-	m.add_child(fire)
+	(parent if parent else m).add_child(fire)
 	fire.emitting = true
 	m.set_meta("cone_fire", fire)
 	var glow := FlickerLight.new()
@@ -100,7 +112,7 @@ static func _cone_fire(m: Node3D, at: Vector3) -> void:
 	glow.position = at + Vector3(0, 0.3, 0)
 	glow.add_to_group(GraphicsSettings.EXTRA_LIGHT_GROUP)
 	glow.visible = GraphicsSettings.high
-	m.add_child(glow)
+	(parent if parent else m).add_child(glow)
 	m.set_meta("cone_glow", glow)
 
 

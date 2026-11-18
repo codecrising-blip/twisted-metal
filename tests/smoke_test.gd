@@ -1222,6 +1222,32 @@ func _run() -> void:
 	bot.projectile_hit(14.0, null)
 	await _frames(3)
 	_check(standing and not is_instance_valid(bot) and st.bot == null, "a power missile alone leaves the robot standing; power + fire (59) blow it up")
+	# Round 19 (owner): opponents go after the robot: an AI car near it drives into it and crushes it.
+	var hunters: Array = main.enemies.filter(func(e: Vehicle): return not e.is_dead)
+	if not hunters.is_empty():
+		st.ammo[st.special_id] = 3
+		st.energy_move("secondary")
+		var bot3: SweetBot = st.bot
+		await _frames(80)
+		var hunter: Vehicle = hunters[0]
+		var hb := AIDriver.new() # a fresh brain on this match's stage (the brains saved at the start
+		hb.arena = main.arena    # belong to the first match, whose stage is gone after the restarts)
+		hunter.health = hunter.max_health
+		hunter.shield_time = 0.0
+		var bp := bot3.global_position
+		var inward := Vector3(-bp.x, 0.0, -bp.z).normalized() # toward the middle of the battleground: safe ground
+		var hunt_at := bp + inward * 24.0
+		_place(hunter, hunt_at.x, hunt_at.z, rad_to_deg(atan2(inward.x, inward.z)))
+		hunter.controller = hb
+		hb._bot_think = 0.0
+		var saw_mode := false
+		for k in 480:
+			await physics_frame
+			saw_mode = saw_mode or hb.mode == "bot"
+			if not is_instance_valid(bot3):
+				break
+		hunter.controller = null
+		_check(saw_mode and not is_instance_valid(bot3), "an AI car goes for Sweet Bot and destroys it (mode bot: %s)" % saw_mode)
 	var outlaws: Array = main.enemies.filter(func(e: Vehicle): return e.car_id == "outlaw" and not e.is_dead)
 	if not outlaws.is_empty():
 		var ol18: Vehicle = outlaws[0]

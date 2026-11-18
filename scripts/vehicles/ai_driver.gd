@@ -26,6 +26,7 @@ var aggression := 1.2 # 0.5 easy .. 1.5 hard; 1.2 = the owner's 7/10
 const SMARTS := 1.1
 const GRAB_HEALTH_BELOW := 0.7 # share of max health: a health pickup close by is worth the detour
 const GRAB_HEALTH_RANGE := 28.0
+const BOT_HUNT_RANGE := 50.0 # round 19 (owner): an enemy Sweet Bot this close is worth killing first
 var arena: Node3D # stage: ramps, wander area
 var mode := "wander" # hunt | chase | attack | retreat | detour | wander (tests and debugging read it)
 var phase := "approach" # attack run: approach | pass | turn
@@ -55,6 +56,8 @@ var _drift := false
 var _plan_jump := false
 var drifts := 0 # handbrake turns started (tests)
 var _energy_think := 1.0 # seconds to the next energy-move decision
+var _bot: SweetBot # the enemy robot this car is going after (mode "bot")
+var _bot_think := 0.0
 
 
 func drive(v: Vehicle, delta: float) -> void:
@@ -234,6 +237,9 @@ func _plan(v: Vehicle, delta: float) -> Dictionary:
 			flee.x = clampf(flee.x, -half, half)
 			flee.z = clampf(flee.z, -half, half)
 			return {"goal": flee, "throttle": 1.0, "turbo": true}
+	var bot_plan := _bot_plan(v, has_t, delta)
+	if not bot_plan.is_empty():
+		return bot_plan
 	if not has_t:
 		return _wander_plan(v)
 	var to := t.global_position - v.global_position
@@ -278,6 +284,46 @@ func _plan(v: Vehicle, delta: float) -> Dictionary:
 		return {"goal": t.global_position, "throttle": 1.0, "turbo": d > 90.0}
 	mode = "attack"
 	return _attack_run(v, t, d, flat_to, delta)
+
+
+## Round 19 (owner): an enemy Sweet Bot left standing takes over the arena, so the AI goes for it: straight
+## into it (a car crushes it), guns blazing on the way. That is Sweet Tooth's chance at its back. It goes
+## when the robot is closer than its target, or aiming at it, or now and then anyway; once set on it, it
+## keeps at it until the robot is gone (or it has to retreat).
+func _bot_plan(v: Vehicle, has_t: bool, delta: float) -> Dictionary:
+	_bot_think -= delta
+	if _bot_think <= 0.0:
+		_bot_think = 0.8 / SMARTS
+		if not is_instance_valid(_bot) or _bot._dead:
+			_bot = null
+			var b := _enemy_bot(v)
+			if b:
+				var db := v.global_position.distance_to(b.global_position)
+				var dt := v.global_position.distance_to(v.target.global_position) if has_t else INF
+				if b._lock == v or db < dt * 1.3 or randf() < 0.35 * aggression:
+					_bot = b
+	if not is_instance_valid(_bot) or _bot._dead or _level(_bot.global_position) != _level(v.global_position):
+		_bot = null
+		return {}
+	mode = "bot"
+	phase = "approach"
+	var d := v.global_position.distance_to(_bot.global_position)
+	return {"goal": _bot.global_position, "throttle": 1.0, "turbo": d > 25.0}
+
+
+## The nearest enemy Sweet Bot on this level within BOT_HUNT_RANGE (out of its truck), or null.
+func _enemy_bot(v: Vehicle) -> SweetBot:
+	var best: SweetBot = null
+	var best_d := BOT_HUNT_RANGE
+	for node in v.get_tree().get_nodes_in_group("bots"):
+		var b := node as SweetBot
+		if b == null or b._dead or b.owner_car == v or b.state == "drop":
+			continue
+		var d := v.global_position.distance_to(b.global_position)
+		if d < best_d and _level(b.global_position) == _level(v.global_position):
+			best_d = d
+			best = b
+	return best
 
 
 ## One attack run: come in beside the target on _side, swing toward its back, drive past,
@@ -627,6 +673,15 @@ func _shoot(v: Vehicle, delta: float) -> void:
 	# A live taser link, chain bomb, napalm can or remote bomb: mash, drop or blow it.
 	if v.has_live_special():
 		_use_live_special(v, delta)
+		return
+	if mode == "bot" and is_instance_valid(_bot): # going for an enemy Sweet Bot: guns, a power missile
+		var tb := _bot.global_position + Vector3.UP * 0.8 - v.global_position
+		var ab := v.flat_forward().angle_to(Vector3(tb.x, 0, tb.z).normalized())
+		v.in_fire_guns = tb.length() < 60.0 and ab < 0.3
+		if _weapon_timer <= 0.0 and ab < 0.1 and tb.length() > 12.0 and v.ammo.get("power", 0) > 0:
+			_weapon_timer = randf_range(1.8, 3.5) / aggression / SMARTS
+			v.selected = v.weapon_order.find("power")
+			v.want_fire_weapon = true
 		return
 	var t := v.target
 	if not is_instance_valid(t) or t.is_dead:

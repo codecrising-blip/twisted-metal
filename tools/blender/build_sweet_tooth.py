@@ -13,6 +13,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tmlib as T
+import clown_head
 import numpy as np
 from mathutils import Matrix, Vector
 
@@ -34,8 +35,6 @@ soot = T.M("burnt", (0.05, 0.04, 0.03), rust=0.5)
 rubber = T.M("rubber", (0.016, 0.016, 0.016), dirt=0.7)
 olive = T.M("paint", (0.075, 0.09, 0.045), wear=0.7, rust=0.5, dirt=0.6)
 canred = T.M("paint", (0.32, 0.035, 0.03), wear=0.7, rust=0.5, dirt=0.6)
-wafer = T.M("plastic", (0.27, 0.17, 0.075), wear=0.8, dirt=0.7)
-swirl = T.M("plastic", (0.40, 0.31, 0.28), wear=0.85, dirt=0.8)
 glass = T.glass()
 body = []     # parts of the body mesh
 door_parts = []  # the tailgate (round 19): its own node, it folds down into a ramp for Sweet Bot
@@ -223,28 +222,24 @@ body.append(T.box((0.72, 0.03, 0.03), (-0.5, -2.46, ROOF + 0.42), mat=bare))  # 
 body.append(T.box((0.03, 0.8, 0.03), (-0.84, -2.46, ROOF + 0.42), mat=bare))
 body.append(T.tube([(-0.28, -2.26, ROOF + 0.63), (-0.2, -2.1, ROOF + 0.5), (-0.1, -1.98, ROOF + 0.2), (-0.05, -1.9, ROOF + 0.3)], 0.025, mat=rubber, n=6))
 
-# ---------------------------------------------------------------- roof sign: burnt-out soft serve cone on a frame
-SC = Vector((0, 0.1, ROOF))   # centre of the sign's footprint
-ring_z = 0.52
-for sx in (1, -1):
-    for sy in (1, -1):
-        body.append(T.tube([tuple(SC + Vector((sx * 0.4, sy * 0.36, 0.0))), tuple(SC + Vector((sx * 0.25, sy * 0.22, ring_z)))], 0.028, mat=armor, n=6))
-        body.append(T.box((0.16, 0.16, 0.03), tuple(SC + Vector((sx * 0.4, sy * 0.36, 0.015))), mat=armor))
-body.append(T.lathe([(0.3, -0.035), (0.34, -0.035), (0.34, 0.035), (0.3, 0.035)], loc=tuple(SC + Vector((0, 0, ring_z))), mat=armor, n=16))
-cone_tip = SC + Vector((0, 0, 0.12))
-CH = 0.78
-cone = T.lathe([(0.0, 0.0), (0.05, 0.05), (0.36, CH), (0.38, CH + 0.06), (0.3, CH + 0.06)], loc=tuple(cone_tip), mat=wafer, n=18)
-body.append(cone)
-sw_base = cone_tip + Vector((0, 0, CH + 0.04))
-sw = T.lathe([(0.3, 0.0), (0.4, 0.05), (0.42, 0.13), (0.34, 0.2), (0.3, 0.22), (0.34, 0.28), (0.32, 0.36), (0.24, 0.42),
-              (0.21, 0.44), (0.23, 0.5), (0.19, 0.58), (0.11, 0.63), (0.08, 0.72), (0.03, 0.8), (0.0, 0.84)], loc=tuple(sw_base), mat=swirl, n=18)
-# blown open at the back
-T.apply(sw)
-T.cut(sw, T.sphere(0.24, tuple(sw_base + Vector((-0.2, -0.3, 0.3))), n=10))
-body.append(sw)
-body.append(T.sphere(0.2, tuple(sw_base + Vector((-0.06, -0.1, 0.22))), mat=soot, n=8))
-body.append(T.sphere(0.07, tuple(sw_base + Vector((-0.15, -0.2, 0.28))), mat=T.glow((1.0, 0.4, 0.06)), n=6))
-markers.append(T.marker("m_cone", tuple(sw_base + Vector((-0.12, -0.18, 0.4)))))
+# ---------------------------------------------------------------- roof: Sweet Tooth's head on a spring (round 19)
+# The owner's reference (the TM 2012 truck): the clown head with its flaming hair, on a coil spring. The head is
+# its own node ("mascot", origin = the top of the spring, m_mascot) so the game bobs it on the spring.
+SC = Vector((0, 0.1, ROOF))
+body.append(T.cyl(0.17, 0.04, tuple(SC + Vector((0, 0, 0.02))), mat=armor, n=14, bevel=0.01))
+for k in range(4):
+    a = math.radians(45 + k * 90)
+    body.append(T.cyl(0.02, 0.03, tuple(SC + Vector((math.cos(a) * 0.12, math.sin(a) * 0.12, 0.05))), mat=bare, n=6))
+SPRING = 0.34
+helix = [tuple(SC + Vector((math.cos(i / 14 * 2 * math.pi) * 0.09, math.sin(i / 14 * 2 * math.pi) * 0.09, 0.04 + SPRING * i / 70))) for i in range(71)]
+body.append(T.tube(helix, 0.016, mat=bare, n=5))
+HEAD_BASE = SC + Vector((0, 0, 0.04 + SPRING))
+mascot_parts = [T.cyl(0.13, 0.05, tuple(HEAD_BASE + Vector((0, 0, 0.02))), mat=armor, n=12)]
+HEAD_S = 1.1
+head_c = HEAD_BASE + Vector((0, 0.06, 0.4 * HEAD_S))
+clown_head.build(head_c, HEAD_S, mascot_parts)
+markers.append(T.marker("m_mascot", tuple(HEAD_BASE)))
+markers.append(T.marker("m_cone", tuple(head_c + Vector((0, -0.42, 0.42)) * 1.0)))  # the roof fire (Last Laugh turns it blue)
 markers.append(T.marker("m_top", (0.0, -1.0, ROOF + 0.3)))
 markers.append(T.marker("m_head", (0.0, NOSE + 0.2, 1.0)))
 
@@ -287,6 +282,7 @@ markers += [T.marker("m_wheel_fr", (TRACK_F, FA, R)), T.marker("m_wheel_fl", (-T
 
 body_ob = T.join(body, "body")
 door_ob = T.join(door_parts, "door")
+mascot_ob = T.join(mascot_parts, "mascot")
 print("triangles: body %d, wheel_f %d, wheel_r %d, spinner %d" % (T.tri_count([body_ob]), T.tri_count([wheel_f]), T.tri_count([wheel_r]), T.tri_count([spinner])))
 
 if "--shape" in sys.argv:
@@ -306,15 +302,7 @@ regions.append((band_fn, CRIMSON, ("paint",)))
 def rear_band(P, N):
     return ((N[:, 1] < -0.7) & (P[:, 2] > 0.86) & (P[:, 2] < 1.38) & (np.abs(P[:, 0]) < HW)).astype(np.float32)
 regions.append((rear_band, CRIMSON, ("paint",)))
-def waffle(P, N):  # diamond grid pressed into the cone
-    d = P - np.array(cone_tip, dtype=np.float32)
-    a = np.arctan2(d[:, 0], d[:, 1])
-    u = a * 3.0 + d[:, 2] * 9.0
-    v = a * 3.0 - d[:, 2] * 9.0
-    line = (np.abs((u % 1.0) - 0.5) > 0.42) | (np.abs((v % 1.0) - 0.5) > 0.42)
-    near = (np.abs(d[:, 0]) < 0.5) & (np.abs(d[:, 1]) < 0.5) & (d[:, 2] > -0.05) & (d[:, 2] < CH + 0.1)
-    return (line & near).astype(np.float32) * 0.75
-regions.append((waffle, (0.09, 0.045, 0.015), ("plastic",)))
+
 
 letter = T.stencil("ICE CREAM", (0.3, 0.035, 0.045), 150, font=T.FONT_BOLD, bridges=False, pad=0.08)
 decals.append(T.Decal(letter, (-HW, -1.1, 2.0), (-1, 0, 0), (0, 0, 1), (3.0, 0.5), depth=0.08, kinds=("paint",), opacity=0.85))
@@ -351,16 +339,17 @@ import bpy
 bpy.context.view_layer.update()
 for o in (wheel_f, wheel_r, spinner):
     T.apply(o)
-objs = [body_ob, wheel_f, wheel_r, spinner, door_ob]
+objs = [body_ob, wheel_f, wheel_r, spinner, door_ob, mascot_ob]
 T.unwrap(objs, margin=0.002)
 if "--nobake" not in sys.argv:
     g = T.gbuffer(objs, size=2048, ao_dist=0.7, bevel_r=0.014, ao_samples=24)
     al, nm, orm = T.weather(g, decals, seed=21, dust_from=0.25, dust_to=1.5, regions=regions,
-        soot=[(tuple(launcher), 0.75), ((HW + 0.1, 0.62, 3.0), 0.45), ((-HW - 0.1, 0.62, 3.0), 0.45), (tuple(sw_base + Vector((-0.1, -0.15, 0.4))), 0.95)])
+        soot=[(tuple(launcher), 0.75), ((HW + 0.1, 0.62, 3.0), 0.45), ((-HW - 0.1, 0.62, 3.0), 0.45)])
     T.save_maps("sweet_tooth", al, nm, orm)
 wheel_f.data.transform(Matrix.Translation((-4.5, -1.0, -R)))
 wheel_r.data.transform(Matrix.Translation((-4.5, 1.0, -R)))
 spinner.data.transform(Matrix.Translation((-4.5, -2.0, -1.0)))
 door_ob.data.transform(Matrix.Translation((0, -(REAR - 0.03), -DOOR_Z0)))  # its origin is the hinge
+mascot_ob.data.transform(Matrix.Translation(-HEAD_BASE))  # its origin is the top of the spring
 T.export_glb("sweet_tooth", objs, markers=markers)
 print("ok")

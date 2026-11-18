@@ -15,7 +15,7 @@ extends StaticBody3D
 const DROP_TIME := 0.75 # sliding out of the box and down the tailgate
 const DOOR_OPEN := 0.3 # the tailgate folding down
 const DOOR_ANGLE := 1.955 # 112 degrees: folded down to the road, a ramp
-const CROUCH := 0.72 # its height in the box (it stands up on the road: _stand)
+const CROUCH := 0.88 # its height in the box (it rises on the road: _stand)
 const SQUEEZE := 0.84 # and its width: arms in, wings folded, it fits the 1.78 m door
 const RAMP := 1.75 # m from the hinge to where the tailgate's end touches the road
 const COOLDOWN := 5.0 # owner, round 19: after a barrage it reloads this long, then fires again
@@ -86,9 +86,9 @@ func _ready() -> void:
 	add_to_group(&"bots")
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(1.75, 2.2, 1.1) # the robot is ~2.35 m tall, 2 m across the shoulders
+	box.size = Vector3(1.75, 1.7, 1.2) # round 19 (owner): the top half on wheels, ~1.75 m tall
 	shape.shape = box
-	shape.position = Vector3(0, 1.1, 0)
+	shape.position = Vector3(0, 0.85, 0)
 	add_child(shape)
 	_model = Node3D.new()
 	add_child(_model)
@@ -235,7 +235,7 @@ func _land() -> void:
 ## Stands up from the landing crouch with a little overshoot, then breathes on its hydraulics.
 func _stand(_delta: float) -> void:
 	var k := clampf((_t if state == "wait" else STAND_TIME) / STAND_TIME, 0.0, 1.0)
-	var y := 0.72 + 0.28 * (1.0 - pow(1.0 - k, 3.0)) + 0.05 * sin(k * PI) # rises, overshoots a hair
+	var y := CROUCH + (1.0 - CROUCH) * (1.0 - pow(1.0 - k, 3.0)) + 0.04 * sin(k * PI) # rises, overshoots a hair
 	if k >= 1.0:
 		y = 1.0 + 0.008 * sin(Time.get_ticks_msec() * 0.004)
 	_model.scale = Vector3(1.0, y, 1.0)
