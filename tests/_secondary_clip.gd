@@ -1,7 +1,9 @@
 extends SceneTree
 ## Scratch (round 18): film the secondary weapons. Run with --fixed-fps 30. args: scenario out_dir frames every
 ##   bot      Sweet Tooth drops Sweet Bot, Outlaw comes up behind, R L U again sends the barrage
+##   botdoor  the same from behind the truck: the tailgate folds down, the robot slides out
 ##   botkill  Outlaw shoots the waiting robot (power + fire missile): it goes up like a Remote
+##   clampcam the same from the clamped car's chase camera, steering held the locked way
 ##   clamp    Outlaw throws the wheel clamp at Sweet Tooth driving ahead of her: the steering drags aside
 
 
@@ -47,7 +49,7 @@ func _run() -> void:
 	var base := LosAngelesArena.ground(-40, 40)
 	var west := Basis(Vector3.UP, deg_to_rad(90)) # facing -X
 	p.global_transform = Transform3D(west, base + Vector3(0, 0.1, 0))
-	e.global_transform = Transform3D(west, base + Vector3(42 if scenario != "clamp" else 26, 0.1, 1.5))
+	e.global_transform = Transform3D(west, base + Vector3(26 if scenario.begins_with("clamp") else 42, 0.1, 1.5))
 	p.target = e
 	e.target = p
 	for i in 20:
@@ -68,17 +70,25 @@ func _run() -> void:
 				var at := base + Vector3(5.7, 0, 0) # where the robot lands, behind the truck
 				cam.global_position = at + Vector3(-5.5, 3.2, 7.5)
 				cam.look_at(at + Vector3(5.0, 1.3, 0))
+			"botdoor": # round 19: the tailgate folds down and the robot slides out, seen from behind the truck
+				if i == 10:
+					p.ammo[p.special_id] = 3
+					p.energy_move("secondary")
+				if i == 75:
+					p.energy_move("secondary")
+				cam.global_position = base + Vector3(11.5, 2.6, 6.5)
+				cam.look_at(base + Vector3(3.6, 1.1, 0))
 			"botlook": # the robot close up, from the front
 				if i == 5:
 					p.ammo[p.special_id] = 3
 					p.energy_move("secondary")
-				var at3 := base + Vector3(5.7, 0, 0)
+				var at3 := (p.bot.global_position if is_instance_valid(p.bot) else base + Vector3(5.7, 0, 0))
 				if args.size() > 4 and args[4] == "cone":
 					cam.global_position = at3 + Vector3(2.2, 2.9, 1.6)
 					cam.look_at(at3 + Vector3(0, 2.8, 0))
 				else:
-					cam.global_position = at3 + Vector3(3.6, 1.9, 2.4)
-					cam.look_at(at3 + Vector3(0, 1.15, 0))
+					cam.global_position = at3 + Vector3(4.2, 1.9, 2.6)
+					cam.look_at(at3 + Vector3(0, 1.2, 0))
 			"botkill":
 				if i == 10:
 					p.ammo[p.special_id] = 3
@@ -90,6 +100,17 @@ func _run() -> void:
 				var at2 := base + Vector3(5.7, 0, 0)
 				cam.global_position = at2 + Vector3(-6.5, 4.0, 10.0)
 				cam.look_at(at2 + Vector3(4.0, 1.2, 0))
+			"clampcam": # round 19: what the clamped driver sees from the chase camera (steering held left)
+				if i == 0:
+					cam.target = p
+					cam.fov = 70.0
+				pp.throttle = 0.8
+				ep.throttle = 0.8
+				if p.clamped_time > 0.0:
+					pp.steer = -1.0 # trying to turn the locked way: it still turns the other way
+				if i == 25:
+					e.ammo[e.special_id] = 2
+					e.energy_move("secondary")
 			"clamp":
 				pp.throttle = 0.8
 				ep.throttle = 0.8

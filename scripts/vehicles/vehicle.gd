@@ -1890,16 +1890,19 @@ func _clamp_step(delta: float) -> void:
 	in_throttle = maxf(in_throttle, 0.0) # no reverse
 	in_steer = free * maxf(WheelClamp.MIN_TURN, in_steer * free) # only ever toward the free side
 	var moving := linear_velocity.length() > WheelClamp.MOVING_SPEED
+	# Owner (round 19): driving counts even when a wall stops the car: gas held = the wheels turn under the
+	# clamp, so it grinds and wears. Only really standing (no gas) leaves it untouched.
+	var grinding := moving or in_throttle > WheelClamp.GAS_GRINDS
 	if is_instance_valid(_clamp_boot):
 		WheelClamp.blink(_clamp_boot)
 	if is_instance_valid(_clamp_snd):
-		if moving and not _clamp_snd.playing:
+		if grinding and not _clamp_snd.playing:
 			_clamp_snd.play()
-		elif not moving and _clamp_snd.playing:
+		elif not grinding and _clamp_snd.playing:
 			_clamp_snd.stop()
-	if not moving:
+	if not grinding:
 		return
-	clamped_time -= delta # only moving time counts (owner)
+	clamped_time -= delta # only driving time counts (owner)
 	_clamp_hurt += WheelClamp.SCRAPE_DPS * delta
 	if _clamp_hurt >= 1.25:
 		take_damage(_clamp_hurt * WeaponData.DAMAGE_SCALE, _clamp_by)
@@ -1907,7 +1910,7 @@ func _clamp_step(delta: float) -> void:
 	_clamp_spark -= delta
 	if _clamp_spark <= 0.0 and is_instance_valid(_clamp_boot):
 		_clamp_spark = 0.06
-		WheelClamp.scrape(self, _clamp_boot)
+		WheelClamp.scrape(self, _clamp_boot, moving)
 	if clamped_time <= 0.0:
 		_release_clamp()
 

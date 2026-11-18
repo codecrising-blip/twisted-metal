@@ -1201,8 +1201,9 @@ func _run() -> void:
 	var bot := st.bot
 	_check(bot != null and st.ammo[st.special_id] == 1 and not st.has_live_special(),
 		"Sweet Bot slides out behind Sweet Tooth for two special charges (the special stays free)")
-	await _frames(50)
-	_check(is_instance_valid(bot) and bot.state == "wait" and bot.reload_left() == 0.0, "Sweet Bot lands and waits for the order")
+	await _frames(90)
+	_check(is_instance_valid(bot) and bot.state == "wait" and bot.reload_left() == 0.0 and bot.global_position.distance_to(st.global_position) > 4.0,
+		"Sweet Bot slides down the tailgate onto the road behind and waits for the order")
 	var shots0 := Projectile.spawned_total
 	st.energy_move("secondary")
 	_check(st.ammo[st.special_id] == 1 and bot.state == "fire", "R L U again orders the barrage, at no cost")
@@ -1247,11 +1248,20 @@ func _run() -> void:
 		await physics_frame
 	_check(st.clamped_time < 4.2 and st.clamped_time > 3.8 and hp0 - st.health > 3.5,
 		"moving wears it down (%.2f s left) and the scraping hurts (%.1f a second)" % [st.clamped_time, hp0 - st.health])
+	# Owner: driving into a wall still counts: gas held, the car held still (the wall), the clamp wears.
+	var keep_ctrl: Variant = st.controller
+	st.controller = GasPad.new()
+	var left0 := st.clamped_time
+	for k in 30:
+		st.linear_velocity = Vector3.ZERO
+		await physics_frame
+	st.controller = keep_ctrl
+	_check(left0 - st.clamped_time > 0.35, "gas held against a wall wears the clamp too (%.2f s)" % (left0 - st.clamped_time))
 	st.clamped_time = 0.05
 	for k in 10:
 		st.linear_velocity = -st.global_basis.z * 8.0
 		await physics_frame
-	_check(st.clamped_time <= 0.0 and not is_instance_valid(st._clamp_boot), "after its moving time the clamp breaks off")
+	_check(st.clamped_time <= 0.0 and not is_instance_valid(st._clamp_boot), "after its driving time the clamp breaks off")
 
 	# Round 17: burning drivers (owner, from Twisted Metal: Black). Shot, they die and the shooter gets
 	# energy; run down fast and head-on they go over the hood into the windshield and are thrown off;
@@ -1331,3 +1341,12 @@ func _run() -> void:
 	main.queue_free()
 	await _frames(2)
 	quit(0 if _failures.is_empty() else 1)
+
+
+## Holds the gas, nothing else (round 19: the clamp wears while pushing against a wall).
+class GasPad:
+	extends RefCounted
+
+	func drive(v: Vehicle, _delta: float) -> void:
+		v.in_throttle = 1.0
+		v.in_steer = 0.0

@@ -37,7 +37,6 @@ func _run() -> void:
 		await physics_frame
 	for k in 4:
 		cars[k].freeze = true # parked for the photo
-		WheelClamp.style = "abcd"[k]
 		cars[k].shield_time = 0.0
 		cars[k].invulnerable_time = 0.0
 		var ok := cars[k].clamp_for(5.0, cars[k].global_position + cars[k].global_basis.x * 2.0)

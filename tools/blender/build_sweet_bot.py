@@ -1,14 +1,15 @@
-"""Sweet Bot (round 18): Sweet Tooth's secondary weapon, a small walker the truck drops and leaves standing.
+"""Sweet Bot (round 19): the owner's pick of four (look A, from the TMB clip
+docs/reference/videos/special_sweet_bot_missiles.mp4) with a design pass. Sweet Tooth's truck box stood up on a
+short spiked chassis with four knobbly wheels; the torso is the van's body with the serving shutter on its
+chest, TMB's black beam across the shoulders, the shoulders are angled side panels with armoured wings and a
+pod of ten loaded missile tubes in each, dark clawed arms on hydraulic rams, two blackened stacks, and the
+clown head sunk in a full sunflower of bronze spikes. Serious, never cartoonish: worn cream paint, rust spots,
+soot round the tubes, bullet holes. Scaled to fit in the truck's box (it slides out of the back door).
     /tmp/bpy3.13/bin/python tools/blender/build_sweet_bot.py              # build, bake, export
     /tmp/bpy3.13/bin/python tools/blender/build_sweet_bot.py --shape a.png  # quick look, no bake
-Our own design (owner: smaller than TMB's, serious, never cartoonish, no face): built from the truck's
-own scrap. Two reverse-jointed steel legs on hydraulic rams, an armoured torso in the van's dirty cream
-paint with the crimson band and polka dots, a roll-up shutter on the chest like the serving hatch, two
-olive missile pods on the shoulders with ten tubes each (twenty missiles), a squat armoured head with
-an orange sensor slit, blackened stacks, and a little burnt soft serve cone on top that still burns.
-About 2.1 m tall. Blender space: +Y forward, +Z up. Nodes: legs, upper (its origin is the waist, it
-turns toward its target) and markers m_waist, m_pod_l / m_pod_r (muzzle centres), m_cone (the flame),
-m_tube_l0..9 / m_tube_r0..9 (every tube mouth, for the launch flashes)."""
+Blender space: +Y forward, +Z up. Writes assets/models/sweet_bot.glb: legs (chassis, wheels, the lower box),
+upper (its origin is the waist; it turns toward its target), markers m_waist, m_head, m_tube_l0..9 and
+m_tube_r0..9 (tube mouths, bottom row first, in firing order)."""
 import math
 import os
 import sys
@@ -19,139 +20,326 @@ import numpy as np
 from mathutils import Matrix, Vector
 
 T.reset()
+V = Vector
 CREAM = (0.43, 0.40, 0.33)
-CRIMSON = (0.28, 0.03, 0.04)
 paint = T.M("paint", CREAM, wear=0.72, rust=0.66, dirt=0.75)
 armor = T.M("steel", (0.035, 0.035, 0.038), wear=0.7, rust=0.6, dirt=0.6)
 bare = T.M("steel", (0.10, 0.10, 0.10), wear=0.7, rust=0.5, dirt=0.5)
 dark = T.M("steel", (0.012, 0.012, 0.013), wear=0.3, rust=0.3, dirt=0.7)
+rubber = T.M("rubber", (0.016, 0.016, 0.016), dirt=0.7)
+bronze = T.M("steel", (0.2, 0.1, 0.035), wear=0.5, rust=0.75, dirt=0.5)
+face = T.M("paint", (0.6, 0.58, 0.53), wear=0.75, rust=0.45, dirt=0.7)
+red = T.M("paint", (0.3, 0.02, 0.02), wear=0.7, rust=0.4, dirt=0.6)
+bone = T.M("plastic", (0.55, 0.52, 0.44), wear=0.8, dirt=0.8)
 soot = T.M("burnt", (0.05, 0.04, 0.03), rust=0.5)
-olive = T.M("paint", (0.075, 0.09, 0.045), wear=0.7, rust=0.5, dirt=0.6)
-chrome = T.M("chrome", (0.35, 0.35, 0.36), wear=0.5, rust=0.3, dirt=0.5)
-wafer = T.M("plastic", (0.27, 0.17, 0.075), wear=0.8, dirt=0.7)
-swirl = T.M("plastic", (0.40, 0.31, 0.28), wear=0.85, dirt=0.8)
-slit = T.glow((1.0, 0.45, 0.1))
-
-WAIST = Vector((0.0, 0.0, 1.12))
-legs = []
-upper = []
+ember = T.glow((1.0, 0.42, 0.06))
+warhead = T.M("paint", (0.32, 0.045, 0.03), wear=0.65, rust=0.45, dirt=0.5)
+chrome = T.M("steel", (0.3, 0.3, 0.28), wear=0.25, rust=0.25, dirt=0.45)
 decals = []
 regions = []
 markers = []
 
 
+def aim(d):
+    q = Vector(d).normalized().to_track_quat("Z", "Y").to_euler()
+    return (math.degrees(q.x), math.degrees(q.y), math.degrees(q.z))
+
+
+def spike(base, d, length, r, mat=bronze, n=8):
+    d = Vector(d).normalized()
+    return T.cyl(r, length, loc=tuple(Vector(base) + d * length / 2), rot=aim(d), mat=mat, n=n, r2=r * 0.06)
+
+
 def limb(a, b, w, d, mat, bevel=0.03):
-    """A box from point a to point b (both in the YZ plane at the same x), w across, d thick."""
+    """A box from a to b (any direction), w across (x), d thick."""
     a, b = Vector(a), Vector(b)
     v = b - a
-    L = v.length
-    theta = math.degrees(math.atan2(-v.y, v.z))
-    return T.box((w, d, L), loc=tuple((a + b) / 2), rot=(theta, 0, 0), mat=mat, bevel=bevel)
+    return T.box((w, d, v.length), loc=tuple((a + b) / 2), rot=aim(v), mat=mat, bevel=bevel)
 
 
 def rod(a, b, r, mat, n=10):
     a, b = Vector(a), Vector(b)
     v = b - a
-    theta = math.degrees(math.atan2(-v.y, v.z))
-    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=(theta, 0, 0), mat=mat, n=n)
+    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=aim(v), mat=mat, n=n)
 
 
-# ---------------------------------------------------------------- legs (stay put)
-legs.append(T.box((0.78, 0.52, 0.26), loc=(0, 0, 1.0), mat=armor, bevel=0.05))              # pelvis
-legs.append(T.box((0.6, 0.36, 0.1), loc=(0, -0.05, 0.84), mat=dark, bevel=0.02))
+def wheel(c, r, w, parts):
+    """A knobbly off-road tyre (tread blocks round it), a steel rim with lug nuts, a dark hub cap."""
+    c = Vector(c)
+    parts.append(T.cyl(r * 0.9, w, loc=tuple(c), rot=(0, 90, 0), mat=rubber, n=22, bevel=0.03))
+    n = 16
+    for k in range(n):
+        a = 2 * math.pi * (k + 0.5 * (k % 2)) / n
+        parts.append(T.box((w * (0.92 if k % 2 else 0.7), r * 0.2, r * 0.15), loc=tuple(c + V((0, math.cos(a), math.sin(a))) * r * 0.93),
+            rot=(math.degrees(a) - 90, 0, 0), mat=rubber))
+    for side in (1, -1):
+        parts.append(T.cyl(r * 0.56, 0.03, loc=tuple(c + V((side * w / 2, 0, 0))), rot=(0, 90, 0), mat=bare, n=16, bevel=0.008))
+        for k in range(6):
+            a = 2 * math.pi * k / 6
+            parts.append(T.cyl(r * 0.055, 0.05, loc=tuple(c + V((side * (w / 2 + 0.02), math.cos(a) * r * 0.34, math.sin(a) * r * 0.34))), rot=(0, 90, 0), mat=dark, n=6))
+        parts.append(T.cyl(r * 0.17, 0.07, loc=tuple(c + V((side * (w / 2 + 0.025), 0, 0))), rot=(0, 90, 0), mat=dark, n=10, r2=r * 0.12))
+
+
+def piston(a, b, parts, r=0.045):
+    """A hydraulic ram: dark cylinder, a bright rod sliding out of it, ball joints at both ends."""
+    a, b = Vector(a), Vector(b)
+    m = a.lerp(b, 0.55)
+    parts.append(rod(a, m, r, dark))
+    parts.append(rod(m - (b - a).normalized() * 0.06, b, r * 0.5, chrome, 8))
+    parts.append(T.cyl(r * 1.15, 0.04, loc=tuple(m), rot=aim(b - a), mat=bare, n=10))
+    for e in (a, b):
+        parts.append(T.sphere(r * 1.15, loc=tuple(e), mat=bare, n=8))
+
+
+def rivets(a, b, n, parts, r=0.016):
+    for k in range(n):
+        parts.append(T.sphere(r, loc=tuple(Vector(a).lerp(Vector(b), k / max(1, n - 1))), mat=bare, n=6))
+
+
+def trim(c, w, h, axis, parts, t=0.035, studs=True):
+    """A riveted steel frame round a panel face centred at c; axis = the face's normal, +-Y or +-X."""
+    c = Vector(c)
+    if abs(axis[1]) > 0.5:
+        u, v = V((1, 0, 0)), V((0, 0, 1))
+        sz_u, sz_v = (w + t, t, t), (t, t, h)
+    else:
+        u, v = V((0, 1, 0)), V((0, 0, 1))
+        sz_u, sz_v = (t, w + t, t), (t, t, h)
+    for e in (1, -1):
+        parts.append(T.box(sz_u, loc=tuple(c + v * e * h / 2), mat=armor, bevel=0.006))
+        parts.append(T.box(sz_v, loc=tuple(c + u * e * w / 2), mat=armor, bevel=0.006))
+        if studs:
+            out = Vector(axis).normalized() * t * 0.5
+            rivets(c + v * e * h / 2 - u * w * 0.45 + out, c + v * e * h / 2 + u * w * 0.45 + out, max(3, int(w / 0.12)), parts)
+
+
+def stacks(c, h, parts, gap=0.36):
+    """Two blackened exhaust stacks with clamps, Sweet Tooth's truck's."""
+    for sx in (1, -1):
+        b = Vector(c) + V((sx * gap / 2, 0, 0))
+        parts.append(rod(b, b + V((0, 0, h)), 0.055, bare, 12))
+        parts.append(T.cyl(0.072, 0.14, loc=tuple(b + V((0, 0, h - 0.02))), mat=soot, n=12, r2=0.085))
+        for z in (0.18, 0.55):
+            parts.append(T.cyl(0.068, 0.035, loc=tuple(b + V((0, 0, h * z))), mat=dark, n=10))
+
+
+def hose(points, parts, r=0.028):
+    parts.append(T.tube([tuple(p) for p in points], r, mat=rubber, n=7))
+
+
+def fist(c, sx, parts, s=1.0, down=(0, 0.25, -1)):
+    """A clawed steel hand: palm, knuckle guard, three two-jointed fingers with hooked claws, a thumb."""
+    c = Vector(c)
+    parts.append(T.box((0.27 * s, 0.3 * s, 0.24 * s), loc=tuple(c), mat=armor, bevel=0.03 * s))
+    parts.append(T.box((0.3 * s, 0.09 * s, 0.1 * s), loc=tuple(c + V((0, 0.13, 0.08)) * s), mat=bare, bevel=0.012))
+    rivets(c + V((-0.11, 0.18, 0.08)) * s, c + V((0.11, 0.18, 0.08)) * s, 4, parts, 0.014)
+    for f in range(3):
+        x = (f - 1) * 0.085
+        k1 = c + V((x, 0.13, -0.08)) * s
+        k2 = k1 + V((0, 0.09, -0.07)) * s
+        tip = k2 + V((0, 0.0, -0.12)) * s
+        parts.append(limb(k1, k2, 0.07 * s, 0.075 * s, armor, 0.01))
+        parts.append(limb(k2, tip, 0.064 * s, 0.068 * s, armor, 0.01))
+        parts.append(T.sphere(0.04 * s, loc=tuple(k2), mat=bare, n=8))
+        parts.append(spike(tip, (0, -0.35, -1), 0.13 * s, 0.03 * s, bare, 6))
+    t1 = c + V((-sx * 0.14, 0.06, -0.02)) * s
+    t2 = t1 + V((-sx * 0.04, 0.12, -0.1)) * s
+    parts.append(limb(t1, t2, 0.07 * s, 0.07 * s, armor, 0.01))
+    parts.append(spike(t2, (sx * 0.3, 0.4, -1), 0.1 * s, 0.026 * s, bare, 6))
+
+
+def elbow(c, parts, r=0.11):
+    parts.append(T.sphere(r, loc=tuple(c), mat=bare, n=12))
+    parts.append(T.cyl(r * 1.05, r * 0.9, loc=tuple(c), rot=(0, 90, 0), mat=dark, n=12))
+
+
+def stencil(text, c, n, size, seed=0, opacity=0.55):
+    decals.append(T.Decal(T.stencil(text, color=(0.32, 0.05, 0.04)), tuple(c), tuple(n), (0, 0, 1), size, depth=0.1, kinds=("paint",), opacity=opacity))
+
+
+def tubes(c, cols, rows, pitch, facing, parts, tag):
+    """A grid of launch tubes on a face centred at c looking along `facing` (+Y or up)."""
+    f = Vector(facing).normalized()
+    side = V((1, 0, 0))
+    up = f.cross(side).normalized() if abs(f.x) < 0.9 else V((0, 0, 1))
+    if up.z < 0:
+        up = -up
+    k = 0
+    for row in range(rows):
+        for col in range(cols):
+            p = Vector(c) + side * (col - (cols - 1) / 2) * pitch + up * (row - (rows - 1) / 2) * pitch
+            parts.append(T.cyl(pitch * 0.42, 0.1, loc=tuple(p), rot=aim(f), mat=dark, n=12))
+            parts.append(T.cyl(pitch * 0.3, 0.09, loc=tuple(p + f * 0.06), rot=aim(f), mat=warhead, n=10, r2=pitch * 0.05))
+            k += 1
+    fw, fh = cols * pitch + 0.05, rows * pitch + 0.05
+    for e in (1, -1):  # a steel frame round the pod's face
+        parts.append(T.box((fw + 0.05, 0.05, 0.05), loc=tuple(Vector(c) + up * e * fh / 2 - f * 0.01), mat=armor, bevel=0.008))
+        parts.append(rod(Vector(c) + side * e * fw / 2 + up * fh / 2 - f * 0.01, Vector(c) + side * e * fw / 2 - up * fh / 2 - f * 0.01, 0.025, armor, 6))
+    return k
+
+
+def clown_head(c, s, parts, tag):
+    """Sweet Tooth's head, facing +Y: a white fibreglass egg gone grey and cracked, dark sunken eyes with
+    embers deep inside, slanted brows, a faded red nose, a grin of steel teeth, and the ruff of bronze
+    spikes fanned out behind it with a tall cone on the crown."""
+    c = Vector(c)
+    parts.append(T.sphere(0.27 * s, loc=tuple(c), mat=face, n=22, scale=(0.95, 0.9, 1.1)))
+    parts.append(T.sphere(0.21 * s, loc=tuple(c + V((0, 0.06, -0.13)) * s), mat=face, n=18, scale=(1.1, 0.95, 0.8)))
+    for sx in (1, -1):
+        # deep narrow sockets, a dim ember far inside, brows cut down hard toward the nose: it glares
+        parts.append(T.sphere(0.068 * s, loc=tuple(c + V((sx * 0.1, 0.205, 0.045)) * s), mat=dark, n=12, scale=(1.35, 0.62, 0.62)))
+        parts.append(T.sphere(0.013 * s, loc=tuple(c + V((sx * 0.1, 0.228, 0.042)) * s), mat=ember, n=8))
+        parts.append(T.box((0.14 * s, 0.05 * s, 0.032 * s), loc=tuple(c + V((sx * 0.1, 0.222, 0.098)) * s), rot=(0, -sx * 26, 0), mat=dark))
+        parts.append(T.box((0.07 * s, 0.03 * s, 0.025 * s), loc=tuple(c + V((sx * 0.17, 0.215, -0.11)) * s), rot=(0, -sx * 35, 0), mat=red))
+    parts.append(T.sphere(0.055 * s, loc=tuple(c + V((0, 0.27, -0.01)) * s), mat=red, n=12))
+    parts.append(T.box((0.27 * s, 0.07 * s, 0.075 * s), loc=tuple(c + V((0, 0.2, -0.15)) * s), mat=dark, bevel=0.01 * s))
+    for lz in (0.045, -0.045):
+        parts.append(T.box((0.29 * s, 0.035 * s, 0.022 * s), loc=tuple(c + V((0, 0.225, -0.15 + lz)) * s), mat=red, bevel=0.005))
+    for k in range(7):
+        x = (k - 3) * 0.034
+        parts.append(T.box((0.026 * s, 0.03 * s, 0.05 * s), loc=tuple(c + V((x, 0.235, -0.15)) * s), mat=bone))
+    parts.append(T.cyl(0.1 * s, 0.22 * s, loc=tuple(c + V((0, -0.02, -0.33)) * s), mat=dark, n=12))  # neck
+    # the ruff: TMB's sunflower of bronze spikes right round the face, swept back, a shorter inner row
+    n = 20
+    for k in range(n):
+        a = math.radians(360 * k / n + 9)
+        d = V((math.cos(a), -0.45, math.sin(a)))
+        base = c + V((math.cos(a) * 0.19, -0.1, math.sin(a) * 0.19)) * s
+        parts.append(spike(base, d, (0.4 + 0.07 * math.sin(k * 2.3)) * s, 0.06 * s))
+    for k in range(14):
+        a = math.radians(360 * k / 14)
+        d = V((math.cos(a), -0.2, math.sin(a)))
+        base = c + V((math.cos(a) * 0.2, -0.02, math.sin(a) * 0.2)) * s
+        parts.append(spike(base, d, 0.2 * s, 0.045 * s, dark, 6))
+    parts.append(spike(c + V((0, -0.04, 0.24)) * s, (0, -0.15, 1), 0.48 * s, 0.075 * s))  # the crown cone
+    markers.append(T.marker("m_head", tuple(c + V((0, -0.05, 0.3)) * s)))
+
+
+def dots(c, n, size, seed, opacity=0.85):
+    decals.append(T.Decal(T.dots_image((0.16, 0.07, 0.03), n=12, seed=seed, size=(256, 256), r=(16, 26)), tuple(c), tuple(n), (0, 0, 1) if abs(n[2]) < 0.9 else (0, 1, 0), size, depth=0.12, kinds=("paint",), opacity=opacity))
+
+
+
+S = 0.82  # the whole robot: about 2.35 m tall, it fits in the truck's box
+WAIST = V((0, 0, 1.46))
+legs, upper = [], []
+
+
+def ribs_y(c, w, h, n, y, parts, mat):
+    for k in range(n):
+        parts.append(T.box((w, 0.05, 0.05), loc=tuple(c + V((0, y, -h / 2 + h * (k + 0.5) / n))), mat=mat, bevel=0.012))
+
+
+# ---------------------------------------------------------------- legs: the truck's chassis and its box
+o = V((0, 0, 0))
+legs.append(T.box((1.1, 1.1, 0.18), loc=(0, 0, 0.42), mat=dark, bevel=0.02))
 for sx in (1, -1):
-    x = sx * 0.36
-    hip = (x, 0.0, 0.98)
-    knee = (x, 0.26, 0.58)
-    ankle = (x, -0.1, 0.2)
-    legs.append(T.cyl(0.13, 0.16, loc=(sx * 0.44, 0.0, 0.98), rot=(0, 90, 0), mat=bare, n=14))     # hip joint
-    legs.append(limb(hip, knee, 0.2, 0.24, paint))                                                     # thigh
-    legs.append(limb((x + sx * 0.11, 0.0, 0.96), (x + sx * 0.11, 0.24, 0.6), 0.04, 0.2, armor, 0.01))  # thigh plate
-    legs.append(T.cyl(0.11, 0.3, loc=knee, rot=(0, 90, 0), mat=bare, n=14))                           # knee
-    legs.append(limb(knee, ankle, 0.16, 0.18, armor))                                                 # shin
-    legs.append(T.cyl(0.09, 0.26, loc=ankle, rot=(0, 90, 0), mat=bare, n=12))                          # ankle
-    # hydraulic rams: chrome rod in a dark sleeve, hip to shin and knee to foot
-    legs.append(rod((x - sx * 0.12, -0.12, 0.92), (x - sx * 0.12, 0.05, 0.42), 0.035, dark))
-    legs.append(rod((x - sx * 0.12, -0.02, 0.7), (x - sx * 0.12, 0.08, 0.3), 0.022, chrome))
-    legs.append(rod((x + sx * 0.12, 0.24, 0.52), (x + sx * 0.12, 0.1, 0.16), 0.022, chrome))
-    # foot: a heavy splayed plate with two toes forward and a spur back
-    legs.append(T.box((0.26, 0.42, 0.1), loc=(x, 0.02, 0.07), mat=armor, bevel=0.03))
-    for tx in (-0.07, 0.07):
-        legs.append(T.box((0.09, 0.26, 0.08), loc=(x + tx, 0.32, 0.05), rot=(-8, 0, 0), mat=armor, bevel=0.02))
-    legs.append(T.box((0.1, 0.2, 0.07), loc=(x, -0.27, 0.05), rot=(10, 0, 0), mat=armor, bevel=0.02))
-legs_ob = T.join(legs, "legs")
+    for sy in (1, -1):
+        wheel((sx * 0.64, sy * 0.42, 0.34), 0.34, 0.24, legs)
+    legs.append(T.box((0.24, 0.025, 0.26), loc=(sx * 0.64, -0.8, 0.3), mat=rubber))  # mud flaps
+    legs.append(T.box((0.3, 0.9, 0.06), loc=(sx * 0.64, 0, 0.72), mat=armor, bevel=0.012))  # fenders over the wheels
+# a short welded plow, Sweet Tooth's, with spikes
+legs.append(T.prism([(-0.68, 0.0), (0.0, 0.22), (0.68, 0.0), (0.68, -0.08), (0.0, 0.14), (-0.68, -0.08)], 0.3,
+    loc=(0, 0.66, 0.36), mat=armor, plane="XY"))
+for k in range(5):
+    x = (k - 2) * 0.27
+    legs.append(spike((x, 0.68 + (0.22 - abs(x) * 0.32), 0.36), (0, 1, -0.1), 0.2, 0.04, bare, 6))
+legs.append(T.box((1.16, 0.12, 0.12), loc=(0, -0.66, 0.42), mat=bare, bevel=0.02))  # rear bumper
+for sx in (1, -1):
+    legs.append(T.box((0.16, 0.04, 0.09), loc=(sx * 0.42, -0.73, 0.52), mat=T.glow((0.9, 0.06, 0.03))))  # tail lights
+    legs.append(T.box((0.2, 0.05, 0.13), loc=(sx * 0.42, -0.71, 0.52), mat=dark, bevel=0.01))
+legs.append(T.box((0.98, 0.66, 0.86), loc=(0, 0, 0.94), mat=paint, bevel=0.045))  # the box stood up
+ribs_y(V((0, 0, 0.94)), 1.02, 0.8, 5, 0.34, legs, paint)
+ribs_y(V((0, 0, 0.94)), 1.02, 0.8, 5, -0.34, legs, paint)
+for sx in (1, -1):
+    legs.append(T.box((0.05, 0.7, 0.86), loc=(sx * 0.5, 0, 0.94), mat=armor, bevel=0.01))  # side rails
+    piston((sx * 0.45, 0.24, 0.55), (sx * 0.48, 0.16, 1.38), legs, 0.04)
+legs.append(T.cyl(0.33, 0.08, loc=(0, 0, 1.41), mat=dark, n=20))  # the lower half of the turret ring
+bolts_ring = [(math.cos(math.radians(a)) * 0.29, math.sin(math.radians(a)) * 0.29) for a in range(0, 360, 45)]
+for bx, by in bolts_ring:
+    legs.append(T.cyl(0.02, 0.03, loc=(bx, by, 1.455), mat=bare, n=6))
+stencil("ICE CREAM", V((0, 0.42, 1.02)), (0, 1, 0), (0.78, 0.2))
+dots(V((0, 0.34, 0.95)), (0, 1, 0), (0.9, 0.8), 13)
+dots(V((0, -0.34, 0.95)), (0, -1, 0), (0.9, 0.8), 14)
 
-# ---------------------------------------------------------------- upper body (turns at the waist)
-upper.append(T.cyl(0.24, 0.14, loc=(0, 0, 1.17), mat=dark, n=18))                                # waist ring
-upper.append(T.box((0.92, 0.68, 0.72), loc=(0, 0, 1.6), mat=paint, bevel=0.06, taper=(0.86, 0.9)))  # torso shell
-upper.append(T.box((0.62, 0.06, 0.4), loc=(0, 0.35, 1.58), mat=bare, bevel=0.015))                   # chest shutter
+# ---------------------------------------------------------------- upper: turns at the waist
+up = upper
+up.append(T.cyl(0.3, 0.1, loc=(0, 0, 1.5), mat=dark, n=20))  # turret ring
+up.append(T.cyl(0.24, 0.12, loc=(0, 0, 1.58), mat=bare, n=16))
+up.append(T.box((1.25, 0.8, 0.64), loc=(0, 0, 1.84), mat=paint, bevel=0.08, taper=(1.1, 1.02)))  # the van's body: the chest
+# the serving shutter on the chest: a steel frame, roll-up slats, a drip ledge
+trim(V((0, 0.41, 1.82)), 0.92, 0.42, (0, 1, 0), up)
 for k in range(7):
-    upper.append(T.box((0.6, 0.02, 0.012), loc=(0, 0.385, 1.42 + k * 0.053), mat=dark))
-upper.append(T.box((0.84, 0.08, 0.16), loc=(0, 0.36, 1.92), mat=armor, bevel=0.02))                  # brow plate
-upper.append(T.box((0.84, 0.08, 0.14), loc=(0, 0.35, 1.27), mat=armor, bevel=0.02))                  # belly plate
-upper.append(T.box((0.94, 0.5, 0.06), loc=(0, -0.05, 1.98), mat=armor, bevel=0.02))                  # roof plate
-upper.append(T.box((0.6, 0.12, 0.5), loc=(0, -0.38, 1.6), mat=armor, bevel=0.03))                    # back pack
-for sx in (1, -1):  # blackened stacks out of the back pack
-    upper.append(T.cyl(0.05, 0.62, loc=(sx * 0.2, -0.46, 1.92), mat=soot, n=10))
-    upper.append(T.cyl(0.065, 0.06, loc=(sx * 0.2, -0.46, 2.22), mat=soot, n=10))
-# shoulder arms and missile pods
-pod_center = {}
+    up.append(T.box((0.88, 0.03, 0.045), loc=(0, 0.415, 1.635 + k * 0.058), mat=bare, bevel=0.006))
+up.append(T.box((1.0, 0.12, 0.04), loc=(0, 0.47, 2.05), mat=armor, bevel=0.01))
+for sx in (1, -1):  # side vents
+    for k in range(4):
+        up.append(T.box((0.03, 0.4, 0.035), loc=(sx * 0.66, 0.0, 1.72 + k * 0.07), rot=(0, sx * 6, 0), mat=dark))
+# TMB's black beam across the shoulders, behind the head, with two work lamps
+up.append(T.box((2.05, 0.28, 0.2), loc=(0, -0.06, 2.2), mat=dark, bevel=0.03))
+rivets((-0.92, 0.09, 2.31), (0.92, 0.09, 2.31), 10, up, 0.02)
 for sx in (1, -1):
-    upper.append(T.cyl(0.11, 0.2, loc=(sx * 0.53, 0, 1.78), rot=(0, 90, 0), mat=bare, n=14))       # shoulder joint
-    upper.append(T.box((0.08, 0.22, 0.36), loc=(sx * 0.63, 0, 1.72), mat=armor, bevel=0.015))     # bracket
-    c = Vector((sx * 0.86, 0.06, 1.78))
-    pod_center[sx] = c
-    upper.append(T.box((0.36, 0.62, 0.46), loc=tuple(c), mat=olive, bevel=0.04))                   # pod
-    upper.append(T.box((0.38, 0.05, 0.48), loc=tuple(c + Vector((0, 0.3, 0))), mat=armor, bevel=0.015))  # front frame
+    hz = V((sx * 0.85, 0.085, 2.2))
+    decals.append(T.Decal(T.hazard_image(stripes=4), tuple(hz), (0, 1, 0), (0, 0, 1), (0.3, 0.18), depth=0.05, kinds=("steel",), opacity=0.8))
+    lamp = V((sx * 0.86, 0.12, 2.36))
+    up.append(T.cyl(0.07, 0.12, loc=tuple(lamp), rot=(-90, 0, 0), mat=dark, n=12))
+    up.append(T.cyl(0.055, 0.02, loc=tuple(lamp + V((0, 0.065, 0))), rot=(-90, 0, 0), mat=T.glow((0.75, 0.55, 0.3)), n=12))
+    up.append(T.box((0.04, 0.06, 0.1), loc=tuple(lamp + V((0, 0, -0.1))), mat=dark))
+up.append(T.cyl(0.16, 0.12, loc=(0, 0.04, 2.3), mat=dark, n=14))  # neck collar on the beam
+tube_marks = {}
+for sx in (1, -1):
+    sh = V((sx * 0.98, 0.0, 1.99))
+    up.append(T.sphere(0.17, loc=tuple(sh + V((-sx * 0.3, 0, -0.08))), mat=bare, n=12))  # shoulder joint
+    up.append(T.box((0.52, 0.74, 0.58), loc=tuple(sh), rot=(0, sx * 18, 0), mat=paint, bevel=0.05))  # the side panel
+    # armoured wing on the outside, tipped out like TMB's, and a plate over the top
+    up.append(T.box((0.07, 0.86, 0.74), loc=tuple(sh + V((sx * 0.31, -0.02, 0.06))), rot=(0, sx * 32, 0), mat=armor, bevel=0.015))
+    up.append(T.box((0.62, 0.84, 0.06), loc=tuple(sh + V((sx * 0.04, -0.02, 0.33))), rot=(0, sx * 18, 0), mat=armor, bevel=0.012))
+    rivets(sh + V((sx * 0.36, 0.42, 0.42)), sh + V((sx * 0.36, -0.42, 0.42)), 6, up)
+    pod = sh + V((0, 0.38, 0.0))
+    tubes(pod, 2, 5, 0.095, (0, 1, 0), up, "a")
     for row in range(5):
         for col in range(2):
-            tx = c.x + (col - 0.5) * 0.15
-            tz = c.z - 0.17 + row * 0.085
-            upper.append(T.cyl(0.035, 0.06, loc=(tx, c.y + 0.32, tz), rot=(90, 0, 0), mat=dark, n=10))
-            markers.append(T.marker("m_tube_%s%d" % ("r" if sx > 0 else "l", row * 2 + col), (tx, c.y + 0.36, tz)))
-    markers.append(T.marker("m_pod_" + ("r" if sx > 0 else "l"), tuple(c + Vector((0, 0.36, 0)))))
-# head: squat armoured box with a sensor slit, no face
-upper.append(T.cyl(0.09, 0.14, loc=(0, 0.08, 2.05), mat=dark, n=12))                              # neck
-upper.append(T.box((0.36, 0.34, 0.24), loc=(0, 0.1, 2.2), mat=armor, bevel=0.04, taper=(0.9, 0.85)))
-upper.append(T.box((0.26, 0.02, 0.035), loc=(0, 0.275, 2.22), mat=slit))                          # sensor slit
-upper.append(T.box((0.3, 0.06, 0.05), loc=(0, 0.27, 2.27), mat=bare, bevel=0.01))                   # visor brow
-# the burnt soft serve cone on a little frame on top (it still burns, like the truck's)
-cone_tip = Vector((0.0, -0.02, 2.33))
-upper.append(T.lathe([(0.0, 0.0), (0.02, 0.02), (0.12, 0.2), (0.13, 0.22), (0.1, 0.22)], loc=tuple(cone_tip), mat=wafer, n=14))
-upper.append(T.lathe([(0.1, 0.0), (0.11, 0.04), (0.07, 0.1), (0.02, 0.15), (0.0, 0.16)], loc=tuple(cone_tip + Vector((0, 0, 0.22))), mat=swirl, n=12))
-for a in range(3):
-    ang = a * 2.0 * math.pi / 3.0
-    upper.append(rod((math.cos(ang) * 0.13, -0.02 + math.sin(ang) * 0.13, 2.31), (math.cos(ang) * 0.05, -0.02 + math.sin(ang) * 0.05, 2.4), 0.012, dark, 6))
-markers.append(T.marker("m_cone", tuple(cone_tip + Vector((0, 0, 0.36)))))
+            tube_marks["m_tube_%s%d" % ("r" if sx > 0 else "l", row * 2 + col)] = pod + V(((col - 0.5) * 0.095, 0.1, (row - 2) * 0.095))
+    decals.append(T.Decal(T.dots_image((0.02, 0.02, 0.02), n=10, seed=40 + sx, size=(256, 256), r=(22, 34)), tuple(pod + V((0, 0.02, 0))), (0, 1, 0), (0, 0, 1),
+        (0.42, 0.66), depth=0.08, kinds=("paint", "steel"), opacity=0.55))  # soot round the mouths
+    up.append(limb(sh + V((sx * 0.2, -0.12, 0.3)), sh + V((sx * 0.62, -0.28, 0.95)), 0.05, 0.08, bare, 0.01))  # blade
+    up.append(limb(sh + V((sx * 0.05, 0.0, -0.25)), sh + V((sx * 0.1, 0.04, -0.52)), 0.26, 0.3, armor))  # upper arm
+    elbow(sh + V((sx * 0.1, 0.04, -0.56)), up, 0.12)
+    up.append(limb(sh + V((sx * 0.1, 0.06, -0.6)), sh + V((sx * 0.13, 0.12, -0.8)), 0.3, 0.34, armor))  # forearm
+    up.append(T.box((0.34, 0.06, 0.24), loc=tuple(sh + V((sx * 0.12, 0.28, -0.68))), rot=(-15, 0, 0), mat=bare, bevel=0.012))  # guard
+    rivets(sh + V((sx * 0.12 - 0.12, 0.32, -0.6)), sh + V((sx * 0.12 + 0.12, 0.32, -0.6)), 4, up, 0.014)
+    fist(sh + V((sx * 0.13, 0.1, -0.97)), sx, up, 1.1)
+    piston(V((sx * 0.5, -0.12, 1.64)), sh + V((-sx * 0.12, -0.15, -0.24)), up)  # shoulder ram
+    hose([V((sx * 0.45, -0.38, 1.95)), V((sx * 0.62, -0.52, 2.1)), sh + V((0, -0.4, 0.05))], up)
+    dots(sh + V((sx * 0.27, 0, 0.05)), (sx, 0, 0), (0.6, 0.5), 5 + sx)
+for name, pos in tube_marks.items():
+    markers.append(T.marker(name, tuple(pos)))
+clown_head(V((0, 0.1, 2.56)), 1.02, up, "a")
+stacks(V((0, -0.45, 1.64)), 1.0, up)
+decals.append(T.Decal(T.holes_image(n=9, seed=7, size=(512, 256), r=(5, 9)), (0.66, 0.15, 1.95), (1, 0, 0), (0, 0, 1), (0.6, 0.3), depth=0.1, kinds=("paint",)))
+decals.append(T.Decal(T.holes_image(n=6, seed=8, size=(512, 256), r=(5, 9)), (-0.2, 0.42, 1.95), (0, 1, 0), (0, 0, 1), (0.5, 0.25), depth=0.1, kinds=("paint", "steel")))
+dots(V((0, -0.41, 1.85)), (0, -1, 0), (1.1, 0.55), 12)
 markers.append(T.marker("m_waist", tuple(WAIST)))
+
+legs_ob = T.join(legs, "legs")
 upper_ob = T.join(upper, "upper")
-
-
-# ---------------------------------------------------------------- paint
-def band(P, N):  # the crimson band round the torso, like the van's
-    return ((P[:, 2] > 1.5) & (P[:, 2] < 1.62) & (np.abs(P[:, 0]) < 0.5) & (P[:, 2] < 1.9)).astype(np.float32)
-regions.append((band, CRIMSON, ("paint",)))
-for sx in (1, -1):
-    decals.append(T.Decal(T.dots_image((0.28, 0.03, 0.04), n=9, seed=3 + sx, size=(256, 256), r=(14, 22)), (sx * 0.47, 0.0, 1.72), (sx, 0, 0), (0, 0, 1), (0.6, 0.36), depth=0.1, kinds=("paint",), opacity=0.8))
-    decals.append(T.Decal(T.stencil("%d" % (10 if sx > 0 else 20), (0.75, 0.72, 0.6), 96, pad=0.1), (sx * 1.045, 0.06, 1.86), (sx, 0, 0), (0, 0, 1), (0.16, 0.1), depth=0.06, kinds=("paint",)))
-    decals.append(T.Decal(T.hazard_image(stripes=5, size=(256, 48)), (pod_center[sx].x, pod_center[sx].y + 0.33, pod_center[sx].z + 0.27), (0, 1, 0), (0, 0, 1), (0.36, 0.06), depth=0.06, kinds=("steel",)))
-decals.append(T.Decal(T.holes_image(7, 5, size=(512, 256), r=(3, 7)), (0, 0.36, 1.6), (0, 1, 0), (0, 0, 1), (0.9, 0.6), depth=0.08, kinds=("paint", "steel")))
-decals.append(T.Decal(T.stencil("ICE", (0.28, 0.03, 0.04), 110, pad=0.1), (0, -0.445, 1.62), (0, -1, 0), (0, 0, 1), (0.34, 0.14), depth=0.06, kinds=("steel",), opacity=0.7))
-
-
-# ---------------------------------------------------------------- bake and export
 objs = [legs_ob, upper_ob]
+scale = Matrix.Scale(S, 4)
+for ob in objs:
+    ob.data.transform(scale)
+for m in markers:
+    m.location = m.location * S
+
 if "--shape" in sys.argv:
     out = sys.argv[sys.argv.index("--shape") + 1]
-    T.preview(out, size=(900, 900), eye=(2.6, 3.4, 2.0), look=(0, 0, 1.15), fov=40, samples=12)
-    T.preview(out.replace(".png", "_b.png"), size=(900, 900), eye=(-2.8, -3.0, 2.4), look=(0, 0, 1.15), fov=40, samples=12)
+    T.preview(out, size=(800, 900), eye=(2.4, 3.6, 2.0), look=(0, 0, 1.15), fov=40, samples=12)
+    T.preview(out.replace(".png", "_back.png"), size=(800, 900), eye=(-2.2, -3.6, 2.2), look=(0, 0, 1.2), fov=40, samples=12)
     sys.exit(0)
 T.unwrap(objs, margin=0.003)
 if "--nobake" not in sys.argv:
-    g = T.gbuffer(objs, size=1024, ao_dist=0.35, bevel_r=0.01, ao_samples=24)
-    al, nm, orm = T.weather(g, decals, seed=41, dust_from=0.0, dust_to=0.9, regions=regions,
-        soot=[((0.2, -0.46, 2.22), 0.25), ((-0.2, -0.46, 2.22), 0.25), (tuple(cone_tip + Vector((0, 0, 0.3))), 0.22)])
+    g = T.gbuffer(objs, size=2048, ao_dist=0.35, bevel_r=0.01, ao_samples=20)
+    al, nm, orm = T.weather(g, decals, seed=61, dust_from=0.0, dust_to=0.9, regions=regions)
     T.save_maps("sweet_bot", al, nm, orm)
-upper_ob.data.transform(Matrix.Translation(-WAIST))  # the upper body turns about the waist
+upper_ob.data.transform(Matrix.Translation(-WAIST * S))  # the upper body turns about the waist
 T.export_glb("sweet_bot", objs, markers=markers)
 print("ok", T.tri_count(objs))

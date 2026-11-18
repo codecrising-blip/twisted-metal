@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://tdx570u16567"
-path.s3tc="res://.godot/imported/wheel_clamps_albedo.webp-8307b9054d87c942ffcb461365a2ca61.s3tc.ctex"
+uid="uid://cgwcn5wdfqdo1"
+path.s3tc="res://.godot/imported/wheel_clamp_normal.webp-5ca12d4d6ecfa93e9bc92d99373cfba6.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/models/wheel_clamps_albedo.webp"
-dest_files=["res://.godot/imported/wheel_clamps_albedo.webp-8307b9054d87c942ffcb461365a2ca61.s3tc.ctex"]
+source_file="res://assets/models/wheel_clamp_normal.webp"
+dest_files=["res://.godot/imported/wheel_clamp_normal.webp-5ca12d4d6ecfa93e9bc92d99373cfba6.s3tc.ctex"]
 
 [params]
 
@@ -20,7 +20,7 @@ compress/mode=2
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/hdr_compression=1
-compress/normal_map=0
+compress/normal_map=1
 compress/channel_pack=0
 mipmaps/generate=true
 mipmaps/limit=-1

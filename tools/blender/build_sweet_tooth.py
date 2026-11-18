@@ -38,6 +38,8 @@ wafer = T.M("plastic", (0.27, 0.17, 0.075), wear=0.8, dirt=0.7)
 swirl = T.M("plastic", (0.40, 0.31, 0.28), wear=0.85, dirt=0.8)
 glass = T.glass()
 body = []     # parts of the body mesh
+door_parts = []  # the tailgate (round 19): its own node, it folds down into a ramp for Sweet Bot
+DOOR_W, DOOR_Z0, DOOR_Z1 = 1.78, 0.74, 2.56
 decals = []
 regions = []
 markers = []
@@ -57,6 +59,19 @@ T.bevel(shell, 0.07, 2, 20)
 for (ay, track) in ((FA, TRACK_F), (RA, TRACK_R)):
     for sx in (1, -1):
         T.cut(shell, T.cyl(0.69, 0.62, (sx * (HW - 0.16), ay, R), rot=(0, 90, 0), n=20))
+# the box's back opens (round 19): a hollow behind the tailgate, lined dark
+T.cut(shell, T.box((DOOR_W, 1.42, DOOR_Z1 - DOOR_Z0), (0, REAR + 0.69, (DOOR_Z0 + DOOR_Z1) / 2)))
+DM = (DOOR_Z0 + DOOR_Z1) / 2
+for size, loc in (((DOOR_W, 1.4, 0.03), (0, REAR + 0.7, DOOR_Z0 + 0.015)), ((DOOR_W, 1.4, 0.03), (0, REAR + 0.7, DOOR_Z1 - 0.015)),
+                  ((DOOR_W, 0.03, DOOR_Z1 - DOOR_Z0), (0, REAR + 1.395, DM)),
+                  ((0.03, 1.4, DOOR_Z1 - DOOR_Z0), (DOOR_W / 2 - 0.015, REAR + 0.7, DM)), ((0.03, 1.4, DOOR_Z1 - DOOR_Z0), (-DOOR_W / 2 + 0.015, REAR + 0.7, DM))):
+    body.append(T.box(size, loc, mat=dark))
+for k in range(4):  # floor slats, worn bright where the robot slides out
+    body.append(T.box((0.06, 1.36, 0.025), ((k - 1.5) * 0.4, REAR + 0.7, DOOR_Z0 + 0.04), mat=bare))
+door_parts.append(T.box((DOOR_W - 0.02, 0.06, DOOR_Z1 - DOOR_Z0 - 0.02), (0, REAR - 0.03, DM), mat=paint, bevel=0.012))
+for k in range(6):  # treads on its inside face: a ramp once it is down
+    door_parts.append(T.box((DOOR_W - 0.24, 0.03, 0.045), (0, REAR + 0.012, DOOR_Z0 + 0.2 + k * 0.28), mat=bare))
+markers.append(T.marker("m_door_hinge", (0, REAR - 0.03, DOOR_Z0)))
 # windshield pocket
 WS_T = math.degrees(math.atan2(0.26, 1.0))
 ws_n = Vector((0, math.cos(math.radians(WS_T)), math.sin(math.radians(WS_T))))
@@ -121,11 +136,10 @@ def side(sx):
     # tail lamps
     body.append(T.box((0.12, 0.03, 0.2), (sx * 0.98, REAR - 0.015, 1.05), mat=T.glow((0.9, 0.05, 0.03))))
     body.append(T.box((0.16, 0.05, 0.26), (sx * 0.98, REAR - 0.01, 1.05), mat=dark))
-    # rear door hinges and locking bar
-    for z in (0.95, 1.65, 2.35):
-        body.append(T.cyl(0.03, 0.14, (sx * 1.08, REAR - 0.02, z), mat=bare, n=6))
-    body.append(T.cyl(0.02, 1.75, (sx * 0.3, REAR - 0.03, 1.62), mat=bare, n=6))
-    body.append(T.box((0.22, 0.03, 0.05), (sx * 0.36, REAR - 0.05, 1.5), mat=bare))
+    # the tailgate's hinges at its foot; its locking bars and handles ride on the door
+    body.append(T.cyl(0.035, 0.18, (sx * 0.55, REAR - 0.05, DOOR_Z0), rot=(0, 90, 0), mat=bare, n=8))
+    door_parts.append(T.cyl(0.02, 1.7, (sx * 0.3, REAR - 0.075, DM), mat=bare, n=6))
+    door_parts.append(T.box((0.22, 0.03, 0.05), (sx * 0.36, REAR - 0.09, 1.5), mat=bare))
     # roof rail
     body.append(T.tube([(sx * 0.98, -2.7, ROOF + 0.02), (sx * 0.98, -2.7, ROOF + 0.14), (sx * 0.98, 1.2, ROOF + 0.14), (sx * 0.98, 1.2, ROOF + 0.02)], 0.022, mat=armor, n=5))
     for y in (-1.4, -0.1):
@@ -183,7 +197,7 @@ body.append(T.box((0.09, 0.012, 0.6), (0.6, NOSE + 0.01, 2.0 - 0.38), rot=(WS_T,
 
 # ---------------------------------------------------------------- rear
 body.append(T.box((2.3, 0.34, 0.1), (0, REAR - 0.2, 0.52), mat=armor, bevel=0.015))
-body.append(T.box((0.42, 0.02, 0.2), (0, REAR - 0.012, 0.86), mat=T.M("paint", (0.5, 0.48, 0.3), 0.8, 0.6, 0.7)))  # plate
+door_parts.append(T.box((0.42, 0.02, 0.2), (0, REAR - 0.07, 0.95), mat=T.M("paint", (0.5, 0.48, 0.3), 0.8, 0.6, 0.7)))  # plate, on the tailgate
 for sx in (1, -1):
     body.append(T.box((0.12, 0.3, 0.2), (sx * 0.7, REAR - 0.18, 0.4), mat=armor))
 
@@ -272,6 +286,7 @@ markers += [T.marker("m_wheel_fr", (TRACK_F, FA, R)), T.marker("m_wheel_fl", (-T
             T.marker("m_wheel_rr", (TRACK_R, RA, R)), T.marker("m_wheel_rl", (-TRACK_R, RA, R))]
 
 body_ob = T.join(body, "body")
+door_ob = T.join(door_parts, "door")
 print("triangles: body %d, wheel_f %d, wheel_r %d, spinner %d" % (T.tri_count([body_ob]), T.tri_count([wheel_f]), T.tri_count([wheel_r]), T.tri_count([spinner])))
 
 if "--shape" in sys.argv:
@@ -314,7 +329,7 @@ door = T.lines_image([(0.03, 0.02, 0.03, 0.98), (0.97, 0.02, 0.97, 0.98), (0.03,
 for sx in (1, -1):
     decals.append(T.Decal(door, (sx * HW, 1.22, 1.5), (sx, 0, 0), (0, 0, 1), (1.05, 1.9), depth=0.05, kinds=("paint",)))
 rear_doors = T.lines_image([(0.5, 0.02, 0.5, 0.98), (0.03, 0.02, 0.03, 0.98), (0.97, 0.02, 0.97, 0.98), (0.03, 0.02, 0.97, 0.02), (0.03, 0.98, 0.97, 0.98)], size=(512, 512), width=5)
-decals.append(T.Decal(rear_doors, (0, REAR, 1.62), (0, -1, 0), (0, 0, 1), (2.05, 1.9), depth=0.05, kinds=("paint",)))
+decals.append(T.Decal(rear_doors, (0, REAR - 0.04, DM), (0, -1, 0), (0, 0, 1), (DOOR_W - 0.02, DOOR_Z1 - DOOR_Z0 - 0.02), depth=0.05, kinds=("paint",)))
 # panel seams along the box sides
 seams = T.lines_image([(0.33, 0.0, 0.33, 1.0), (0.66, 0.0, 0.66, 1.0)], size=(512, 64), width=3, alpha=0.7)
 for sx in (1, -1):
@@ -336,7 +351,7 @@ import bpy
 bpy.context.view_layer.update()
 for o in (wheel_f, wheel_r, spinner):
     T.apply(o)
-objs = [body_ob, wheel_f, wheel_r, spinner]
+objs = [body_ob, wheel_f, wheel_r, spinner, door_ob]
 T.unwrap(objs, margin=0.002)
 if "--nobake" not in sys.argv:
     g = T.gbuffer(objs, size=2048, ao_dist=0.7, bevel_r=0.014, ao_samples=24)
@@ -346,5 +361,6 @@ if "--nobake" not in sys.argv:
 wheel_f.data.transform(Matrix.Translation((-4.5, -1.0, -R)))
 wheel_r.data.transform(Matrix.Translation((-4.5, 1.0, -R)))
 spinner.data.transform(Matrix.Translation((-4.5, -2.0, -1.0)))
+door_ob.data.transform(Matrix.Translation((0, -(REAR - 0.03), -DOOR_Z0)))  # its origin is the hinge
 T.export_glb("sweet_tooth", objs, markers=markers)
 print("ok")

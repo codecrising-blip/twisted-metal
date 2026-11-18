@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://icqdq32vu4qo"
-path.s3tc="res://.godot/imported/wheel_clamps_orm.webp-8f349330a7dc41704d236d028159d8fc.s3tc.ctex"
+uid="uid://dbeoa2vokuqci"
+path.s3tc="res://.godot/imported/wheel_clamp_orm.webp-027043850bdb9d41e89c8b4c96672cd6.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/models/wheel_clamps_orm.webp"
-dest_files=["res://.godot/imported/wheel_clamps_orm.webp-8f349330a7dc41704d236d028159d8fc.s3tc.ctex"]
+source_file="res://assets/models/wheel_clamp_orm.webp"
+dest_files=["res://.godot/imported/wheel_clamp_orm.webp-027043850bdb9d41e89c8b4c96672cd6.s3tc.ctex"]
 
 [params]
 

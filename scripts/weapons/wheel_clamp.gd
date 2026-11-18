@@ -1,12 +1,14 @@
 class_name WheelClamp
-## Outlaw's secondary weapon (design 2.3; round 19, the owner's rules): a big bright wheel clamp thrown
+## Outlaw's secondary weapon (design 2.3; round 19, the owner's rules): a big heavy police wheel clamp thrown
 ## forward with light homing. A hit locks the wheels on the side it struck (Vehicle.clamp_for): while the
-## car moves it can only turn the other way, no turbo, no reverse; it wears off after 5 s of MOVING and
-## scrapes SCRAPE_DPS while it moves (25 in all), sparks and bright scratch lines trailing behind the wheel.
+## car moves it can only turn the other way, no turbo, no reverse; it wears off after 5 s of DRIVING (moving,
+## or gas held against a wall) and scrapes SCRAPE_DPS meanwhile (25 in all): sparks, a glowing ribbon and
+## bright scratch lines trailing behind the wheel.
 ## The answer (design): it is slow and easy to see; a hard handbrake turn makes it fly past.
 
 const MIN_TURN := 0.6 # the least it turns toward the free side while moving (of full lock)
-const MOVING_SPEED := 2.0 # m/s: slower than this the car counts as standing still (the clamp doesn't wear)
+const MOVING_SPEED := 2.0 # m/s: slower than this the car counts as standing still...
+const GAS_GRINDS := 0.2 # ...unless the gas is held (pushing against a wall still wears the clamp: owner)
 const SCRAPE_DPS := 5.0 # 25 over the 5 s of moving
 const MARKS_MAX := 70
 
@@ -14,22 +16,20 @@ static var _marks: Array = []
 static var _mark_mesh: QuadMesh
 
 
-## Which of the four Blender looks (tools/blender/build_wheel_clamps.py) the game uses: the owner picks.
-static var style := "a"
-const LAMPS := {"a": ["lamp_a"], "b": ["lamp_b"], "c": ["lamp_c_red", "lamp_c_blue"], "d": ["lamp_d"]}
+const LAMPS := ["lamp_red", "lamp_blue"] # blink in turn
 const MODEL_R := 0.5 # the Blender clamps are built round a wheel this big
-const SIZE := 1.15 # x the car's wheel: a little bigger than the wheel itself, so nobody misses it
+const SIZE := 1.3 # x the car's wheel (owner, round 19): bigger than the wheel itself, so nobody misses it
 
 
-## The boot, its plate facing +X (outward on a right-hand wheel), about a 0.5 m wheel. The Blender model
-## when it is there (lamps as children named "Lamp*", blinking while it holds), else the old primitives.
-static func build_boot(parent: Node3D, look := "") -> void:
-	var st := look if look != "" else style
-	if ModelLib.has("wheel_clamps") and LAMPS.has(st):
-		parent.add_child(ModelLib.instance("wheel_clamps", "clamp_" + st))
+## The clamp, its plate facing +X (outward on a right-hand wheel), about a 0.5 m wheel: the owner's pick of
+## four (round 19, look C, a police impound lock as heavy as a weight plate; tools/blender/build_wheel_clamp.py),
+## lamps as children named "Lamp*" blinking while it holds. The old primitives if the model is missing.
+static func build_boot(parent: Node3D) -> void:
+	if ModelLib.has("wheel_clamp"):
+		parent.add_child(ModelLib.instance("wheel_clamp", "clamp"))
 		var k := 0
-		for lamp_name: String in LAMPS[st]:
-			var l := ModelLib.instance("wheel_clamps", lamp_name)
+		for lamp_name: String in LAMPS:
+			var l := ModelLib.instance("wheel_clamp", lamp_name)
 			l.name = "Lamp%d" % k
 			parent.add_child(l)
 			k += 1
@@ -119,13 +119,14 @@ static func hit_feel(car: Vehicle, boot: Node3D) -> void:
 
 ## While the car moves: sparks spray back off the locked wheel and bright scratch lines are left on the
 ## ground behind it (the trail the owner asked for); the warning lamp blinks.
-static func scrape(car: Vehicle, boot: Node3D) -> void:
+static func scrape(car: Vehicle, boot: Node3D, moving := true) -> void:
 	var world := car.get_parent()
 	var at := boot.global_position
 	var g := Specials.ground_below(world, at + Vector3.UP * 0.5)
-	var back := -car.linear_velocity.normalized()
+	var back := -car.linear_velocity.normalized() if moving else car.global_basis.z # spinning on the spot: thrown back
 	FxKit.spark(world, g + Vector3.UP * 0.1, (back + Vector3.UP * 0.5 + car.global_basis.x * 0.3 * signf(car.global_basis.x.dot(at - car.global_position))).normalized())
-	_mark(world, g, car.linear_velocity)
+	if moving:
+		_mark(world, g, car.linear_velocity)
 
 
 static func _mark(world: Node, at: Vector3, vel: Vector3) -> void:

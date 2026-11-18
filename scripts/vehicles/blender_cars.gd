@@ -19,6 +19,13 @@ static func build(id: String) -> Node3D:
 	var m := Node3D.new()
 	m.name = "Model"
 	m.add_child(ModelLib.instance(id, "body"))
+	if marks.has("door") and marks.has("m_door_hinge"): # round 19: Sweet Tooth's tailgate folds down (Sweet Bot)
+		var hinge := Node3D.new()
+		hinge.name = "DoorHinge"
+		hinge.position = (marks["m_door_hinge"] as Transform3D).origin
+		hinge.add_child(ModelLib.instance(id, "door"))
+		m.add_child(hinge)
+		m.set_meta("door", hinge)
 	var wheels: Array = []
 	var steer: Array = []
 	var radius := 0.5

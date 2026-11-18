@@ -2,8 +2,8 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dxghwjqn2fban"
-path.s3tc="res://.godot/imported/sweet_bots_orm.webp-d5f8f68f292117068599600534c6b9ca.s3tc.ctex"
+uid="uid://b6beqb41qy4bw"
+path.s3tc="res://.godot/imported/wheel_clamp_albedo.webp-13f6986c9931ba90f07a26692d273fd6.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -11,8 +11,8 @@ metadata={
 
 [deps]
 
-source_file="res://assets/models/sweet_bots_orm.webp"
-dest_files=["res://.godot/imported/sweet_bots_orm.webp-d5f8f68f292117068599600534c6b9ca.s3tc.ctex"]
+source_file="res://assets/models/wheel_clamp_albedo.webp"
+dest_files=["res://.godot/imported/wheel_clamp_albedo.webp-13f6986c9931ba90f07a26692d273fd6.s3tc.ctex"]
 
 [params]
 

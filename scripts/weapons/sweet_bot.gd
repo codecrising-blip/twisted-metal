@@ -12,7 +12,12 @@ extends StaticBody3D
 ## can fire again, until an opponent destroys it; if its truck is destroyed the next one takes it over.
 ## Costs two special charges to drop (design 1.6). Model: tools/blender/build_sweet_bot.py.
 
-const DROP_TIME := 0.6 # sliding down out of the back door
+const DROP_TIME := 0.75 # sliding out of the box and down the tailgate
+const DOOR_OPEN := 0.3 # the tailgate folding down
+const DOOR_ANGLE := 1.955 # 112 degrees: folded down to the road, a ramp
+const CROUCH := 0.72 # its height in the box (it stands up on the road: _stand)
+const SQUEEZE := 0.84 # and its width: arms in, wings folded, it fits the 1.78 m door
+const RAMP := 1.75 # m from the hinge to where the tailgate's end touches the road
 const COOLDOWN := 5.0 # owner, round 19: after a barrage it reloads this long, then fires again
 const STAND_TIME := 0.4
 const TURN_RATE := 3.2 # rad/s the upper body turns toward its target
@@ -24,7 +29,6 @@ var _t := 0.0
 var _model: Node3D
 var _upper: Node3D
 var _tubes: Array = [] # tube mouths in the upper body's space, in firing order (left, right, left ...)
-var _cone_fire: FoamFire
 var _lock: Vehicle
 var _shots := 0
 var _gap := 0.0
@@ -36,25 +40,41 @@ var _recoil := 0.0
 var _scan := 0.0
 var _hit_flash := 0.0
 var _waist := Vector3(0, 1.12, 0)
+var _car_model: Node3D
+var _hinge := Vector3.ZERO # the tailgate's hinge in the truck model's space
+var _ramp_top := Vector3.ZERO # in the world, fixed once the robot is out of the box
 
 
-## Dropped out of the back of `car`, facing back the way the truck came (at whoever chases it).
+## Out of the back of `car`, facing back the way the truck came (at whoever chases it).
 static func deploy(car: Vehicle) -> SweetBot:
 	var world := car.get_parent()
 	var b := SweetBot.new()
 	b.owner_car = car
 	world.add_child(b)
-	var size: Vector3 = car.stats.get("size", Vector3(2.5, 2.8, 6.6))
-	# Round 19 (owner): it slides down out of the truck's back door: from the floor of the box at the
-	# back, down and out onto the road behind.
-	var back := car.global_position - car.flat_forward() * (size.z * 0.5 + 2.6) + Vector3.UP
-	b._ground = Specials.ground_below(world, back)
-	b._drop_from = car.global_position - car.flat_forward() * (size.z * 0.5 - 0.6) + Vector3.UP * 0.65
+	# Round 19 (owner): the truck's tailgate folds down into a ramp and the robot, crouched in the box, slides
+	# out and down it onto the road behind; it stands up there. The path follows the truck while the robot is
+	# still inside (the truck may be driving), then runs down the ramp from where the hinge was.
+	b._car_model = car.model
+	b._hinge = b._local_hinge(car)
+	b._drop_from = car.model.to_global(b._hinge + Vector3(0, 0.02, -1.0))
 	b.global_position = b._drop_from
 	b.rotation = Vector3(0.0, car.global_rotation.y + PI, 0.0)
+	b._model.scale = Vector3(SQUEEZE, CROUCH, 1.0)
+	b._ramp_top = car.model.to_global(b._hinge)
+	var back := car.model.global_basis.z
+	back.y = 0.0
+	b._ground = Specials.ground_below(world, b._ramp_top + back.normalized() * (RAMP + 0.7) + Vector3.UP)
+	b._t = -DOOR_OPEN # waits in the box while the door comes down
+	var door := car.model.get_meta("door") as Node3D if car.model.has_meta("door") else null
+	if door:
+		var tw := door.create_tween()
+		tw.tween_property(door, "rotation:x", DOOR_ANGLE, DOOR_OPEN).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_callback(func() -> void: GameFeel.play("land_thud", door.global_position, world, -6.0, 1.3))
+		tw.tween_interval(DROP_TIME + 0.5)
+		tw.tween_property(door, "rotation:x", 0.0, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_callback(func() -> void: GameFeel.play("metal_fall", door.global_position, world, -8.0, 1.2))
 	car.bot = b
 	GameFeel.play("mine_drop", b._drop_from, world, -2.0, 0.8)
-	GameFeel.play("metal_fall", b._drop_from, world, -6.0, 0.7)
 	if car.is_player:
 		car.notice.emit(car, "SWEET BOT OUT - R L U AGAIN TO LAUNCH")
 	return b
@@ -66,58 +86,32 @@ func _ready() -> void:
 	add_to_group(&"bots")
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(2.0, 2.6, 1.2)
+	box.size = Vector3(1.75, 2.2, 1.1) # the robot is ~2.35 m tall, 2 m across the shoulders
 	shape.shape = box
-	shape.position = Vector3(0, 1.3, 0)
+	shape.position = Vector3(0, 1.1, 0)
 	add_child(shape)
 	_model = Node3D.new()
 	add_child(_model)
-	if ModelLib.has("sweet_bots") and POD.has(style):
-		_build_candidate()
-	else:
-		_build_v1()
+	_build_model()
 	for mi in _model.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 
 
-## Round 19: the four TMB-style candidates (tools/blender/build_sweet_bots.py), until the owner picks one.
-## The whole robot turns to aim; the missiles leave its pods. POD = for each look, the centre of each pod
-## (Godot space, robot facing -Z), columns x rows, the spacing, and which way the pod faces (y tilt).
-static var style := "a"
-const POD := {
-	"a": [[Vector3(-0.98, 1.98, -0.42), Vector3(0.98, 1.98, -0.42)], 2, 5, 0.095],
-	"b": [[Vector3(-0.82, 1.85, -0.53), Vector3(0.82, 1.85, -0.53)], 2, 5, 0.09],
-	"c": [[Vector3(0.0, 2.27, -0.23)], 5, 4, 0.12],
-	"d": [[Vector3(-0.72, 2.33, -0.1), Vector3(0.72, 2.33, -0.1)], 2, 5, 0.1],
-}
+## The tailgate's hinge in the truck model's space (m_door_hinge), or the back of the box.
+func _local_hinge(car: Vehicle) -> Vector3:
+	if car.model.has_meta("door"):
+		return (car.model.get_meta("door") as Node3D).position
+	var size: Vector3 = car.stats.get("size", Vector3(2.5, 2.8, 6.6))
+	return Vector3(0, 0.74, size.z * 0.45)
 
 
-func _build_candidate() -> void:
-	_waist = Vector3.ZERO
-	_upper = Node3D.new()
-	_model.add_child(_upper)
-	_upper.add_child(ModelLib.instance("sweet_bots", "bot_" + style))
-	var pod: Array = POD[style]
-	var cols := int(pod[1])
-	var rows := int(pod[2])
-	var pitch := float(pod[3])
-	var per: Array = []
-	for c: Vector3 in pod[0]:
-		var mouths: Array = []
-		for r in rows: # bottom row first
-			for k in cols:
-				mouths.append(c + Vector3((k - (cols - 1) * 0.5) * pitch, (r - (rows - 1) * 0.5) * pitch, 0.0))
-		per.append(mouths)
-	for i in rows * cols: # one pod and then the other in turn
-		for mouths: Array in per:
-			_tubes.append(mouths[i])
-
-
-func _build_v1() -> void:
+## The owner's pick (round 19, look A of four, from the TMB clip; tools/blender/build_sweet_bot.py): legs
+## (chassis, wheels, the truck's box) stand still, the upper body turns at m_waist; the missiles leave
+## the tube mouths m_tube_l/r0..9, one pod and then the other.
+func _build_model() -> void:
 	var marks := ModelLib.marks("sweet_bot")
-	var waist: Vector3 = (marks.get("m_waist", Transform3D(Basis.IDENTITY, Vector3(0, 1.12, 0))) as Transform3D).origin
-	var legs := ModelLib.instance("sweet_bot", "legs")
-	_model.add_child(legs)
+	var waist: Vector3 = (marks.get("m_waist", Transform3D(Basis.IDENTITY, Vector3(0, 1.2, 0))) as Transform3D).origin
+	_model.add_child(ModelLib.instance("sweet_bot", "legs"))
 	_waist = waist
 	_upper = Node3D.new()
 	_upper.position = waist
@@ -129,19 +123,7 @@ func _build_v1() -> void:
 			if m != null:
 				_tubes.append((m as Transform3D).origin - waist)
 	if _tubes.is_empty():
-		_tubes = [Vector3(-0.86, 0.66, -0.42), Vector3(0.86, 0.66, -0.42)]
-	_cone_fire = FoamFire.new() # the little burnt cone on top still burns, like the truck's
-	_cone_fire.size = 0.5
-	_cone_fire.rate = 26.0
-	_cone_fire.life = 0.4
-	_cone_fire.rise = 0.8
-	_cone_fire.inherit = 0.0
-	_cone_fire.glow = 0.95
-	_cone_fire.box = Vector3(0.07, 0.02, 0.07)
-	var cone: Variant = marks.get("m_cone")
-	_cone_fire.position = (((cone as Transform3D).origin - waist) if cone != null else Vector3(0, 1.57, 0.02)) + Vector3.DOWN * 0.2
-	_upper.add_child(_cone_fire)
-	_cone_fire.on = true
+		_tubes = [Vector3(-0.8, 0.45, -0.4), Vector3(0.8, 0.45, -0.4)]
 
 
 ## Ordered to fire (its owner's R L U while it stands): only when it is ready (not mid-barrage, not reloading).
@@ -189,10 +171,22 @@ func _physics_process(delta: float) -> void:
 		_adopt() # its truck was destroyed: it waits for the next one (owner: only an opponent ends it)
 	_hit_flash = maxf(0.0, _hit_flash - delta)
 	match state:
-		"drop": # slides down out of the back door onto the road, lands with a thump, stands up
+		"drop": # slides out of the box and down the tailgate onto the road, lands with a thump, stands up
+			_model.scale = Vector3(SQUEEZE, CROUCH, 1.0) # folded up to fit the box
 			var k := clampf(_t / DROP_TIME, 0.0, 1.0)
-			global_position = _drop_from.lerp(_ground, k) + Vector3.UP * 0.25 * sin(k * PI)
-			if k >= 1.0:
+			const OUT := 0.35 # share of the time it takes to reach the hinge
+			if k < OUT and is_instance_valid(_car_model):
+				var from := _car_model.to_global(_hinge + Vector3(0, 0.02, -1.0))
+				_ramp_top = _car_model.to_global(_hinge)
+				var back := _car_model.global_basis.z
+				back.y = 0.0
+				_ground = Specials.ground_below(get_parent(), _ramp_top + back.normalized() * (RAMP + 0.7) + Vector3.UP)
+				global_position = from.lerp(_ramp_top, k / OUT)
+				rotation.y = _car_model.global_rotation.y + PI
+			elif k < 1.0:
+				var d := (k - OUT) / (1.0 - OUT)
+				global_position = _ramp_top.lerp(_ground, d * d) # gathering speed down the ramp
+			else:
 				_land()
 		"wait":
 			_stand(delta)

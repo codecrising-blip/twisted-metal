@@ -3,13 +3,13 @@
 importer="scene"
 importer_version=1
 type="PackedScene"
-uid="uid://b3arcy2agxwww"
-path="res://.godot/imported/wheel_clamps.glb-7659e11eb46aebd9b60926a67601698e.scn"
+uid="uid://cre4bx6afjawv"
+path="res://.godot/imported/wheel_clamp.glb-acb9a68cf2d6b89d96cdddecb82515c5.scn"
 
 [deps]
 
-source_file="res://assets/models/wheel_clamps.glb"
-dest_files=["res://.godot/imported/wheel_clamps.glb-7659e11eb46aebd9b60926a67601698e.scn"]
+source_file="res://assets/models/wheel_clamp.glb"
+dest_files=["res://.godot/imported/wheel_clamp.glb-acb9a68cf2d6b89d96cdddecb82515c5.scn"]
 
 [params]
 
