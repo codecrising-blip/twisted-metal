@@ -48,7 +48,7 @@ TONGUES = [
 
 def _mats():
     if not _m:
-        _m["skin"] = T.M("paint", (0.8, 0.74, 0.6), wear=0.18, rust=0.1, dirt=0.28, rough=0.3)
+        _m["skin"] = T.M("paint", (0.5, 0.47, 0.38), wear=0.3, rust=0.25, dirt=0.45, rough=0.35)  # the truck's cream (owner)
         _m["seam"] = T.M("paint", (0.8, 0.5, 0.12), wear=0.25, rust=0.25, dirt=0.45, rough=0.35)
         _m["red"] = T.M("paint", (0.62, 0.035, 0.03), wear=0.2, rust=0.08, dirt=0.25, rough=0.25)
         _m["nose"] = T.M("plastic", (0.62, 0.04, 0.025), wear=0.2, dirt=0.25, rough=0.2)
@@ -227,7 +227,7 @@ def _paint_face(local, bvh):
         out[idx] = w
         return out
 
-    return [(whites, (0.86, 0.84, 0.78), ("paint",)), (teeth, (0.9, 0.89, 0.84), ("paint",)),
+    return [(whites, (0.58, 0.55, 0.46), ("paint",)), (teeth, (0.66, 0.64, 0.56), ("paint",)),
             (gaps, (0.5, 0.47, 0.42), ("paint",)), (red, (0.62, 0.03, 0.025), ("paint",))]
 
 

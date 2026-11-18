@@ -546,7 +546,7 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   cheeks, jaw, fire mass, 11 cubic tongues) melted into ONE surface, decimated to ~2.5k tris; the seam (fire hairline,
   `FS`/`SEAM`) is laid on the tongue-less smooth head; eyes, lips, teeth and tooth gaps are PAINTED at the bake
   (`_paint_face`: 3D distance to lines projected on the full-detail sculpt, even widths), fire colour by distance from
-  the seam (gold, yellow-orange, orange, orange-red), `PITCH` -8 deg. Owner rejected first: separate spheres/cones
+  the seam (gold, yellow-orange, orange, orange-red), `PITCH` -8 deg. Face paint = the truck's cream, not white (owner). Owner rejected first: separate spheres/cones
   ("goofy", "crayons"), round tube lips ("pipes"), big eyes, short forehead, then too much forehead (hairline brought
   forward, `SEAM` 0). `build(c, s, parts, decals, regions, unbake)`: `unbake` maps bake points back when the caller
   moves the meshes after building (the robot). Gotcha: `T.preview(tex=...)` needs `T._finish_materials` first.
