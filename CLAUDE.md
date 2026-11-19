@@ -554,8 +554,8 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   (PS2 rip, 19 cars incl. Sweet Bot, shapes only, no textures) + clay sheet; Sketchfab TM2 Axel / roster are embed
   links only (not downloadable, sketchfab.com blocked here). Use for proportions; never ship the ripped meshes.
 - **Round 20, full text `docs/design/25-owner-round-20.md`:** more references in `docs/reference/3d_models/`: TM2 roster
-  WITH textures (`tm2_roster_textured_obj.zip`, 15 cars), 4-view clay shots of 11 TM2 cars (`tm2_cars_4views/`), stage
-  meshes (`maps/`). Drivers (owner): Axel = the TMB-art man chained between the wheels with red missile boxes behind
+  WITH textures (`tm2_roster_textured_obj.zip`, 15 cars), stage meshes (`maps/`); the small grey 4-view phone shots
+  were deleted (the owner retakes them in colour on PC). Drivers (owner): Axel = the TMB-art man chained between the wheels with red missile boxes behind
   his shoulders; Mr. Grimm = Head-On clothes + TM2's round black helmet; Roadkill = bearded Marcus in a long coat.
   **Sweet Bot third pass = a mini TMB Sweet Bot "with no guessing"**: every part placed from the TMB mesh
   (`Mesh_1348.002`) scaled to 1.8 m (loose-part centres/sizes + PCA for tilted parts), front turned to +Y, then our own
@@ -566,6 +566,11 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   black helmet + Death's coat (tattered tails, hood down, bell sleeves, scythe on his back). Wheels: m_wheel_fl/rl =
   bike, m_wheel_rr = sidecar (all R 0.36). `BlenderCars.LEAN` (Grimm 0.08), `SHADOW`. `tests/_car_close.gd -- id out
   fwd,right,up [fov]` = one model up close on the pavers.
+  **Owner (after Grimm v1): TM2 cars must be IDENTICAL to TM2 in shape AND colours, clean, no weathering touch now**
+  ("our touch" comes in a later stage per car). Grimm v1 used our muted/rusty look and lost TM2's art: to be redone.
+  Method: shapes from the 3D references, colours projected onto the model from the owner's colour shots (front,
+  back, left, right, top + 3/4 front and back, car filling the screen, flat light), TM2's own art (skull, flames) from
+  the textured roster zip.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
