@@ -772,7 +772,18 @@ func _special_makes_sense(v: Vehicle, dist: float, angle: float) -> bool:
 			return dist < 80.0 and angle < 0.12 and _clear_shot(v, v.target)
 		"ghost_missile":
 			return dist < 70.0
+		"boomerang": # out and back along a line: thrown at a target ahead, in reach of the blade
+			return dist < 50.0 and angle < 0.45 and _clear_shot(v, v.target)
+		"crowd_controller": # design: when a car is right on him or something holds him
+			return dist < 10.0 or v.clamped_time > 0.0 or _held_by_taser(v)
 	return dist < 60.0 and angle < 0.3
+
+
+func _held_by_taser(v: Vehicle) -> bool:
+	for node in v.get_parent().get_children():
+		if node is TaserLink and (node as TaserLink).target == v:
+			return true
+	return false
 
 
 func _use_live_special(v: Vehicle, delta: float) -> void:

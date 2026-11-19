@@ -156,7 +156,8 @@ const DEFS := {
 		"label": "Chain Bomb", "kind": "bomb", "color": Color(1.0, 0.25, 0.1), "special": true, "handler": "chain_bomb",
 		"speed": 45.0, "chain": 25.0, "radius": 7.0, "damage": 30.0, "edge_damage": 15.0, "stuck_bonus": 10.0,
 		"fuse": 3.0, "cooldown": 1.0,
-		"burn": 4.0, "pool_radius": 5.0, "pool_time": 5.0, # round 16: the blast burns and leaves a fire pool "recharge": 15.0,
+		"burn": 4.0, "pool_radius": 5.0, "pool_time": 5.0, # round 16: the blast burns and leaves a fire pool
+		"recharge": 15.0,
 	},
 	# Mr. Grimm: TM2 flaming skull. Owner (session 4): 65, the hardest single special hit but no
 	# instant kills (a medium car, 280, takes five).
@@ -164,6 +165,23 @@ const DEFS := {
 		"label": "Reaper Skull", "kind": "skull", "color": Color(1.0, 0.55, 0.15), "special": true,
 		"speed": 85.0, "damage": 65.0, "homing": 0.6, "life": 2.5, "cooldown": 3.0, "recharge": 20.0, "push": 8.0,
 		"squish": 0.08, "shake": 0.6,
+	},
+	# Roadkill (Marcus Kane): Boomerang Blast (design 01). A blade of welded scrap, light homing, out to
+	# "range" m or the first car it cuts, then back toward Roadkill: 16 out, 32 back (48 if one car takes
+	# both). Walls break it; props are cut through. Caught on the way back = next special 5 s sooner.
+	"boomerang": {
+		"label": "Boomerang Blast", "kind": "blade", "color": Color(1.0, 0.6, 0.25), "special": true, "handler": "boomerang",
+		"speed": 45.0, "return_speed": 50.0, "homing": 1.0, "range": 55.0, "life": 4.5,
+		"damage": 16.0, "return_damage": 32.0, "push": 3.0, "catch_bonus": 5.0,
+		"squish": 0.04, "shake": 0.3, "cooldown": 1.0, "recharge": 15.0,
+	},
+	# Axel: Crowd Controller (design 01). 0.4 s of sparks off the tyres (the warning), then a ring of
+	# electric fire races out to 12 m in 0.35 s: 16 near him, 8 at the rim, a hard throw away (not a super
+	# heavy) and burning. Kills mines inside it and breaks any grab on Axel. Jump it to dodge.
+	"crowd_controller": {
+		"label": "Crowd Controller", "kind": "ring", "color": Color(0.5, 0.75, 1.0), "special": true, "handler": "crowd_ring",
+		"windup": 0.4, "spread": 0.35, "radius": 12.0, "damage": 16.0, "edge_damage": 8.0, "push": 20.0, "burn": 3.0,
+		"cooldown": 1.0, "recharge": 15.0,
 	},
 	# Spectre: ghost missile that flies through walls.
 	"ghost_missile": {

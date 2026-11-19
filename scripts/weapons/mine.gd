@@ -34,6 +34,7 @@ var _sense_mat: StandardMaterial3D
 
 
 func _ready() -> void:
+	add_to_group(&"mines")
 	if def.get("electronic", false):
 		_build_electronic()
 		return
@@ -171,6 +172,19 @@ func _physics_process(delta: float) -> void:
 		if Vector2(rel.x, rel.z).length() < reach and absf(rel.y) < 2.5:
 			detonate()
 			return
+
+
+## Wiped out without a blast (Axel's Crowd Controller): a pop of sparks and it is gone.
+func fizzle() -> void:
+	if _done:
+		return
+	_done = true
+	FxKit.spark(get_parent(), global_position + Vector3.UP * 0.3, Vector3.UP)
+	FxKit.puff(get_parent(), global_position + Vector3.UP * 0.2, 0.35)
+	GameFeel.play("taser_fizzle", global_position, get_parent(), -8.0)
+	if is_instance_valid(owner_car) and owner_car.live_special() == self:
+		owner_car.set_live_special(null)
+	queue_free()
 
 
 func detonate() -> void:

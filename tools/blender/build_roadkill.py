@@ -65,8 +65,9 @@ def section(y, hw, zb, zt, c=0.07, tuck=0.06):
 
 
 # ---------------------------------------------------------------- lower body: tail to nose (side view grid)
-lower = [section(y_(0.0), 0.95, 0.47, 0.93), section(y_(0.25), 1.0, 0.42, 1.0), section(y_(0.9), HW, 0.4, 1.0),
-         section(y_(1.6), HW, 0.38, 1.0), section(y_(3.2), HW, 0.38, 1.0), section(y_(4.0), HW, 0.39, 0.93),
+# The rear quarters rise toward the tail (HD side view: 1.0 at the door, 1.17 under the wing).
+lower = [section(y_(0.0), 0.95, 0.47, 1.1), section(y_(0.25), 1.0, 0.42, 1.17), section(y_(0.9), HW, 0.4, 1.15),
+         section(y_(1.55), HW, 0.38, 1.06), section(y_(1.95), HW, 0.38, 1.02), section(y_(3.2), HW, 0.38, 1.0), section(y_(4.0), HW, 0.39, 0.93),
          section(y_(4.7), 0.99, 0.42, 0.86), section(y_(5.12), 0.97, 0.47, 0.8), section(y_(5.39), 0.94, 0.55, 0.66, 0.04)]
 lb = T.loft(lower, mat=tm2, angle=35.0)
 for (yc, r, xc) in ((RA, RR, TR), (FA, RF, TF)):  # wheel arches cut through each side
@@ -76,7 +77,7 @@ for (yc, r, xc) in ((RA, RR, TR), (FA, RF, TF)):  # wheel arches cut through eac
 body.append(lb)
 # the cabin: a fastback greenhouse, narrower than the body
 cab = []
-for y, hb, ht, zt in ((y_(1.05), 0.88, 0.8, 1.02), (y_(1.55), 0.86, 0.72, 1.3), (y_(1.75), 0.86, 0.7, 1.32), (y_(2.75), 0.86, 0.7, 1.32),
+for y, hb, ht, zt in ((y_(1.2), 0.88, 0.8, 1.14), (y_(1.6), 0.86, 0.72, 1.31), (y_(1.75), 0.86, 0.7, 1.32), (y_(2.75), 0.86, 0.7, 1.32),
                       (y_(3.25), 0.88, 0.8, 1.02)):
     cab.append([(hb, y, 0.99), (ht, y, zt), (-ht, y, zt), (-hb, y, 0.99)])
 body.append(T.loft(cab, mat=tm2, angle=30.0))
@@ -86,40 +87,46 @@ def quad(p, mat, th=0.012):
     n = (b - a).cross(d - a).normalized()
     return T.loft([[tuple(a + n * th), tuple(b + n * th), tuple(c + n * th), tuple(d + n * th)], [tuple(a), tuple(b), tuple(c), tuple(d)]], mat=mat, angle=10.0)
 body.append(quad([(0.82, y_(3.2), 1.03), (-0.82, y_(3.2), 1.03), (-0.66, y_(2.8), 1.29), (0.66, y_(2.8), 1.29)], tm2_glass))
-body.append(quad([(-0.8, y_(1.12), 1.04), (0.8, y_(1.12), 1.04), (0.66, y_(1.5), 1.28), (-0.66, y_(1.5), 1.28)], tm2_glass))
+body.append(quad([(-0.8, y_(1.27), 1.155), (0.8, y_(1.27), 1.155), (0.67, y_(1.56), 1.29), (-0.67, y_(1.56), 1.29)], tm2_glass))
 for sx in (1, -1):
     pts = [(sx * 0.875, y_(1.7), 1.05), (sx * 0.875, y_(3.05), 1.05), (sx * 0.73, y_(2.72), 1.27), (sx * 0.73, y_(1.78), 1.27)]
     body.append(quad(pts if sx > 0 else list(reversed(pts)), tm2_glass))
 # the rear wing on its end plates, the riveted rear plate, tail lamps
-body.append(T.box((1.96, 0.62, 0.035), loc=(0, y_(0.38), 1.27), rot=(-9, 0, 0), mat=tm2, bevel=0.01))
+body.append(T.box((1.96, 0.62, 0.035), loc=(0, y_(0.38), 1.31), rot=(-9, 0, 0), mat=tm2, bevel=0.01))
 for sx in (1, -1):
-    body.append(T.box((0.04, 0.66, 0.2), loc=(sx * 0.97, y_(0.38), 1.2), rot=(-9, 0, 0), mat=tm2, bevel=0.008))
-    body.append(T.box((0.06, 0.12, 0.28), loc=(sx * 0.62, y_(0.62), 1.1), mat=tm2_metal, bevel=0.01))
-    body.append(T.box((0.26, 0.03, 0.09), loc=(sx * 0.7, TAIL - 0.005, 0.86), mat=T.glow((0.85, 0.06, 0.04))))
-body.append(T.box((1.98, 0.36, 0.33), loc=(0, TAIL + 0.13, 0.615), mat=tm2, bevel=0.02))
+    body.append(T.box((0.04, 0.66, 0.2), loc=(sx * 0.97, y_(0.38), 1.24), rot=(-9, 0, 0), mat=tm2, bevel=0.008))
+    body.append(T.box((0.06, 0.12, 0.2), loc=(sx * 0.62, y_(0.62), 1.2), mat=tm2_metal, bevel=0.01))
+    body.append(T.box((0.3, 0.03, 0.12), loc=(sx * 0.72, TAIL - 0.05, 0.84), mat=dark, bevel=0.006))   # tail lamp recess
+    body.append(T.box((0.24, 0.03, 0.07), loc=(sx * 0.72, TAIL - 0.06, 0.84), mat=T.glow((0.85, 0.06, 0.04))))
+body.append(T.box((1.98, 0.36, 0.45), loc=(0, TAIL + 0.13, 0.69), mat=tm2, bevel=0.02))   # the riveted rear plate (HD back view)
 for row in range(2):
     for k in range(7):
-        body.append(T.sphere(0.022, loc=((k - 3) * 0.3, TAIL - 0.055, 0.53 + row * 0.16), mat=tm2_metal, n=8))
+        body.append(T.sphere(0.03, loc=((k - 3) * 0.3, TAIL - 0.055, 0.56 + row * 0.2), mat=tm2_metal, n=8, scale=(1, 0.6, 1)))
 # the nose: a riveted armour plate, the slots over it, two pairs of small square lamps
 body.append(T.box((1.9, 0.07, 0.3), loc=(0, NOSE - 0.015, 0.6), rot=(12, 0, 0), mat=tm2, bevel=0.012))
-for row in range(2):
-    for k in range(8):
-        body.append(T.sphere(0.02, loc=((k - 3.5) * 0.24, NOSE + 0.02, 0.53 + row * 0.13), mat=tm2_metal, n=8))
+for bx, bz in ((-0.17, 0.66), (0.17, 0.66), (-0.73, 0.55), (-0.36, 0.55), (0.0, 0.55), (0.36, 0.55), (0.73, 0.55)):
+    body.append(T.sphere(0.036, loc=(bx, NOSE + 0.02 - (bz - 0.6) * 0.21, bz), mat=tm2_metal, n=10, scale=(1, 0.6, 1)))  # its bolts, two over five
+body.append(T.box((1.3, 0.24, 0.22), loc=(0, NOSE - 0.2, 0.4), mat=tm2, bevel=0.01))   # the dark apron under the nose
 body.append(T.box((1.86, 0.16, 0.05), loc=(0, NOSE - 0.12, 0.775), rot=(-14, 0, 0), mat=tm2, bevel=0.01))   # the slotted strip on the nose
 for k in range(11):  # its slots, cut in (dark, flush with the strip)
     body.append(T.box((0.05, 0.11, 0.012), loc=((k - 5) * 0.16, NOSE - 0.12, 0.802), rot=(-14, 0, 0), mat=dark))
-for sx in (1, -1):  # two small square lamps at each top corner of the plate
-    for k in range(2):
-        body.append(T.box((0.1, 0.03, 0.065), loc=(sx * (0.62 + k * 0.13), NOSE + 0.035, 0.7), rot=(12, 0, 0), mat=T.glow((0.9, 0.85, 0.65))))
-        body.append(T.box((0.12, 0.03, 0.085), loc=(sx * (0.62 + k * 0.13), NOSE + 0.025, 0.7), rot=(12, 0, 0), mat=dark, bevel=0.006))
-# hood scoop with two round intakes, a slotted box ahead of it
-body.append(T.box((0.46, 0.85, 0.16), loc=(0, y_(4.15), 1.03), mat=tm2, bevel=0.03))
-for sx in (1, -1):
-    body.append(T.cyl(0.075, 0.12, loc=(sx * 0.11, y_(4.55), 1.06), rot=(-90, 0, 0), mat=tm2_metal, n=16))
-    body.append(T.cyl(0.055, 0.125, loc=(sx * 0.11, y_(4.555), 1.06), rot=(-90, 0, 0), mat=dark, n=16))
-body.append(T.box((0.34, 0.22, 0.07), loc=(0, y_(4.85), 0.88), mat=tm2, bevel=0.01))
-for k in range(5):
-    body.append(T.box((0.03, 0.18, 0.02), loc=((k - 2) * 0.06, y_(4.85), 0.92), mat=dark))
+lamp = T.glow((0.9, 0.85, 0.65))
+for sx in (1, -1):  # a dark recess at each upper corner of the plate with two round-ended lamps in it
+    body.append(T.box((0.27, 0.03, 0.09), loc=(sx * 0.62, NOSE + 0.03, 0.665), rot=(12, 0, 0), mat=dark, bevel=0.008))
+    for k in (-1, 1):
+        body.append(T.cyl(0.03, 0.1, loc=(sx * 0.62 + k * 0.058, NOSE + 0.045, 0.665), rot=(0, 90, 0), mat=lamp, n=12))
+        for e in (-1, 1):
+            body.append(T.sphere(0.03, loc=(sx * 0.62 + k * 0.058 + e * 0.05, NOSE + 0.045, 0.665), mat=lamp, n=10))
+# hood scoop: a housing narrowing upward, two big round intakes over three small ones; a slotted plate
+# ahead of it on the right; the cowl vent across the hood at the windshield's foot
+body.append(T.box((0.62, 0.85, 0.2), loc=(0, y_(4.15), 1.03), mat=tm2, bevel=0.025, taper=(0.66, 1.0)))
+for ix, iz, r in ((-0.1, 1.07, 0.078), (0.1, 1.07, 0.078), (-0.2, 0.985, 0.043), (0.0, 0.985, 0.043), (0.2, 0.985, 0.043)):
+    body.append(T.cyl(r + 0.018, 0.1, loc=(ix, y_(4.56), iz), rot=(-90, 0, 0), mat=tm2_metal, n=16))
+    body.append(T.cyl(r, 0.105, loc=(ix, y_(4.565), iz), rot=(-90, 0, 0), mat=dark, n=16))
+body.append(T.box((0.36, 0.2, 0.04), loc=(0.24, y_(4.88), 0.86), mat=tm2, bevel=0.008))
+for k in range(3):
+    body.append(T.box((0.03, 0.12, 0.012), loc=(0.24 + (k - 1) * 0.09, y_(4.88), 0.882), mat=dark))
+body.append(T.box((0.72, 0.07, 0.015), loc=(0, y_(3.36), 1.003), mat=dark))
 # side pipes along the sills, two slots in each front fender
 for sx in (1, -1):
     body.append(rod(V((sx * 1.04, y_(2.2), 0.47)), V((sx * 1.04, y_(3.95), 0.47)), 0.055, tm2_metal))
@@ -187,7 +194,7 @@ if "--shape" in sys.argv:
     wf = [T.dup(wheel_f, (TF, FA, RF)), T.dup(wheel_f, (-TF, FA, RF), rot=(0, 0, 180)), T.dup(wheel_r, (TR, RA, RR)), T.dup(wheel_r, (-TR, RA, RR), rot=(0, 0, 180))]
     for o in (wheel_f, wheel_r):
         o.location = (0, 0, -50)
-    T.preview(out, size=(1100, 600), eye=(-7.5, 0.0, 1.0), look=(0, 0.0, 0.75), fov=40, samples=12)           # side (left)
+    T.preview(out, size=(1100, 600), eye=(-9.5, 0.0, 0.9), look=(0, 0.0, 0.7), fov=40, samples=12)           # side (left)
     T.preview(out.replace(".png", "_f.png"), size=(1100, 600), eye=(0.0, 8.0, 1.2), look=(0, 0, 0.8), fov=36, samples=12)
     T.preview(out.replace(".png", "_b.png"), size=(1100, 600), eye=(0.0, -8.0, 1.6), look=(0, 0, 0.8), fov=36, samples=12)
     T.preview(out.replace(".png", "_q.png"), size=(1100, 600), eye=(-5.0, 5.5, 3.2), look=(0, 0.2, 0.6), fov=40, samples=12)

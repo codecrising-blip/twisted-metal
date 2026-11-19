@@ -76,6 +76,25 @@ const CARS := {
 		"hood": Vector2(1.2, -1.3), "glass": Vector2(1.38, -0.45), "glass_n": Vector3(0, 0.75, -0.66),
 		"tagline": "She stopped telling them it was about justice.",
 	},
+	# Round 20 (owner): TM2's car (not TM1's), Head-On's driver (Marcus Kane, bearded, long coat).
+	"roadkill": {
+		"name": "Roadkill", "ram": 6.5, "engine": "suv", "driver": "Marcus Kane",
+		"spd": 6, "arm": 5, "hnd": 7, "spc": 6, "class": "medium",
+		"special": "boomerang",
+		"pickup_energy": 8.0, # owner, round 11: +8 energy for every weapon he picks up
+		"size": Vector3(2.2, 1.35, 5.4), "camera": [3.9, 10.0],
+		"hood": Vector2(0.92, -1.7), "glass": Vector2(1.16, -0.3), "glass_n": Vector3(0, 0.84, -0.55),
+		"tagline": "He keeps what he finds. Including you.",
+	},
+	# Round 20 (owner): TM2's Axel, the man locked between two giant wheels (not Super Axel).
+	"axel": {
+		"name": "Axel", "ram": 9.5, "engine": "tank", "driver": "Axel",
+		"spd": 4, "arm": 7, "hnd": 7, "spc": 6, "class": "medium",
+		"special": "crowd_controller",
+		"size": Vector3(3.8, 2.8, 2.8), "camera": [5.4, 11.5],
+		"hood": Vector2(0.5, -0.9), "glass": Vector2(1.7, -0.2), "glass_n": Vector3(0, 0.2, -0.98),
+		"tagline": "Twenty years between two wheels.",
+	},
 	"junkyard_dog": {
 		"name": "Junkyard Dog", "ram": 7.0, "engine": "tow", "driver": "Billy Ray Stillwell",
 		"spd": 5, "arm": 8, "hnd": 4, "spc": 7, "class": "heavy",

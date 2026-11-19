@@ -23,6 +23,10 @@ static func fire(v: Vehicle, id: String, charged := false) -> void:
 			_salvo(v, id, def)
 		"sat":
 			SatStrike.start(v, id, def)
+		"boomerang":
+			Boomerang.start(v, def)
+		"crowd_ring":
+			CrowdRing.start(v, def)
 		_:
 			v.launch(id, v.target)
 

@@ -1638,6 +1638,12 @@ func _update_charge_fx() -> void:
 	(ball.material_override as StandardMaterial3D).emission = Color(1.0, 0.45, 0.1).lerp(Color(1.0, 0.95, 0.8), r)
 
 
+## The next special comes back this many seconds sooner (Roadkill catching his blade).
+func special_bonus(seconds: float) -> void:
+	if ammo.get(special_id, 0) < special_charges:
+		_special_timer += seconds
+
+
 ## A turbo pickup fills the bar up again (turbo never refills by itself).
 func refill_turbo() -> void:
 	turbo = 100.0
@@ -1912,6 +1918,12 @@ func _clamp_step(delta: float) -> void:
 		_clamp_spark = 0.06
 		WheelClamp.scrape(self, _clamp_boot, moving)
 	if clamped_time <= 0.0:
+		_release_clamp()
+
+
+## Broken off from outside (Axel's Crowd Controller).
+func release_clamp() -> void:
+	if clamped_time > 0.0:
 		_release_clamp()
 
 

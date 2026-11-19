@@ -243,6 +243,11 @@ func _draw(from: Vector3, to: Vector3, strength: float, reroll: bool, on_car: bo
 	_light.light_energy = 0.5 if _dark else randf_range(2.0, 4.0) + strength * 4.0
 
 
+## Torn off from outside (Axel's Crowd Controller breaks every grab on him).
+func break_link() -> void:
+	_end(true)
+
+
 func _end(lost: bool) -> void:
 	if _pending > 0.0 and is_instance_valid(target) and not target.is_dead:
 		target.take_damage(_pending * WeaponData.DAMAGE_SCALE, owner_car)

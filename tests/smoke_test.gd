@@ -1359,6 +1359,55 @@ func _run() -> void:
 	me.take_damage(99999.0, ol17)
 	_check(me.is_dead and count_corpses.call() == bodies0 + 1, "destroyed in the air: the driver is thrown out of the car")
 
+	# Round 20: Roadkill's Boomerang Blast and Axel's Crowd Controller.
+	var rk: Vehicle = main._spawn("roadkill", Transform3D(Basis.IDENTITY, LosAngelesArena.ground(40, 26, 0.1)), false)
+	var ax: Vehicle = main._spawn("axel", Transform3D(Basis.IDENTITY, LosAngelesArena.ground(-40, -20, 0.1)), false)
+	_check(rk.model.get_meta("wheels", []).size() == 4 and ax.model.get_meta("wheels", []).size() == 2,
+		"Roadkill (four wheels) and Axel (two giant wheels) load their Blender models")
+	var ol20: Vehicle = main.enemies.filter(func(e: Vehicle): return e.car_id == "outlaw")[0]
+	for c: Vehicle in [rk, ax, ol20]:
+		c.is_dead = false
+		c.health = c.max_health
+		c.invulnerable_time = 0.0
+		c.shield_time = 0.0
+		c.controller = null
+	_place(rk, 40, 26, 0) # a clear stretch of the battleground (no prop for the blade to break on)
+	_place(ol20, 40, 3, 0)
+	await _frames(5)
+	rk.target = ol20
+	rk.ammo["boomerang"] = 1
+	rk._special_timer = 0.0
+	var b_hp := ol20.health
+	Specials.fire(rk, "boomerang")
+	var blade := main.get_children().filter(func(n: Node): return n is Boomerang)
+	_check(blade.size() == 1, "Roadkill throws his blade")
+	var why := [""]
+	var bl0 := blade[0] as Boomerang
+	bl0.tree_exiting.connect(func() -> void: why[0] = bl0.end_reason)
+	await _frames(60)
+	_check(absf((b_hp - ol20.health) - 16.0) < 0.6, "the blade cuts going out for 16 (%.1f)" % (b_hp - ol20.health))
+	var flying: Variant = blade[0] # may already be caught (freed)
+	for i in 150:
+		await _frames(1)
+		if not is_instance_valid(flying):
+			break
+	_check(not is_instance_valid(flying) and rk._special_timer >= 5.0,
+		"it swings back and Roadkill catches it: his next special comes 5 s sooner (%.1f s; %s)" % [rk._special_timer, why[0]])
+
+	_place(ax, -40, -20, 0)
+	_place(ol20, -33, -20, 0)
+	await _frames(5)
+	ol20.health = ol20.max_health
+	var mine20 := Mine.drop(ol20, WeaponData.get_def("remote"))
+	var a_hp := ol20.health
+	Specials.fire(ax, "crowd_controller")
+	await _frames(50)
+	var ring_dmg := a_hp - ol20.health
+	_check(ring_dmg >= 8.0 and ring_dmg <= 16.5 and ol20.burn_time > 0.0,
+		"Axel's ring hits a car close by (%.1f, 8-16) and sets it burning" % ring_dmg)
+	_check(ol20.velocity.x > 4.0, "the ring throws it away from Axel (%.1f m/s)" % ol20.velocity.x)
+	_check(not is_instance_valid(mine20) or mine20.is_queued_for_deletion(), "mines inside the ring die harmlessly")
+
 	print("")
 	if _failures.is_empty():
 		print("ALL TESTS PASSED")

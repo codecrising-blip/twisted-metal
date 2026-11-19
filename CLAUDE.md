@@ -593,13 +593,29 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   only past `flat`); the belt went. Owner's standing order: work as an artist, appearance first, build tools when
   needed, keep improving Roadkill and Axel until satisfied, across sessions.
   **Roadkill model** (`build_roadkill.py`, 5.39 m, colours transferred from rip "rk"; the HD car is lower than the rip:
-  roof 1.32 vs 1.55, shape follows the HD). **Axel model** (`build_axel.py`): the rip's man is a flat card, so his
-  colours are set per part from AX-5/6 (bronze skin, red goggles, blue jeans, brown boots, dark straps); sizes from
-  the HD front view at 1.8 m for the man: tyres r 1.39 x 1.18 m at +-1.31, frame plates +-0.46..0.63, hands locked in
-  red-lit blocks beside his head, silver rings (AX-4) at the plates' feet; only `wheel_r` + m_wheel_rr/rl (no
-  steering wheels). Tread grooves: build one row at the top of the tyre, `T.dup` it round the axle, `view_layer.update()`
-  before `T.apply` (rotating boxes in place with Euler angles scattered them). `Sculpt`/`cloth` are imported from
-  grimm_rider.py. Neither car is in the roster yet.
+  roof 1.32 vs 1.55, shape follows the HD; second pass: rear quarters rise to 1.17 under the wing, riveted rear plate
+  with recessed tail lamps, nose bolts 2 over 5, round lamp pairs in dark recesses, a scoop with 2 big + 3 small
+  intakes, cowl slot). **Axel v2** (`build_axel.py`): each side is an **A-frame of channel bars with ladder rungs**
+  (apex beside his hands at 2.08 m, feet at y +-0.86, round bottom member, cross member at the hub with the axle
+  bearing), NOT a solid plate (v1 was wrong: only the front view had been read; the IL/IR/T views and the rip showed
+  it). Colours measured from the rip's textures: frame light brass-silver (`hs-0`, a shared mechanical texture), rims
+  reddish bronze-grey (AX-1), two red oval lights per hand block and three red tail bars per back foot (AX-3), silver
+  gatling faces at the front feet = his guns (AX-4); the man (AX-5/6) dark brown with an oily sheen (v1's tan was far
+  too light), a sculpted bodybuilder (pecs, six abs, lats, deltoids), double-biceps pose of the HD views (the PS1 card
+  is a T-pose only because it is a flat card). Tyres: chevrons in three ribs + two grooves; the hub cap sticks out.
+  Isolate a car of the textured rip: median of its texture's face centres, delete faces farther than a radius
+  (scratch `ax_iso.py`), render 6 ortho views; list texture names near it to find shared ones (hs-0).
+  **In the game (round 20):** `Roster` "roadkill" (6/5/7/6 medium, ram 6.5, special `boomerang`, `pickup_energy` 8)
+  and "axel" (4/7/7/6 medium, ram 9.5, size 3.8 x 2.8 x 2.8, special `crowd_controller`). **Boomerang Blast**
+  (`Boomerang`): 45 m/s out with light homing to 55 m or the first car (16), swings back to Roadkill at 50 m/s
+  (32; the car cut going out is cut again only after the blade left it: 48 both ways), walls break it, props are cut
+  through, caught = `Vehicle.special_bonus(5)`. **Crowd Controller** (`CrowdRing`): 0.4 s tyre sparks + lift, then a
+  ring to 12 m in 0.35 s, 16 -> 8, thrown away (not super heavy), burning, jumping it dodges; `Mine.fizzle()` for
+  mines inside (group "mines"), `TaserLink.break_link()`, `Vehicle.release_clamp()`, chain bomb unhooked. AI: blade
+  within 50 m ahead with a clear shot; ring when a car is within 10 m or he is held. Pause menu picks any Blender car
+  (`main.PREVIEW_PICKS`: Sweet Tooth, Outlaw, Mr. Grimm, Roadkill, Axel) against Outlaw (Sweet Tooth if you are
+  Outlaw). Not built yet: their secondaries (Roadkill's charged missiles, Axel's Rim Shot), Axel's Pivot and Wheel
+  Hop, Roadkill's Scavenger icons. Bug fixed: the chain bomb's `recharge` 15 was inside a comment (it used 20).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

@@ -5,9 +5,11 @@ extends Node3D
 ## in the same fight; the last one lost is game over. Stage 1 = TM2 Los Angeles with 4 enemies.
 ## Run with `-- junkyard` after the project path to play the old Junkyard instead.
 
-## Quality preview (owner, session 5): only the two detailed cars, one on one in Los Angeles.
-## You play one (pick it in the pause menu), the AI drives the other.
+## Quality preview (owner, session 5): one on one in Los Angeles, Sweet Tooth vs Outlaw.
+## Round 20: the pause menu picks any of the cars remade in Blender; the AI drives Outlaw (Sweet Tooth
+## when you play Outlaw).
 const PREVIEW_DRIVERS := ["sweet_tooth", "outlaw"]
+const PREVIEW_PICKS := ["sweet_tooth", "outlaw", "mr_grimm", "roadkill", "axel"]
 ## The whole test roster (the other three still have their simple prototype models).
 ## Run with `-- full` after the project path; the smoke test uses it too.
 const FULL_DRIVERS := ["sweet_tooth", "outlaw", "junkyard_dog", "mr_grimm", "spectre"]
@@ -35,6 +37,7 @@ var hud: Hud
 var music: AudioStreamPlayer
 
 var drivers: Array = PREVIEW_DRIVERS
+var picks: Array = PREVIEW_PICKS # the pause menu's driver list
 var _respawn_timer := -1.0
 
 
@@ -46,6 +49,9 @@ func _ready() -> void:
 	AudioSettings.setup()
 	if full_roster or "full" in OS.get_cmdline_user_args():
 		drivers = FULL_DRIVERS
+		picks = FULL_DRIVERS
+	elif not player_car in PREVIEW_DRIVERS:
+		drivers = [player_car, "outlaw"]
 	arena = JunkyardArena.new() if "junkyard" in OS.get_cmdline_user_args() else LosAngelesArena.new()
 	arena.name = "Arena"
 	add_child(arena)
@@ -82,7 +88,7 @@ func _ready() -> void:
 	hud.restart_requested.connect(_restart)
 	hud.driver_requested.connect(_pick_driver)
 	hud.music_requested.connect(_cycle_music)
-	hud.drivers.assign(drivers.map(func(id: String): return String(Roster.get_car(id).get("name", id))))
+	hud.drivers.assign(picks.map(func(id: String): return String(Roster.get_car(id).get("name", id))))
 	hud.set_enemies_left(enemies.size())
 	hud.set_lives(lives - 1)
 	if arena.has_method("radar_lines"):
@@ -306,5 +312,5 @@ func _restart() -> void:
 
 
 func _pick_driver(index: int) -> void:
-	player_car = drivers[index]
+	player_car = picks[index]
 	_restart()
