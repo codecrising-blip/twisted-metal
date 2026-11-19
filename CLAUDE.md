@@ -579,6 +579,13 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   materials. NOTHING invented (owner: the v1 "GRIMM" stencil was guessing; never add text, holes or parts unasked).
   The owner's 'colour' shots of the HD roster are grey (that model is unpainted): colours only come from the rip.
   `T.lathe` caps its end rings (a tyre becomes a solid disc): use an open ring (`ring_solid` in build_mr_grimm.py).
+  **Owner: Grimm's vehicle = "perrrrfect", keep it as it is.** The rider v1 was "Lego" (tubes and balls; the hood ball
+  read as "an ass growing from his shoulders"). Rider v2 = `tools/blender/grimm_rider.py`: ONE metaball sculpt for
+  the body in the coat (`Sculpt.ball/chain`, melted, decimated), gloves and boots as their own sculpts, the coat's
+  skirt/tails/hood/collar/lapels as thick cloth panels with soft folds and a torn hem (`cloth()`), a belt + buckle,
+  dark red lining at the edges, charcoal-blue coat (pure black read as a flat shadow), TM2's round helmet with the
+  visor painted into its own faces (a floating visor strip looked like glasses), the scythe; ~7k triangles.
+  Never build a person from separate primitives again: sculpt one surface.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

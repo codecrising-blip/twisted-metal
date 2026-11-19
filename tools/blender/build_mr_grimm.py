@@ -32,9 +32,10 @@ rubber = T.M("rubber", (0.018, 0.018, 0.018), dirt=0.0)
 hub = T.M("plastic", (0.6, 0.58, 0.52), wear=0.0, dirt=0.0, rough=0.35)
 # the rider (not from the original: the owner's clothes)
 helmet = T.M("plastic", (0.012, 0.012, 0.014), wear=0.0, dirt=0.0, rough=0.25)
-visor = T.glass((0.02, 0.025, 0.03))
-coat = T.M("cloth", (0.022, 0.023, 0.03), dirt=0.0)
-leather = T.M("plastic", (0.02, 0.018, 0.017), wear=0.0, dirt=0.0)
+visor = T.glass((0.16, 0.18, 0.22))
+coat = T.M("cloth", (0.065, 0.07, 0.09), dirt=0.0)
+lining = T.M("cloth", (0.16, 0.02, 0.025), dirt=0.0)
+leather = T.M("plastic", (0.03, 0.027, 0.025), wear=0.0, dirt=0.0, rough=0.4)
 wood = T.M("wood", (0.16, 0.09, 0.045), dirt=0.0)
 blade = T.M("steel", (0.32, 0.32, 0.31), wear=0.0, rust=0.0, dirt=0.0)
 decals = []
@@ -155,73 +156,8 @@ markers.append(T.marker("m_top", (BX, 0.3, 1.2)))
 markers.append(T.marker("m_head", (BX, 0.95, 1.2)))
 
 # ---------------------------------------------------------------- the rider: TM2's pose and helmet, Death's coat
-HIP = V((BX, -0.55, 1.08))
-SHO = V((BX, -0.8, 1.6))
-ax = (SHO - HIP).normalized()
-back_n = V((0, -ax.z, ax.y))
-
-
-def ring(t, w, d, k=10):
-    c = HIP.lerp(SHO, t)
-    return [tuple(c + V((1, 0, 0)) * math.cos(2 * math.pi * i / k) * w / 2 + back_n * math.sin(2 * math.pi * i / k) * d / 2) for i in range(k)]
-
-
-body.append(T.loft([ring(-0.05, 0.46, 0.32), ring(0.4, 0.48, 0.32), ring(0.8, 0.6, 0.36), ring(1.02, 0.54, 0.3)], mat=coat, angle=50.0))
-body.append(T.cyl(0.075, 0.12, loc=tuple(SHO + ax * 0.06), rot=aim(ax), mat=coat, n=10))
-body.append(T.cyl(0.13, 0.13, loc=tuple(SHO + ax * 0.03), rot=aim(ax), mat=coat, n=12, r2=0.16))       # high collar
-body.append(T.sphere(0.16, loc=tuple(SHO + back_n * 0.13 - ax * 0.02), mat=coat, n=12, scale=(1.3, 0.7, 0.8)))  # hood, down
-HC = V((BX, -0.86, 1.83))
-body.append(T.sphere(0.175, loc=tuple(HC), mat=helmet, n=18, scale=(0.95, 1.08, 1.0)))                 # TM2's round helmet
-body.append(T.box((0.26, 0.06, 0.07), loc=tuple(HC + V((0, 0.15, -0.01))), rot=(-8, 0, 0), mat=visor, bevel=0.025))  # visor band
-for sx in (1, -1):
-    s = SHO + V((sx * 0.27, 0.02, -0.04))
-    e = V((BX + sx * 0.25, -0.42, 1.62))
-    w = V((BX + sx * 0.24, -0.06, 1.66))
-    body.append(T.sphere(0.12, loc=tuple(s), mat=coat, n=12))
-    body.append(rod(s, e, 0.11, coat, 12, 0.1))
-    body.append(rod(e, w + (e - w).normalized() * 0.05, 0.1, coat, 12, 0.13))                     # bell sleeve
-    body.append(T.sphere(0.065, loc=tuple(w), mat=leather, n=10, scale=(1.0, 1.3, 0.9)))            # gloved hand
-    th = HIP + V((sx * 0.12, 0.04, -0.03))
-    kn = V((BX + sx * 0.2, -0.05, 1.25))
-    ft = V((BX + sx * 0.21, 0.15, 0.66))
-    body.append(rod(th, kn, 0.12, coat, 12, 0.095))
-    body.append(T.sphere(0.095, loc=tuple(kn), mat=coat, n=12))
-    body.append(rod(kn, ft + V((0, -0.02, 0.06)), 0.085, coat, 12, 0.065))
-    body.append(T.box((0.11, 0.26, 0.11), loc=tuple(ft + V((0, 0.04, 0.0))), mat=leather, bevel=0.03))  # boot on the peg
-    for k in range(4):  # the coat hangs open down his sides in tatters
-        top = V((BX + sx * 0.21, -0.68 + k * 0.1, 1.06))
-        L = 0.4 + 0.08 * ((k * 7 + (sx > 0) * 3) % 3)
-        body.append(strip([top, top + V((sx * 0.05, 0.0, -L * 0.5)), top + V((sx * 0.07, -0.04, -L))], 0.12, 0.012, coat, up=V((sx, 0, 0)), taper=0.55))
-for k in range(5):  # the tails behind him, down over the tail of the bike
-    x = BX + (k - 2) * 0.08
-    p0 = V((x, -0.72, 1.12))
-    L = 0.5 + 0.08 * ((k * 7) % 3)
-    sp = (k - 2) * 0.025
-    body.append(strip([p0, p0 + V((sp * 0.4, -0.18, -0.02)), p0 + V((sp, -0.32, -0.12)), p0 + V((sp * 1.5, -0.4, -L))], 0.13, 0.012, coat, up=V((0, -1, 0.2)), taper=0.6))
-# the scythe across his back, the blade out past his right shoulder
-A = HIP + ax * (-0.1) + V((-0.28, 0, 0)) + back_n * 0.18
-B = HIP + ax * 1.15 + V((0.3, 0, 0)) + back_n * 0.18
-body.append(rod(A, B, 0.022, wood, 8))
-for t in (0.25, 0.55):
-    body.append(T.cyl(0.03, 0.05, loc=tuple(A.lerp(B, t)), rot=aim(B - A), mat=leather, n=8))
-body.append(T.cyl(0.032, 0.07, loc=tuple(B), rot=aim(B - A), mat=blade, n=8))
-d = (B - A).normalized()
-e = (V((1, 0, 0)) - d * d.x).normalized()
-nb = e.cross(d).normalized()
-secs = []
-for k in range(9):
-    s = k / 8
-    c = B + e * (0.7 * s) - d * (0.22 * s * s) + d * 0.03
-    tg = (e * 0.7 - d * (0.44 * s)).normalized()
-    wv = nb.cross(tg).normalized()
-    if wv.dot(-d) < 0:
-        wv = -wv
-    w = 0.13 * (1 - s) ** 0.8 + 0.004
-    th = 0.012 * (1 - s) + 0.003
-    secs.append([tuple(c + nb * th), tuple(c - wv * w * 0.15 + nb * th * 0.3), tuple(c - nb * th), tuple(c + wv * w - nb * 0.001)])
-body.append(T.loft(secs, mat=blade, angle=40.0))
-for sx in (1, -1):
-    body.append(strip([SHO + V((sx * 0.17, 0.0, 0.03)) + back_n * 0.14, HIP.lerp(SHO, 0.4) + V((-sx * 0.2, 0, 0)) + back_n * 0.15], 0.045, 0.012, leather, up=back_n))
+import grimm_rider  # a sculpt, not parts (owner: "not a Lego driver")
+body += grimm_rider.build(BX, dict(coat=coat, leather=leather, helmet=helmet, visor=visor, wood=wood, blade=blade, lining=lining, metal=gun_steel))
 
 # ---------------------------------------------------------------- wheels (axle along X, outer face at +X) and the spinner
 
@@ -279,6 +215,10 @@ if "--shape" in sys.argv:
     T.preview(out.replace(".png", "_r.png"), size=(1000, 700), eye=(5.0, 0.1, 1.0), look=(0, 0.0, 0.9), fov=40, samples=12)
     T.preview(out.replace(".png", "_f.png"), size=(1000, 700), eye=(-0.1, 5.5, 1.3), look=(0, 0, 0.9), fov=40, samples=12)
     T.preview(out.replace(".png", "_b.png"), size=(1000, 700), eye=(1.8, -4.6, 2.6), look=(0, 0, 0.7), fov=40, samples=12)
+    if "--rider" in sys.argv:  # close-ups of the rider
+        T.preview(out.replace(".png", "_rf.png"), size=(900, 900), eye=(-2.2, 1.6, 2.2), look=(BX, -0.5, 1.45), fov=36, samples=16)
+        T.preview(out.replace(".png", "_rb.png"), size=(900, 900), eye=(-1.6, -2.6, 2.4), look=(BX, -0.6, 1.4), fov=36, samples=16)
+        T.preview(out.replace(".png", "_rs.png"), size=(900, 900), eye=(-3.0, -0.4, 1.6), look=(BX, -0.4, 1.35), fov=36, samples=16)
     sys.exit(0)
 
 # ---------------------------------------------------------------- bake: the shape here, the paint from the original
