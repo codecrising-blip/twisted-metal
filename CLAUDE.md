@@ -96,10 +96,10 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 | Character | Vehicle from | Driver from |
 |---|---|---|
 | Sweet Tooth — Needles Kane | TM 2012 truck (`TM2012SweetToothRender`) | Head-On (`Screen_shot_2012-02-05...`) |
-| Roadkill — Marcus Kane | TM1 | Head-On |
+| Roadkill — Marcus Kane | TM2 (round 20; was TM1) | Head-On |
 | Outlaw — Jamie Roberts (a woman) | TM2 Outlaw 2 (`TM2Outlaw2Render`) | TM2 (`TM2JamieRobertsPSX`) |
-| Axel | TM4 Super Axel | — |
-| Mr. Grimm | Black | Black |
+| Axel | TM2 (round 20; NOT Super Axel) | TM2 (story: later, its own arc) |
+| Mr. Grimm | TM2 (bike + weapon sidecar, TM2 helmet) | Head-On: grim reaper coat + scythe |
 | Shadow — Raven | TM2 (exact TM2 design: purple hearse, black roof) | Black (Raven) |
 | Mr. Slam — Simon Whittlebone | Head-On | Head-On, but alive (not a ghost) |
 | Hammerhead — Mike and Stu | TM2 | TM2 |
@@ -561,6 +561,11 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   (`Mesh_1348.002`) scaled to 1.8 m (loose-part centres/sizes + PCA for tilted parts), front turned to +Y, then our own
   detailed build at S = 1.75/1.8; TM 2012 clown head kept (owner, round 19). Same nodes/markers as before.
   Scan tools: render/measure scripts were scratch (bpy: open the .blend with `use_scripts=False`).
+  **Mr. Grimm remade** (`build_mr_grimm.py`, ~11.7k tris): TM2 red sport bike + armoured weapon sidecar on the right
+  (wedge nose, 3 lamps, bone skull on its back, 6-barrel gatling = `spinner`, brass rack + belt), rider in TM2's round
+  black helmet + Death's coat (tattered tails, hood down, bell sleeves, scythe on his back). Wheels: m_wheel_fl/rl =
+  bike, m_wheel_rr = sidecar (all R 0.36). `BlenderCars.LEAN` (Grimm 0.08), `SHADOW`. `tests/_car_close.gd -- id out
+  fwd,right,up [fov]` = one model up close on the pavers.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

@@ -7,7 +7,9 @@ class_name BlenderCars
 ## Built by tools/blender/build_<id>.py.
 
 const EXHAUST_DIR := {"sweet_tooth": Vector3.UP}
-const SHADOW := {"sweet_tooth": Vector2(3.2, 7.4), "outlaw": Vector2(2.7, 5.6)}
+const SHADOW := {"sweet_tooth": Vector2(3.2, 7.4), "outlaw": Vector2(2.7, 5.6), "mr_grimm": Vector2(2.4, 3.6)}
+## How far the body rolls in turns (radians). Grimm's bike has a sidecar bolted on: it barely leans.
+const LEAN := {"mr_grimm": 0.08}
 
 
 static func has(id: String) -> bool:
@@ -91,6 +93,8 @@ static func build(id: String) -> Node3D:
 		cone_at = -spring.position
 	if marks.has("m_cone"):
 		_cone_fire(m, (marks["m_cone"] as Transform3D).origin + cone_at, cone_parent)
+	if LEAN.has(id):
+		m.set_meta("lean", LEAN[id])
 	HeroModels._ground_shadow(m, SHADOW.get(id, Vector2(2.8, 5.8)))
 	return m
 
