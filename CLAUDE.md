@@ -550,6 +550,9 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   ("goofy", "crayons"), round tube lips ("pipes"), big eyes, short forehead, then too much forehead (hairline brought
   forward, `SEAM` 0). `build(c, s, parts, decals, regions, unbake)`: `unbake` maps bake points back when the caller
   moves the meshes after building (the robot). Gotcha: `T.preview(tex=...)` needs `T._finish_materials` first.
+- **3D references (owner, after round 19):** `docs/reference/3d_models/` (see its README): the TMB vehicle meshes
+  (PS2 rip, 19 cars incl. Sweet Bot, shapes only, no textures) + clay sheet; Sketchfab TM2 Axel / roster are embed
+  links only (not downloadable, sketchfab.com blocked here). Use for proportions; never ship the ripped meshes.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
