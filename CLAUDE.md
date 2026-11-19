@@ -571,6 +571,14 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   Method: shapes from the 3D references, colours projected onto the model from the owner's colour shots (front,
   back, left, right, top + 3/4 front and back, car filling the screen, flat light), TM2's own art (skull, flames) from
   the textured roster zip.
+  **Grimm v2 built that way** (`build_mr_grimm.py`, ~11.4k tris): shape from the owner's 7 HD views (`docs/reference/Mr
+  Grimm F/B/L/R/T/IL/IR.jpeg`) at the original's sizes (rip x25: 3.17 x 1.86 m, wheels r 0.45 at +-1.12, sidecar on the
+  right with ramp + skull at the back, slot grid, 10-plate magazine, 6-barrel gatling); colours = `T.ps1_reference(zip,
+  "mg", 25)` + `T.transfer_colors(g, ..., [tm2, tm2_metal])` after `gbuffer` (ray back along each texel's normal onto
+  the original, read its UV, sample the Lanczos-upscaled texture); clean materials; wheels/spinner/rider keep their own
+  materials. NOTHING invented (owner: the v1 "GRIMM" stencil was guessing; never add text, holes or parts unasked).
+  The owner's 'colour' shots of the HD roster are grey (that model is unpainted): colours only come from the rip.
+  `T.lathe` caps its end rings (a tyre becomes a solid disc): use an open ring (`ring_solid` in build_mr_grimm.py).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

@@ -1272,3 +1272,110 @@ def preview(path, objs=None, size=(960, 540), eye=(4.5, -6.0, 3.2), look=(0, 0, 
     for o in made:
         bpy.data.objects.remove(o)
     return path
+
+
+# ------------------------------------------------------------------ TM2 colour transfer (round 20)
+
+def ps1_reference(zip_path, prefix, scale, out_dir=None):
+    """The original TM2 car from the textured roster rip (docs/reference/3d_models/tm2_roster_textured_obj.zip):
+    every triangle whose texture starts with `prefix` (e.g. "mg" = Mr. Grimm), turned into our space (the rip looks
+    along +X with its right at -Y: we look along +Y, right +X), centred in X/Y, standing on z = 0, `scale`d to metres.
+    Returns (tris (n,3,3), uvs (n,3,2), texture (H,W,3) linear float). The imported objects are removed again."""
+    import tempfile
+    import zipfile
+    from PIL import Image as _Img
+    tmp = out_dir or tempfile.mkdtemp()
+    zipfile.ZipFile(zip_path).extractall(tmp)
+    objf = [f for f in os.listdir(tmp) if f.endswith(".obj")][0]
+    before = set(bpy.data.objects)
+    bpy.ops.wm.obj_import(filepath=os.path.join(tmp, objf))
+    new = [o for o in bpy.data.objects if o not in before]
+    verts, uvs, tex = [], [], None
+    for ob in new:
+        if ob.type != "MESH":
+            continue
+        me = ob.data
+        uvl = me.uv_layers.active.data
+        mw = ob.matrix_world
+        for p in me.polygons:
+            m = me.materials[p.material_index] if me.materials else None
+            node = None
+            if m is not None and m.node_tree is not None:
+                node = next((n for n in m.node_tree.nodes if n.type == "TEX_IMAGE" and n.image), None)
+            if node is None or not os.path.basename(node.image.filepath).startswith(prefix):
+                continue
+            tex = tex or os.path.join(tmp, os.path.basename(node.image.filepath))
+            loops = list(p.loop_indices)
+            for k in range(1, len(loops) - 1):
+                for li in (loops[0], loops[k], loops[k + 1]):
+                    verts.append((mw @ me.vertices[me.loops[li].vertex_index].co)[:])
+                    uvs.append(uvl[li].uv[:])
+    for ob in new:
+        me = ob.data if ob.type == "MESH" else None
+        bpy.data.objects.remove(ob)
+        if me is not None and me.users == 0:
+            bpy.data.meshes.remove(me)
+    V = np.array(verts, dtype=np.float64)
+    V = np.stack([-V[:, 1], V[:, 0], V[:, 2]], axis=1)
+    lo, hi = V.min(0), V.max(0)
+    V -= np.array([(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, lo[2]])
+    V *= scale
+    img = np.asarray(_Img.open(tex).convert("RGB"), dtype=np.float32) / 255.0
+    lin = np.where(img <= 0.04045, img / 12.92, ((img + 0.055) / 1.055) ** 2.4)
+    return V.reshape(-1, 3, 3), np.array(uvs, dtype=np.float64).reshape(-1, 3, 2), lin
+
+
+def transfer_colors(g, tris, uvs, tex, mats, ray=0.3, reach=0.8, upscale=4):
+    """Paint the baked base colour of every texel of materials `mats` with the colour the original car has at that
+    spot: a ray from just outside the surface back along its normal finds the original's surface (else the nearest
+    point), its UV is read off the triangle there, and the texture (upscaled smoothly, not pixel blocks) is sampled.
+    Edits g["base"] in place; returns how many texels were painted."""
+    from mathutils.bvhtree import BVHTree
+    from PIL import Image as _Img
+    n = len(tris)
+    bvh = BVHTree.FromPolygons([tuple(v) for v in tris.reshape(-1, 3)], [(3 * i, 3 * i + 1, 3 * i + 2) for i in range(n)])
+    keep = [m["tm_idx"] for m in mats]
+    sel = g["cover"].reshape(-1) & np.isin(g["idx"].reshape(-1), keep)
+    ids = np.nonzero(sel)[0]
+    P = g["pos"].reshape(-1, 3)[ids]
+    N = g["nrm"].reshape(-1, 3)[ids]
+    hp = np.zeros((len(ids), 3))
+    hf = np.full(len(ids), -1, dtype=np.int64)
+    for k in range(len(ids)):
+        p = Vector(P[k].tolist())
+        d = Vector(N[k].tolist())
+        loc, nor, fi, dist = bvh.ray_cast(p + d * ray, -d, ray * 2.0)
+        if fi is None:
+            loc, nor, fi, dist = bvh.find_nearest(p, reach)
+        if fi is not None:
+            hp[k] = loc[:]
+            hf[k] = fi
+    ok = hf >= 0
+    A, B, C = tris[hf[ok], 0], tris[hf[ok], 1], tris[hf[ok], 2]
+    v0, v1, v2 = B - A, C - A, hp[ok] - A
+    d00 = (v0 * v0).sum(1); d01 = (v0 * v1).sum(1); d11 = (v1 * v1).sum(1)
+    d20 = (v2 * v0).sum(1); d21 = (v2 * v1).sum(1)
+    den = np.maximum(d00 * d11 - d01 * d01, 1e-12)
+    wb = (d11 * d20 - d01 * d21) / den
+    wc = (d00 * d21 - d01 * d20) / den
+    wa = 1.0 - wb - wc
+    U = uvs[hf[ok]]
+    uv = U[:, 0] * wa[:, None] + U[:, 1] * wb[:, None] + U[:, 2] * wc[:, None]
+    th, tw = tex.shape[:2]
+    # smooth upscale per channel (Lanczos), then bilinear sampling
+    chans = []
+    for c in range(3):
+        im = _Img.fromarray((tex[..., c] * 255.0).astype(np.float32), mode="F")
+        chans.append(np.asarray(im.resize((tw * upscale, th * upscale), _Img.LANCZOS), dtype=np.float32) / 255.0)
+    up = np.clip(np.stack(chans, axis=2), 0, 1)
+    H2, W2 = up.shape[:2]
+    x = np.clip(uv[:, 0] % 1.0, 0, 1) * (W2 - 1)
+    y = np.clip(1.0 - (uv[:, 1] % 1.0), 0, 1) * (H2 - 1)
+    x0 = np.floor(x).astype(int); y0 = np.floor(y).astype(int)
+    x1 = np.minimum(x0 + 1, W2 - 1); y1 = np.minimum(y0 + 1, H2 - 1)
+    fx = (x - x0)[:, None]; fy = (y - y0)[:, None]
+    col = (up[y0, x0] * (1 - fx) * (1 - fy) + up[y0, x1] * fx * (1 - fy) + up[y1, x0] * (1 - fx) * fy + up[y1, x1] * fx * fy)
+    base = g["base"].reshape(-1, 3)
+    base[ids[ok]] = col
+    g["base"] = base.reshape(g["base"].shape)
+    return int(ok.sum())
