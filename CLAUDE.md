@@ -592,6 +592,14 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   sank into the seat (now it follows the measured seat/tail tops 3 cm above, flat over the tail's width, `drape`
   only past `flat`); the belt went. Owner's standing order: work as an artist, appearance first, build tools when
   needed, keep improving Roadkill and Axel until satisfied, across sessions.
+  **Roadkill model** (`build_roadkill.py`, 5.39 m, colours transferred from rip "rk"; the HD car is lower than the rip:
+  roof 1.32 vs 1.55, shape follows the HD). **Axel model** (`build_axel.py`): the rip's man is a flat card, so his
+  colours are set per part from AX-5/6 (bronze skin, red goggles, blue jeans, brown boots, dark straps); sizes from
+  the HD front view at 1.8 m for the man: tyres r 1.39 x 1.18 m at +-1.31, frame plates +-0.46..0.63, hands locked in
+  red-lit blocks beside his head, silver rings (AX-4) at the plates' feet; only `wheel_r` + m_wheel_rr/rl (no
+  steering wheels). Tread grooves: build one row at the top of the tyre, `T.dup` it round the axle, `view_layer.update()`
+  before `T.apply` (rotating boxes in place with Euler angles scattered them). `Sculpt`/`cloth` are imported from
+  grimm_rider.py. Neither car is in the roster yet.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
