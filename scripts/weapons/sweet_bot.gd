@@ -86,9 +86,9 @@ func _ready() -> void:
 	add_to_group(&"bots")
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
-	box.size = Vector3(1.75, 1.7, 1.2) # round 19 (owner): the top half on wheels, ~1.75 m tall
+	box.size = Vector3(1.5, 1.75, 1.2) # mini TMB Sweet Bot (owner, after round 19): ~1.75 m tall, 1.5 m wide
 	shape.shape = box
-	shape.position = Vector3(0, 0.85, 0)
+	shape.position = Vector3(0, 0.875, 0)
 	add_child(shape)
 	_model = Node3D.new()
 	add_child(_model)

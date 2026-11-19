@@ -553,6 +553,14 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
 - **3D references (owner, after round 19):** `docs/reference/3d_models/` (see its README): the TMB vehicle meshes
   (PS2 rip, 19 cars incl. Sweet Bot, shapes only, no textures) + clay sheet; Sketchfab TM2 Axel / roster are embed
   links only (not downloadable, sketchfab.com blocked here). Use for proportions; never ship the ripped meshes.
+- **Round 20, full text `docs/design/25-owner-round-20.md`:** more references in `docs/reference/3d_models/`: TM2 roster
+  WITH textures (`tm2_roster_textured_obj.zip`, 15 cars), 4-view clay shots of 11 TM2 cars (`tm2_cars_4views/`), stage
+  meshes (`maps/`). Drivers (owner): Axel = the TMB-art man chained between the wheels with red missile boxes behind
+  his shoulders; Mr. Grimm = Head-On clothes + TM2's round black helmet; Roadkill = bearded Marcus in a long coat.
+  **Sweet Bot third pass = a mini TMB Sweet Bot "with no guessing"**: every part placed from the TMB mesh
+  (`Mesh_1348.002`) scaled to 1.8 m (loose-part centres/sizes + PCA for tilted parts), front turned to +Y, then our own
+  detailed build at S = 1.75/1.8; TM 2012 clown head kept (owner, round 19). Same nodes/markers as before.
+  Scan tools: render/measure scripts were scratch (bpy: open the .blend with `use_scripts=False`).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
