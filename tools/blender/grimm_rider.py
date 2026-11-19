@@ -61,7 +61,7 @@ class Sculpt:
         return ob
 
 
-def cloth(path, width, thick, mat, up, folds=3, fold_depth=0.018, taper=1.0, ragged=0.0, sub=5, seed=0, m=10):
+def cloth(path, width, thick, mat, up, folds=3, fold_depth=0.018, taper=1.0, ragged=0.0, sub=5, seed=0, m=10, drape=0.0, drape_from=0.0, flat=0.0):
     """A panel of heavy cloth along `path` (top to hem): `width` across, soft folds running down it, the hem
     ragged by `ragged` metres. Sections are dense so it shades smoothly."""
     pts = [V(p) for p in path]
@@ -84,6 +84,9 @@ def cloth(path, width, thick, mat, up, folds=3, fold_depth=0.018, taper=1.0, rag
             u = j / (m - 1) * 2 - 1
             fold = math.sin((u * folds + 0.25) * math.pi) * fold_depth * (0.4 + 0.6 * s)
             q = p + side * u * w + nrm * fold
+            if drape > 0.0:  # the edges hang down over whatever it lies on
+                over = max(0.0, (abs(u) * w - flat) / max(1e-3, w - flat))  # flat across what it lies on, then down
+                q = q - nrm * drape * over * over * min(1.0, max(0.0, (s - drape_from) / 0.25))
             if i == n - 1 and ragged > 0:  # the hem: uneven, torn
                 q = q - t * ragged * (0.5 + 0.5 * math.sin(u * 9.0 + seed * 1.7)) * (0.6 + 0.4 * math.cos(u * 23.0 + seed))
             front.append(q + nrm * thick / 2)
@@ -94,9 +97,10 @@ def cloth(path, width, thick, mat, up, folds=3, fold_depth=0.018, taper=1.0, rag
     return ob
 
 
-def build(BX, mats):
+def build(BX, mats, regions=None):
     """The rider on a bike whose centre line is x = BX. mats: coat, leather, helmet, visor, wood, blade."""
     coat, leather, helmet, visor, wood, blade, lining, metal = (mats[k] for k in ("coat", "leather", "helmet", "visor", "wood", "blade", "lining", "metal"))
+    regions = regions if regions is not None else []
     parts = []
     HIP = V((BX, -0.52, 1.17))
     CHEST = V((BX, -0.66, 1.46))
@@ -161,9 +165,13 @@ def build(BX, mats):
                            0.34, 0.014, coat, V((sx, 0, 0)), folds=2, fold_depth=0.02, taper=1.35, ragged=0.07, seed=sx))
         parts.append(cloth([top + V((-sx * 0.012, 0.18, 0)), top + V((sx * 0.05, 0.27, -0.22)), top + V((sx * 0.08, 0.32, -0.45))],
                            0.03, 0.016, lining, V((sx, 0, 0)), folds=0, fold_depth=0.0, sub=3, m=3))
-    w0 = HIP + back_n * 0.12 + V((0, 0, 0.0))
-    parts.append(cloth([w0, w0 + V((0, -0.18, -0.06)), w0 + V((0, -0.36, -0.12)), w0 + V((0, -0.5, -0.3)), w0 + V((0, -0.56, -0.55))],
-                       0.44, 0.014, coat, V((0, -0.3, 1)), folds=3, fold_depth=0.025, taper=1.5, ragged=0.09, seed=3))
+    # the back of the coat lies ON the bike: from his waist it settles on the seat behind him, follows the tail's
+    # top 3 cm above it, its edges hanging down the tail's sides, and falls over the tail's end (heights measured
+    # off the bike: seat top 1.075, tail top 1.14 at y -0.81 rising to 1.23 at -1.25)
+    back = [V((BX, -0.67, 1.31)), V((BX, -0.75, 1.19)), V((BX, -0.86, 1.185)), V((BX, -1.05, 1.225)), V((BX, -1.23, 1.265)),
+            V((BX, -1.31, 1.13)), V((BX, -1.34, 0.9))]
+    parts.append(cloth(back, 0.42, 0.014, coat, V((0, 0, 1)), folds=3, fold_depth=0.012, taper=1.45, ragged=0.08, seed=3, sub=4,
+                       drape=0.17, drape_from=0.15, flat=0.17))
     # the coat's front: two lapels down the chest from the collar, the dark red lining showing at their edges
     front_n = -back_n
     for sx in (1, -1):
@@ -171,14 +179,6 @@ def build(BX, mats):
         b = HIP.lerp(CHEST, 0.45) + V((sx * 0.05, 0, 0)) + front_n * 0.13
         parts.append(cloth([a, a.lerp(b, 0.5) + front_n * 0.02, b], 0.08, 0.016, coat, front_n, folds=0, fold_depth=0.0, sub=3, m=4, taper=0.5))
         parts.append(cloth([a + V((sx * 0.04, 0, 0)), b + V((sx * 0.025, 0, 0))], 0.02, 0.018, lining, front_n, folds=0, fold_depth=0.0, sub=3, m=3))
-    # the belt round the waist, a square buckle in front
-    belt = []
-    for k in range(13):
-        a = 2 * math.pi * k / 12
-        belt.append(HIP + up_t * 0.12 + V((math.sin(a) * 0.215, 0, 0)) + front_n * math.cos(a) * 0.165)
-    parts.append(cloth(belt, 0.055, 0.016, leather, up_t, folds=0, fold_depth=0.0, sub=2, m=3))
-    parts.append(T.box((0.07, 0.02, 0.06), loc=tuple(HIP + up_t * 0.12 + front_n * 0.172), mat=metal, bevel=0.008))
-    # the inside of the skirt panels shows the lining
     # the hood, down: a heavy fold of cloth lying round the back of the neck and over the shoulders
     arc = []
     for k in range(9):
@@ -191,19 +191,7 @@ def build(BX, mats):
         a = math.radians(-120 + k * 40)
         col.append(NECK + V((math.sin(a) * 0.1, -math.cos(a) * 0.09, 0.03)))
     parts.append(cloth(col, 0.13, 0.012, coat, up_t, folds=1, fold_depth=0.004, sub=2, m=6))
-    # TM2's helmet: one round shell; the visor is painted into its own surface (a band of faces across the front
-    # at eye level take the visor material), so nothing floats in front of it
-    HC = NECK + up_t * 0.2 + V((0, -0.02, 0.0))
-    hs = T.sphere(0.165, loc=tuple(HC), mat=helmet, n=24, scale=(0.94, 1.1, 1.0))
-    hs.data.materials.append(visor)
-    mw = hs.matrix_world
-    for p in hs.data.polygons:
-        c = mw @ p.center - HC
-        ang = math.degrees(math.atan2(c.x, c.y))      # 0 = straight ahead
-        if abs(ang) < 68 and -0.035 < c.z < 0.05 and c.y > 0:
-            p.material_index = 1
-    hs.data.polygons.foreach_set("use_smooth", [True] * len(hs.data.polygons))
-    parts.append(hs)
+    parts += helmet_parts(NECK + up_t * 0.2 + V((0, -0.02, 0.0)), mats, regions)
     # the scythe across his back: snath from the left hip up past the right shoulder, the blade out to the right
     A = HIP + up_t * (-0.08) + V((-0.28, 0, 0)) + back_n * 0.2
     Bt = HIP + up_t * 1.15 + V((0.3, 0, 0)) + back_n * 0.2
@@ -236,4 +224,85 @@ def build(BX, mats):
         b = HIP.lerp(CHEST, 0.6) + V((-sx * 0.2, 0, 0)) + back_n * 0.15
         parts.append(cloth([a, a.lerp(b, 0.5) + back_n * 0.03, b], 0.045, 0.012, leather, back_n, folds=0, fold_depth=0.0, sub=3, m=3))
     print("rider triangles: %d" % T.tri_count(parts))
+    return parts
+
+
+def helmet_parts(HC, mats, regions):
+    """TM2's full-face helmet, made like a real one: a sculpted shell (crown, a chin bar jutting forward, the back
+    flaring over the neck), a smoked visor lying on the shell across the eye port with a rubber gasket round it,
+    pivot plates at its ends, three vents in the chin bar, a padded roll round the neck opening. The visor is its
+    own glass paint, darkest low down and catching the sky at the top, so it reads against the black shell."""
+    from mathutils.bvhtree import BVHTree
+    shell_m, visor_m, rubber_m, metal_m = mats["helmet"], mats["visor"], mats["leather"], mats["metal"]
+    parts = []
+    H = Sculpt("grimm_helmet", 0.012)
+    H.ball(HC, 0.165, (0.95, 1.08, 1.0))                               # the crown
+    H.ball(HC + V((0, -0.05, -0.06)), 0.14, (1.0, 0.9, 0.85))           # the back, flaring over the neck
+    H.ball(HC + V((0, 0.1, -0.1)), 0.085, (1.25, 0.85, 0.75))           # the chin bar, jutting forward
+    for sx in (1, -1):
+        H.ball(HC + V((sx * 0.08, 0.05, -0.08)), 0.08)                  # cheeks
+    shell = H.mesh(shell_m, 0.12)
+    parts.append(shell)
+    bm = bmesh.new()
+    bm.from_mesh(shell.data)
+    bm.transform(shell.matrix_world)
+    bvh = BVHTree.FromBMesh(bm)
+
+    def on_shell(yaw, pitch, lift):
+        d = V((math.sin(math.radians(yaw)) * math.cos(math.radians(pitch)), math.cos(math.radians(yaw)) * math.cos(math.radians(pitch)), math.sin(math.radians(pitch))))
+        hit = bvh.ray_cast(HC + d * 0.4, -d, 0.5)
+        p = hit[0] if hit[0] is not None else HC + d * 0.17
+        return p + d * lift
+
+    # the visor: a grid laid on the shell 5 mm proud, 2 layers
+    Y0, Y1, P0, P1 = -64.0, 64.0, -16.0, 20.0
+    nu, nv = 18, 6
+    vb = bmesh.new()
+    outer = [[vb.verts.new(on_shell(Y0 + (Y1 - Y0) * i / nu, P0 + (P1 - P0) * j / nv, 0.007)) for i in range(nu + 1)] for j in range(nv + 1)]
+    inner = [[vb.verts.new(on_shell(Y0 + (Y1 - Y0) * i / nu, P0 + (P1 - P0) * j / nv, 0.001)) for i in range(nu + 1)] for j in range(nv + 1)]
+    for j in range(nv):
+        for i in range(nu):
+            vb.faces.new((outer[j][i], outer[j][i + 1], outer[j + 1][i + 1], outer[j + 1][i]))
+            vb.faces.new((inner[j][i], inner[j + 1][i], inner[j + 1][i + 1], inner[j][i + 1]))
+    for i in range(nu):  # close the edges
+        vb.faces.new((outer[0][i], inner[0][i], inner[0][i + 1], outer[0][i + 1]))
+        vb.faces.new((outer[nv][i], outer[nv][i + 1], inner[nv][i + 1], inner[nv][i]))
+    for j in range(nv):
+        vb.faces.new((outer[j][0], outer[j + 1][0], inner[j + 1][0], inner[j][0]))
+        vb.faces.new((outer[j][nu], inner[j][nu], inner[j + 1][nu], outer[j + 1][nu]))
+    bmesh.ops.recalc_face_normals(vb, faces=vb.faces[:])
+    vis = T._new_obj("visor", vb, visor_m, (0, 0, 0), (0, 0, 0), 60.0)
+    vis.data.polygons.foreach_set("use_smooth", [True] * len(vis.data.polygons))
+    parts.append(vis)
+    # the gasket: a rubber lip all round the visor's edge
+    rim = [on_shell(Y0 + (Y1 - Y0) * i / nu, P0 - 1.5, 0.006) for i in range(nu + 1)]
+    rim += [on_shell(Y1 + 1.5, P0 + (P1 - P0) * j / nv, 0.006) for j in range(nv + 1)]
+    rim += [on_shell(Y1 - (Y1 - Y0) * i / nu, P1 + 1.5, 0.006) for i in range(nu + 1)]
+    rim += [on_shell(Y0 - 1.5, P1 - (P1 - P0) * j / nv, 0.006) for j in range(nv + 1)]
+    parts.append(T.tube([tuple(p) for p in rim], 0.008, mat=rubber_m, n=6))
+    for sx in (1, -1):  # pivot plates where the visor hinges
+        p = on_shell(sx * (Y1 + 9), (P0 + P1) / 2, 0.004)
+        n = (p - HC).normalized()
+        q = n.to_track_quat("Z", "Y").to_euler()
+        parts.append(T.cyl(0.026, 0.008, loc=tuple(p), rot=(math.degrees(q.x), math.degrees(q.y), math.degrees(q.z)), mat=metal_m, n=12))
+    for k in range(3):  # vents in the chin bar
+        p = on_shell((k - 1) * 14, -34, 0.002)
+        n = (p - HC).normalized()
+        q = n.to_track_quat("Z", "Y").to_euler()
+        parts.append(T.box((0.03, 0.01, 0.006), loc=tuple(p), rot=(math.degrees(q.x), math.degrees(q.y), math.degrees(q.z)), mat=rubber_m))
+    # the padded roll round the neck opening
+    roll = []
+    for k in range(13):
+        a = 2 * math.pi * k / 12
+        roll.append(HC + V((math.sin(a) * 0.13, math.cos(a) * 0.15 - 0.02, -0.16)))
+    parts.append(T.tube([tuple(p) for p in roll], 0.022, mat=rubber_m, n=8))
+    # the visor's paint: smoke glass catching the sky toward its top
+    hcz, hcy = HC.z, HC.y
+    import numpy as _np
+
+    def sky(P, N):
+        t = _np.clip((P[:, 2] - (hcz - 0.03)) / 0.08, 0, 1)
+        near = (_np.abs(P[:, 1] - hcy) < 0.3)
+        return (t * t * 0.75 * near).astype(_np.float32)
+    regions.append((sky, (0.42, 0.5, 0.6), ("glassy",)))
     return parts

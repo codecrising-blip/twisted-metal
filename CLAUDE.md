@@ -586,6 +586,12 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   dark red lining at the edges, charcoal-blue coat (pure black read as a flat shadow), TM2's round helmet with the
   visor painted into its own faces (a floating visor strip looked like glasses), the scythe; ~7k triangles.
   Never build a person from separate primitives again: sculpt one surface.
+  Owner round 2 on the rider: helmet was "a black Lego ball" (now `helmet_parts`: sculpted shell + chin bar, visor laid
+  on the shell by ray projection with a rubber gasket, pivots, vents, neck roll; visor = kind "glassy" + a sky
+  gradient region: ModelLib's shared "glass" is near black and vanishes on a black helmet); the back of the coat
+  sank into the seat (now it follows the measured seat/tail tops 3 cm above, flat over the tail's width, `drape`
+  only past `flat`); the belt went. Owner's standing order: work as an artist, appearance first, build tools when
+  needed, keep improving Roadkill and Axel until satisfied, across sessions.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

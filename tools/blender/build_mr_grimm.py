@@ -31,8 +31,8 @@ gun_steel = T.M("steel", (0.42, 0.42, 0.42), wear=0.0, rust=0.0, dirt=0.0, rough
 rubber = T.M("rubber", (0.018, 0.018, 0.018), dirt=0.0)
 hub = T.M("plastic", (0.6, 0.58, 0.52), wear=0.0, dirt=0.0, rough=0.35)
 # the rider (not from the original: the owner's clothes)
-helmet = T.M("plastic", (0.012, 0.012, 0.014), wear=0.0, dirt=0.0, rough=0.25)
-visor = T.glass((0.16, 0.18, 0.22))
+helmet = T.M("plastic", (0.02, 0.02, 0.023), wear=0.0, dirt=0.0, rough=0.18)
+visor = T.M("glassy", (0.03, 0.04, 0.055), wear=0.0, rust=0.0, dirt=0.0)
 coat = T.M("cloth", (0.065, 0.07, 0.09), dirt=0.0)
 lining = T.M("cloth", (0.16, 0.02, 0.025), dirt=0.0)
 leather = T.M("plastic", (0.03, 0.027, 0.025), wear=0.0, dirt=0.0, rough=0.4)
@@ -157,7 +157,7 @@ markers.append(T.marker("m_head", (BX, 0.95, 1.2)))
 
 # ---------------------------------------------------------------- the rider: TM2's pose and helmet, Death's coat
 import grimm_rider  # a sculpt, not parts (owner: "not a Lego driver")
-body += grimm_rider.build(BX, dict(coat=coat, leather=leather, helmet=helmet, visor=visor, wood=wood, blade=blade, lining=lining, metal=gun_steel))
+body += grimm_rider.build(BX, dict(coat=coat, leather=leather, helmet=helmet, visor=visor, wood=wood, blade=blade, lining=lining, metal=gun_steel), regions)
 
 # ---------------------------------------------------------------- wheels (axle along X, outer face at +X) and the spinner
 
@@ -216,6 +216,7 @@ if "--shape" in sys.argv:
     T.preview(out.replace(".png", "_f.png"), size=(1000, 700), eye=(-0.1, 5.5, 1.3), look=(0, 0, 0.9), fov=40, samples=12)
     T.preview(out.replace(".png", "_b.png"), size=(1000, 700), eye=(1.8, -4.6, 2.6), look=(0, 0, 0.7), fov=40, samples=12)
     if "--rider" in sys.argv:  # close-ups of the rider
+        T.preview(out.replace(".png", "_rh.png"), size=(900, 900), eye=(-0.9, 0.2, 2.0), look=(BX, -0.86, 1.85), fov=30, samples=16)
         T.preview(out.replace(".png", "_rf.png"), size=(900, 900), eye=(-2.2, 1.6, 2.2), look=(BX, -0.5, 1.45), fov=36, samples=16)
         T.preview(out.replace(".png", "_rb.png"), size=(900, 900), eye=(-1.6, -2.6, 2.4), look=(BX, -0.6, 1.4), fov=36, samples=16)
         T.preview(out.replace(".png", "_rs.png"), size=(900, 900), eye=(-3.0, -0.4, 1.6), look=(BX, -0.4, 1.35), fov=36, samples=16)
