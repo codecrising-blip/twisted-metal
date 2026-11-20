@@ -47,6 +47,12 @@ const KEYS := {
 	"pick_3": [KEY_3],
 	"pick_4": [KEY_4],
 	"pick_5": [KEY_5],
+	# Round 22: the pause menu's opponent pick (6 7 8 9 0 = the same five cars as 1-5).
+	"pick_6": [KEY_6],
+	"pick_7": [KEY_7],
+	"pick_8": [KEY_8],
+	"pick_9": [KEY_9],
+	"pick_10": [KEY_0],
 }
 
 const MOUSE := {

@@ -641,6 +641,19 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   burn 4 s + throw; secondary `rim_shot` (`RimShot`: spiked tyre 45 m/s, 3 wall bounces, 20 a car, 2 cars). Axel's
   turbo flames: `BlenderCars.EXTRA_EXHAUST`. Tests waiting on projectiles must count physics frames (headless
   process frames run several times faster).
+- **Round 22, full text `docs/design/27-owner-round-22.md`:** **Zero tracking** on every straight weapon (owner):
+  `homing` 0 for the skull and the wheel clamp; `Vehicle.flies_straight()` = bullet or homing <= 0, and those get no
+  launch aim at the target (power, skull, clamp, charged cone fly along `level_forward()`); the MG has no aim assist
+  and no spread; Rim Shot rolls straight. **Charged missiles:** electric lime (no other missile has it), body 0.65
+  (`model_scale` 0.52), trail 0.65 (`trail_w` 0.39), `glow` 2.5 (emissive body, brighter nose/tail, additive halo in
+  `Projectile`), fire's tracking (1.1, seek 25); red = crimson `red_color`, `red_speed` 70. **Ghost skull:** the skull
+  mesh drawn with `scripts/fx/ghost_skull.gdshader` (red, unshaded, see-through, bright rim, drifting wisps, flicker),
+  two afterimages (`Projectile._ghost_step`, top-level copies 2/4 physics steps behind), faint aura, thin red streak,
+  red light, no FoamFire. The owner's reference video was NOT on GitHub (ask again). **Boomerang:** out = light
+  homing as before; on turning back it stores Roadkill's position (`_home`), bends to it, and once lined up and past it
+  flies straight on (moved away = lost). **Crowd Controller:** radius 10.2 (x0.85), throw = the Remote mine formula
+  (`launch` heights by class, falloff `k`, `push` 24, `blast_knock`). **Opponent pick:** pause menu keys 6 7 8 9 0
+  (`pick_6..pick_10`, `HUD.opponent_requested`, `main.opponent_car`), mirror matches allowed.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

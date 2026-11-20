@@ -7,6 +7,7 @@ extends CanvasLayer
 
 signal restart_requested
 signal driver_requested(index: int)
+signal opponent_requested(index: int) # round 22: pause menu 6 7 8 9 0
 signal music_requested # pause menu M: try the next theme
 
 var music_label := "" # shown in the pause menu
@@ -65,6 +66,7 @@ var player: Vehicle
 var camera: Camera3D
 var game_over := false
 var drivers: Array[String] = [] # names for the pause menu's driver pick (keys 1-5)
+var opponent_menu := false # round 22: the preview also offers the opponent (keys 6 7 8 9 0)
 
 var _post: ShaderMaterial
 var _fps_t := 0.0
@@ -326,6 +328,12 @@ func _handle_input() -> void:
 				GameFeel.ui("menu_select", get_tree())
 				driver_requested.emit(i)
 				return
+		for i in mini(drivers.size(), 5):
+			if Input.is_action_just_pressed("pick_%d" % (i + 6)):
+				get_tree().paused = false
+				GameFeel.ui("menu_select", get_tree())
+				opponent_requested.emit(i)
+				return
 
 
 func _heading_name(f: Vector3) -> String:
@@ -340,9 +348,14 @@ func _show_pause() -> void:
 
 func _driver_menu() -> String:
 	var parts: PackedStringArray = []
+	var foes: PackedStringArray = []
 	for i in mini(drivers.size(), 5):
 		parts.append("%d  %s" % [i + 1, drivers[i].to_upper()])
-	return "PICK A DRIVER:   " + "     ".join(parts)
+		foes.append("%d  %s" % [(i + 6) % 10, drivers[i].to_upper()])
+	var text := "PICK A DRIVER:   " + "     ".join(parts)
+	if opponent_menu:
+		text += "\nPICK AN OPPONENT:   " + "     ".join(foes)
+	return text
 
 
 func _update_target() -> void:

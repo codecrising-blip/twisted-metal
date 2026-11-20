@@ -104,7 +104,7 @@ const DEFS := {
 	# it can only turn the other way, no turbo, no reverse, and the scraping costs 25 more (WheelClamp).
 	"wheel_clamp": {
 		"label": "Wheel Clamp", "kind": "clamp", "color": Color(1.0, 0.78, 0.05),
-		"speed": 60.0, "damage": 15.0, "homing": 1.2, "seek": 30.0, "life": 0.85, "clamp": 5.0, "push": 1.4, "shake": 0.35,
+		"speed": 60.0, "damage": 15.0, "homing": 0.0, "life": 0.85, "clamp": 5.0, "push": 1.4, "shake": 0.35, # round 22: no tracking
 		"trail": Color(1.0, 0.8, 0.12), "trail_len": 0.45, "trail_w": 0.9,
 	},
 	# Energy move only (front / rear freeze), never a pickup.
@@ -163,7 +163,7 @@ const DEFS := {
 	# instant kills (a medium car, 280, takes five).
 	"reaper_skull": {
 		"label": "Reaper Skull", "kind": "skull", "color": Color(1.0, 0.55, 0.15), "special": true,
-		"speed": 85.0, "damage": 65.0, "homing": 0.6, "life": 2.5, "cooldown": 3.0, "recharge": 20.0, "push": 8.0,
+		"speed": 85.0, "damage": 65.0, "homing": 0.0, "life": 2.5, "cooldown": 3.0, "recharge": 20.0, "push": 8.0, # round 22: no tracking
 		"sound_db": 3.5, # round 21 (owner): the special's sound x1.5 louder
 		"squish": 0.08, "shake": 0.6,
 	},
@@ -171,13 +171,16 @@ const DEFS := {
 	# numbers from round 16): hold fire and a missile loads every charge_time / salvo_max s, up to 6 ("MAX
 	# MISSILE CHARGE"); let go and they stream out, 80% of homing's tracking, 8 each (48 if all hit). Held
 	# red_after s more they turn red: 70 for the six. A tap fires one.
+	# Round 22 (owner): thin (0.65 of the round 21 missile and trail), a colour no other missile has (electric
+	# lime), glowing 2.5x brighter than a normal missile (`glow`), the fire missile's tracking (homing 1.1, seek
+	# 25). Red (held 2 s past full): crimson and faster (`red_speed`).
 	"charged_missiles": {
-		"label": "Charged Missiles", "kind": "missile", "handler": "charged_salvo", "color": Color(1.0, 0.62, 0.2), "special": true,
-		"speed": 52.0, "damage": 8.0, "homing": 2.56, "seek": 45.0, "life": 2.8, "push": 1.5,
-		"trail": Color(1.0, 0.75, 0.4), "trail_len": 0.35, "trail_w": 0.6, "model_scale": 0.8,
+		"label": "Charged Missiles", "kind": "missile", "handler": "charged_salvo", "color": Color(0.55, 1.0, 0.12), "special": true,
+		"speed": 52.0, "damage": 8.0, "homing": 1.1, "seek": 25.0, "life": 2.8, "push": 1.5,
+		"trail": Color(0.7, 1.0, 0.35), "trail_len": 0.35, "trail_w": 0.39, "model_scale": 0.52, "glow": 2.5,
 		"squish": 0.03, "wobble": 0.2, "shake": 0.15,
 		"charge_time": 2.4, "salvo_max": 6, "salvo_gap": 0.09, "red_after": 2.0, "red_total": 70.0,
-		"red_color": Color(1.0, 0.12, 0.08), "cooldown": 1.0, "recharge": 16.0, "sound_db": 3.5,
+		"red_color": Color(0.86, 0.04, 0.2), "red_speed": 70.0, "cooldown": 1.0, "recharge": 16.0, "sound_db": 3.5,
 	},
 	# Roadkill's secondary (round 21; was his special in round 20): Boomerang Blast (design 01). A blade of
 	# welded scrap, light homing, out to "range" m or the first car it cuts, then back toward Roadkill: 16
@@ -194,7 +197,9 @@ const DEFS := {
 	# hard throw away (not a super heavy) and burning. Kills mines inside it and breaks any grab on Axel.
 	"crowd_controller": {
 		"label": "Crowd Controller", "kind": "ring", "color": Color(1.0, 0.55, 0.25), "special": true, "handler": "crowd_ring",
-		"spread": 0.35, "radius": 12.0, "damage": 50.0, "push": 20.0, "burn": 4.0,
+		# Round 22 (owner): 0.85 of the size (12 -> 10.2 m) and a Remote mine's throw ("launch" by class).
+		"spread": 0.35, "radius": 10.2, "damage": 50.0, "push": 24.0, "burn": 4.0,
+		"launch": {"light": 18.0, "medium": 12.6, "heavy": 8.1, "super": 4.5},
 		"cooldown": 1.0, "recharge": 15.0, "sound_db": 3.5,
 	},
 	# Axel's secondary: Rim Shot (design 01). A spiked tyre rolls along the ground at 45 m/s and bounces

@@ -35,21 +35,13 @@ static func fire(v: Vehicle, id: String, charged := false) -> void:
 			v.launch(id, v.target)
 
 
-## Napalm Cone (Sweet Tooth). Tap: homing cone. Charged: twice the damage, straight path.
+## Napalm Cone (Sweet Tooth). Tap: homing cone. Charged: twice the damage, dead straight (round 22: no aim at launch).
 static func _cone(v: Vehicle, id: String, def: Dictionary, charged: bool) -> void:
 	if not charged:
 		v.launch(id, v.target)
 		return
 	var from := v.straight_from(v.launch_point())
 	var dir := v.level_forward() # round 21: straight shots fly level with the ground
-	var t := v.target
-	if is_instance_valid(t) and not t.is_dead:
-		# Aimed sideways at launch like a power missile, kept level with the ground (round 21), no tracking.
-		var n := v.get_floor_normal() if v.is_on_floor() else Vector3.UP
-		var to_t := t.aim_point() - from
-		to_t -= n * to_t.dot(n)
-		if to_t.length() > 0.5 and dir.angle_to(to_t.normalized()) < deg_to_rad(25.0):
-			dir = to_t.normalized()
 	Projectile.spawn(v.get_parent(), id, from, dir, v, null, {
 		"damage": def.get("charged_damage", 90.0), "speed": def.get("charged_speed", 64.0),
 		"homing": 0.0, "charged": true, "push": 11.0, "squish": 0.1, "shake": 0.8, "trail_w": 1.8, "trail_len": 0.4,
@@ -79,7 +71,8 @@ static func _charged_salvo(v: Vehicle, id: String, def: Dictionary) -> void:
 	if red:
 		count = most
 		var rc: Color = def.get("red_color", Color(1.0, 0.12, 0.08))
-		over = {"damage": float(def.get("red_total", 70.0)) / most, "color": rc, "trail": rc, "trail_w": 0.75, "shake": 0.25}
+		over = {"damage": float(def.get("red_total", 70.0)) / most, "color": rc, "trail": rc.lerp(Color.WHITE, 0.15),
+			"speed": float(def.get("red_speed", 70.0)), "shake": 0.25} # crimson and faster (round 22)
 	var lock := v.target if is_instance_valid(v.target) and not v.target.is_dead else null
 	var gap := float(def.get("salvo_gap", 0.09))
 	for i in count:

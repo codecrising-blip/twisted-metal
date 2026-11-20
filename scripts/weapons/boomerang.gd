@@ -1,15 +1,15 @@
 class_name Boomerang
 extends Node3D
 ## Roadkill's Boomerang Blast (design 01, Roadkill): a spinning blade of welded scrap thrown ahead with
-## light homing, out to "range" metres or until it cuts a car, then it swings back toward where Roadkill
-## is NOW. Going out it deals "damage", coming back "return_damage" (twice, as in the series); one car can
-## take both. Walls break it either way; palms, street lights and stands are cut through. If Roadkill
+## light homing, out to "range" metres or until it cuts a car, then it swings back to where Roadkill WAS
+## at that moment (round 22) and flies straight on past it. Going out it deals "damage", coming back
+## "return_damage" (twice, as in the series); one car can take both. Walls break it either way; palms, street lights and stands are cut through. If Roadkill
 ## drives through his returning blade he catches it: the special charge it cost comes back at once (round 21).
 
 const HEIGHT := 1.2 # flies this high over the ground
 const HIT_RADIUS := 5.5 # a car's aim point this close is cut (round 21, owner: 2.5x the first 2.2)
 const CATCH_RADIUS := 3.0
-const BACK_TURN := 7.0 # rad/s it bends toward Roadkill on the way back
+const BACK_TURN := 7.0 # rad/s it bends round toward the spot it returns to
 
 var owner_car: Vehicle
 var def := {}
@@ -24,6 +24,9 @@ var _blade: Node3D
 var _whirr: AudioStreamPlayer3D
 var _done := false
 var refund := 0 # special charges given back when Roadkill catches it (it was paid for as a secondary)
+var _home := Vector3.ZERO # where Roadkill was when it turned back (round 22): it returns there, not to him
+var _aligned := false # lined up on _home
+var _home_passed := false # went past _home: straight on from here
 var end_reason := "" # "caught", "wall <name>", "time" (tests read it)
 
 
@@ -89,11 +92,17 @@ func _physics_process(delta: float) -> void:
 		return
 	var speed := float(def.get("return_speed" if _back else "speed", 45.0))
 	var want := _dir
-	if _back and _owner_ok():
-		want = owner_car.global_position + Vector3.UP * HEIGHT - global_position
+	if _back and not _home_passed:
+		# Round 22 (owner: "it follows me everywhere, that's cheap"): it comes back to where Roadkill WAS when
+		# it turned, never chasing him. Once it lines up on that spot and goes past it, it flies straight on:
+		# if he moved away, it's lost.
+		want = _home - global_position
 		want.y = 0.0
-		want = want.normalized() if want.length() > 0.1 else _dir
-		_dir = _turn(_dir, want, BACK_TURN, delta)
+		if want.length() < 1.5 or (_aligned and _dir.dot(want) < 0.0):
+			_home_passed = true
+		elif want.length() > 0.1:
+			_dir = _turn(_dir, want.normalized(), BACK_TURN, delta)
+			_aligned = _aligned or _dir.angle_to(want.normalized()) < deg_to_rad(10.0)
 	elif not _back and is_instance_valid(lock) and not lock.is_dead and not lock.is_hidden():
 		want = lock.global_position - global_position
 		want.y = 0.0
@@ -143,6 +152,7 @@ func _ground_y(p: Vector3) -> float:
 func _turn_back() -> void:
 	_back = true
 	_cut.clear()
+	_home = owner_car.global_position if _owner_ok() else global_position - _dir * 30.0
 	GameFeel.play("ricochet", global_position, get_parent(), -8.0, 0.8)
 
 

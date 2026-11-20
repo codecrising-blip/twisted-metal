@@ -6,8 +6,8 @@ extends Node3D
 ## Run with `-- junkyard` after the project path to play the old Junkyard instead.
 
 ## Quality preview (owner, session 5): one on one in Los Angeles, Sweet Tooth vs Outlaw.
-## Round 20: the pause menu picks any of the cars remade in Blender; the AI drives Outlaw (Sweet Tooth
-## when you play Outlaw).
+## Round 20: the pause menu picks any of the cars remade in Blender for you (keys 1-5); round 22: and for the
+## AI opponent too (keys 6 7 8 9 0). By default the opponent is Outlaw (Sweet Tooth when you play Outlaw).
 const PREVIEW_DRIVERS := ["sweet_tooth", "outlaw"]
 const PREVIEW_PICKS := ["sweet_tooth", "outlaw", "mr_grimm", "roadkill", "axel"]
 ## The whole test roster (the other three still have their simple prototype models).
@@ -22,6 +22,7 @@ const MUSIC_ORDER := ["los_angeles", "paris", "manslaughter", "egypt", "tokyo", 
 	"warhawk", "rome", "amazonia", "minion", "calypso", "unpicked_1", "unpicked_2"]
 
 static var player_car := "sweet_tooth" # survives scene reloads
+static var opponent_car := "" # round 22: the preview's AI car ("" = Outlaw, or Sweet Tooth against Outlaw)
 static var full_roster := false # true = FULL_DRIVERS (tests, `-- full`)
 ## Music test (owner, session 6): M in the pause menu swaps the stage's theme for any other track in
 ## audio/music (unpicked ones too), to hear whether it fits. "" = the stage's own theme. Kept until quit.
@@ -50,8 +51,9 @@ func _ready() -> void:
 	if full_roster or "full" in OS.get_cmdline_user_args():
 		drivers = FULL_DRIVERS
 		picks = FULL_DRIVERS
-	elif not player_car in PREVIEW_DRIVERS:
-		drivers = [player_car, "outlaw"]
+	else:
+		var foe := opponent_car if opponent_car != "" else ("sweet_tooth" if player_car == "outlaw" else "outlaw")
+		drivers = [player_car, foe] # a mirror match is allowed
 	arena = JunkyardArena.new() if "junkyard" in OS.get_cmdline_user_args() else LosAngelesArena.new()
 	arena.name = "Arena"
 	add_child(arena)
@@ -62,6 +64,8 @@ func _ready() -> void:
 	player.controller = PlayerController.new()
 	player.protect()
 	var enemy_cars: Array = drivers.filter(func(id: String): return id != player_car)
+	if drivers.size() == 2 and drivers[0] == player_car:
+		enemy_cars = [drivers[1]] # the preview's opponent (it may be the same car: a mirror match)
 	for i in enemy_cars.size():
 		var e := _spawn(enemy_cars[i], arena.spawn_points[(i + 1) % arena.spawn_points.size()], false)
 		var brain := AIDriver.new()
@@ -89,6 +93,8 @@ func _ready() -> void:
 	hud.driver_requested.connect(_pick_driver)
 	hud.music_requested.connect(_cycle_music)
 	hud.drivers.assign(picks.map(func(id: String): return String(Roster.get_car(id).get("name", id))))
+	hud.opponent_menu = not (full_roster or "full" in OS.get_cmdline_user_args())
+	hud.opponent_requested.connect(_pick_opponent)
 	hud.set_enemies_left(enemies.size())
 	hud.set_lives(lives - 1)
 	if arena.has_method("radar_lines"):
@@ -309,6 +315,11 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 
 func _restart() -> void:
 	get_tree().reload_current_scene()
+
+
+func _pick_opponent(index: int) -> void:
+	opponent_car = picks[index]
+	_restart()
 
 
 func _pick_driver(index: int) -> void:

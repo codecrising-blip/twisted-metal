@@ -4,8 +4,8 @@ extends Node3D
 ## goes off THE MOMENT it is fired. A 360 degree sphere of electric fire races out from Axel to "radius"
 ## m in "spread" s: a hollow shell, bright at its rim from every side (not a ball), with a ring racing
 ## along the ground under it and lightning crawling over it. Every car it reaches, on the ground or in
-## the air, takes the same "damage" (no weaker edge), is thrown hard away from Axel (a super heavy only
-## takes the damage) and burns. Mines inside it die harmlessly, and any grab on Axel breaks (a taser
+## the air, takes the same "damage" (no weaker edge), is thrown away from Axel like a Remote mine throws
+## (round 22) and burns. Mines inside it die harmlessly, and any grab on Axel breaks (a taser
 ## link, a wheel clamp, a chain bomb on him).
 
 const COLOR := Color(1.0, 0.55, 0.25) # the ring's electric orange (round 20), now the whole sphere
@@ -161,9 +161,16 @@ func _reach(radius: float) -> void:
 		var away := Vector3(rel.x, 0.0, rel.z)
 		away = away.normalized() if away.length() > 0.3 else o.flat_forward()
 		o.hit_react(away, dmg)
-		if o.stats.get("class", "medium") != "super":
-			var push := float(def.get("push", 20.0)) * o.knockback
-			o.blast_knock(away * push + Vector3.UP * push * 0.3, 0.0, false)
+		# Round 22 (owner): thrown like a Remote mine throws (Mine.detonate): the closer to Axel, the higher and
+		# further, by weight class (a super heavy too, the least), rolling away from him.
+		var heights: Dictionary = def.get("launch", {})
+		var hh := float(heights.get(o.stats.get("class", "medium"), 8.4))
+		var flat := Vector2(rel.x, rel.z).length()
+		var r := float(def.get("radius", 10.2))
+		var k := 1.0 - clampf((flat - 2.8) / maxf(r - 2.8, 0.1), 0.0, 1.0)
+		var up := sqrt(2.0 * Vehicle.GRAVITY * hh * (0.25 + 0.5 * k) * maxf(k, 0.15))
+		var side := away * float(def.get("push", 24.0)) * (0.35 + 0.65 * k) * (hh / 8.4)
+		o.blast_knock(side + Vector3.UP * up, 0.15 + 0.35 * k, false)
 		o.ignite(float(def.get("burn", 4.0)), owner_car)
 		FxKit.spark(get_parent(), o.aim_point(), -away)
 		GameFeel.flash(get_parent(), o.aim_point(), 1.6, Color(1.0, 0.75, 0.4), 0.08)

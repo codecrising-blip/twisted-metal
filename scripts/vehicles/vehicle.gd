@@ -92,7 +92,6 @@ const RAM_ATTACK := {"front": 1.0, "side": 0.3, "rear": 0.3}
 const RAM_DEFENSE := {"front": 1.0, "side": 1.6, "rear": 1.3}
 const TARGET_RANGE := 120.0
 const TARGET_CONE := deg_to_rad(40.0)
-const AIM_ASSIST_CONE := deg_to_rad(12.0)
 
 var car_id := ""
 var stats := {}
@@ -1166,10 +1165,11 @@ func straight_from(p: Vector3) -> Vector3:
 	return p - up * (h - STRAIGHT_FIRE_H) if h > STRAIGHT_FIRE_H else p
 
 
-## Weapons that fly straight (no or very light homing) use level_forward() (round 21).
+## Weapons that fly straight use level_forward() (round 21). Round 22 (owner): they have NO tracking at all,
+## not even an aim toward the target at launch: bullets, power, the skull, the charged cone, the wheel clamp.
 static func flies_straight(id: String) -> bool:
 	var d := WeaponData.get_def(id)
-	return d.get("kind", "") == "bullet" or float(d.get("homing", 0.0)) <= 0.6
+	return d.get("kind", "") == "bullet" or float(d.get("homing", 0.0)) <= 0.0
 
 
 func aim_point() -> Vector3:
@@ -1755,17 +1755,7 @@ func _fire_guns() -> void:
 	_gun_index = (_gun_index + 1) % muzzles.size()
 	var from := straight_from(model.to_global(muzzles[_gun_index]))
 	var dir := level_forward()
-	# Light aim assist: bend shots toward a target that is almost dead ahead (round 21: sideways only,
-	# the rounds stay level with the ground, no spread up or down).
-	if is_instance_valid(target) and not target.is_dead:
-		var to_t := (target.aim_point() - from)
-		if to_t.length() < 90.0 and dir.angle_to(to_t.normalized()) < AIM_ASSIST_CONE:
-			var side := to_t - dir * to_t.dot(dir)
-			var up := Vector3.UP if not _grounded else _ground_n
-			side -= up * side.dot(up)
-			dir = (dir * to_t.dot(dir) + side).normalized()
-	var spread := dir.cross(Vector3.UP if not _grounded else _ground_n).normalized()
-	dir = (dir + spread * randf_range(-1, 1) * 0.012).normalized()
+	# Round 22 (owner): no aim assist and no spread: the rounds go exactly where the guns point.
 	_break_invisibility()
 	Projectile.spawn(get_parent(), "guns", from, dir, self, null)
 	_fx.gun_fired(_gun_index)
@@ -1835,9 +1825,6 @@ func launch(id: String, lock: Vehicle) -> void:
 		var to_t := lock.aim_point() - from
 		# Start roughly toward the target so homing doesn't have to U-turn. Round 12 (owner): only
 		# homing weapons; straight ones (power) leave along the nose, or they looked half-homing.
-		if flies_straight(id): # the skull: turned toward it sideways only, it stays level (round 21)
-			var n := _ground_n if _grounded else Vector3.UP
-			to_t -= n * to_t.dot(n)
 		if homing and to_t.length() > 0.5 and dir.angle_to(to_t.normalized()) < deg_to_rad(60):
 			dir = dir.lerp(to_t.normalized(), 0.6).normalized()
 	else:

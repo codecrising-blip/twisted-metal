@@ -1452,6 +1452,45 @@ func _run() -> void:
 	await _frames(40)
 	_check(absf((r_hp - ol20.health) - 20.0) < 0.6, "Axel's Rim Shot rolls into the car for 20 (%.1f)" % (r_hp - ol20.health))
 
+	# Round 22 (owner): straight weapons have NO tracking at all.
+	var straight_ok := true
+	for wid: String in ["power", "reaper_skull", "wheel_clamp"]:
+		straight_ok = straight_ok and float(WeaponData.get_def(wid).get("homing", 1.0)) <= 0.0 and Vehicle.flies_straight(wid)
+	_check(straight_ok, "power, Grimm's skull and the wheel clamp have zero tracking")
+	await _frames(30)
+	_place(rk, 40, 26, 0)
+	_place(ol20, 46, 6, 0) # ~17 deg off Roadkill's nose
+	await _frames(3)
+	var pw22 := Projectile.spawn(main, "power", rk.straight_from(rk.launch_point()), rk.level_forward(), rk, ol20)
+	var pw22_dir := pw22.direction
+	for i in 10:
+		await physics_frame
+	_check(not is_instance_valid(pw22) or pw22.direction.angle_to(pw22_dir) < 0.01, "a power missile flies dead straight past a car beside its path")
+	# Round 22: the blade comes back to where Roadkill WAS when it turned; if he drove off, it flies on and is lost.
+	rk.target = null
+	rk.ammo["charged_missiles"] = 1
+	_place(rk, 40, 26, 0)
+	await _frames(3)
+	rk.energy_move("secondary")
+	var blades := main.get_children().filter(func(n: Node): return n is Boomerang)
+	var bl1: Boomerang = blades[0] if not blades.is_empty() else null
+	var why1 := [""]
+	if bl1:
+		bl1.tree_exiting.connect(func() -> void: why1[0] = bl1.end_reason)
+		for i in 240:
+			await physics_frame
+			if not is_instance_valid(bl1) or bl1._back:
+				break
+	var home_ok := bl1 != null and is_instance_valid(bl1) and bl1._home.distance_to(rk.global_position) < 0.5
+	_place(rk, 72, 26, 0) # he drives off to the side (out of its straight path)
+	for i in 300:
+		await physics_frame
+		if not is_instance_valid(bl1):
+			break
+	_check(home_ok and why1[0] != "caught" and int(rk.ammo["charged_missiles"]) == 0,
+		"the blade returns to Roadkill's old spot, not to him: moved away, he loses it (%s)" % why1[0])
+	_check(InputMap.has_action("pick_10") and main.has_method("_pick_opponent"), "the pause menu picks the opponent (keys 6-0)")
+
 	print("")
 	if _failures.is_empty():
 		print("ALL TESTS PASSED")

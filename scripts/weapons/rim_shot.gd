@@ -29,12 +29,6 @@ static func start(v: Vehicle, d: Dictionary) -> RimShot:
 	v.get_parent().add_child(r)
 	var size: Vector3 = v.stats.get("size", Vector3(3.8, 2.8, 2.8))
 	r._dir = v.flat_forward()
-	var t := v.target
-	if is_instance_valid(t) and not t.is_dead:
-		var to := t.global_position - v.global_position
-		to.y = 0.0
-		if to.length() > 1.0 and r._dir.angle_to(to.normalized()) < deg_to_rad(20.0):
-			r._dir = to.normalized() # rolled at a car that is nearly dead ahead
 	var at := v.global_position + v.flat_forward() * (size.z * 0.5 + 1.2)
 	r.global_position = Specials.ground_below(v.get_parent(), at + Vector3.UP * 2.0) + Vector3.UP * RADIUS
 	GameFeel.play("ram_impact", r.global_position, v.get_parent(), -4.0 + float(d.get("sound_db", 0.0)), 0.7, true)
