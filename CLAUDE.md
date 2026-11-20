@@ -682,6 +682,9 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   halo read as a fireball); charged = fire rings behind it (`_ring_step`). Roadkill: `Vehicle._rack_fx` = six darts over
   the launcher lighting up as missiles load (crimson when red); charged missiles carry two orbiting sparks.
   `tests/_proj_shot.gd -- weapon out.png [charged]` = one projectile up close; `tests/_charge_film.gd` = Roadkill's charge.
+  Charged darts burst in their own colour (`Projectile._dart_burst`: flash, ring, coloured sparks, tiny fireball). Soul
+  Harvest sound `audio/sfx/scythe_sweep.ogg` (Higgsfield Mirelo, the last 0.5 credit: the owner's balance is ~0.17 now),
+  played from its start at pitch 1.3 so its two whooshes land on the two laps. HUD chip "TYRE DASH n.n".
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

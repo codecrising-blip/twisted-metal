@@ -240,6 +240,32 @@ static func _embers(big: float) -> CPUParticles3D:
 	return p
 
 
+## A charged dart's burst: fast sparks of its colour flying out in every direction (additive).
+static func _dart_burst(world: Node, pos: Vector3, c: Color) -> void:
+	var p := CPUParticles3D.new()
+	p.mesh = FxKit.particle_mesh(true)
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.amount = 18
+	p.lifetime = 0.35
+	p.local_coords = false
+	p.direction = Vector3.UP
+	p.spread = 180.0
+	p.gravity = Vector3(0, -12.0, 0)
+	p.initial_velocity_min = 7.0
+	p.initial_velocity_max = 14.0
+	p.scale_amount_min = 0.05
+	p.scale_amount_max = 0.12
+	p.color_ramp = FxKit._ramp([Color(1, 1, 1, 1), c, Color(c.r, c.g, c.b, 0)])
+	p.emitting = false
+	world.add_child(p)
+	p.global_position = pos
+	p.emitting = true
+	var tw := p.create_tween()
+	tw.tween_interval(0.6)
+	tw.tween_callback(p.queue_free)
+
+
 var _ring_t := 0.0
 
 ## The charged cone throws a ring of fire behind it every few metres, square to its path, growing and fading.
@@ -528,6 +554,15 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 		world.get_tree().create_timer(0.07, false).timeout.connect(func() -> void:
 			if is_instance_valid(world) and world.is_inside_tree():
 				FxKit.explosion(world, up, 0.9 * big, Color(1.0, 0.38, 0.08), false))
+	elif kind != "gas" and float(def.get("glow", 1.0)) > 1.0:
+		# Round 23: Roadkill's charged darts burst in their own colour, an electric pop, not a fireball: a
+		# white-hot flash, a spray of lime (or crimson) sparks, a ring on the ground, a small dark puff.
+		var c: Color = def.get("color", Color(0.32, 1.0, 0.02))
+		GameFeel.flash(world, pos, 1.1, c.lerp(Color.WHITE, 0.5), 0.07)
+		GameFeel.shockwave(world, pos - Vector3.UP * 0.6, 3.2, c)
+		GameFeel.play("explosion", pos, world, -6.0, 1.5, true)
+		_dart_burst(world, pos, c)
+		FxKit.explosion(world, pos, 0.35, c, false)
 	elif kind != "gas":
 		if kind == "skull": # round 23: the spirit face blows apart in gold sparks over the fireball
 			SpiritSkull.burst(world, pos)

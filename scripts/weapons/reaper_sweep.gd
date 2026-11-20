@@ -120,8 +120,10 @@ func _begin() -> void:
 	# The release: a cold flash on Grimm, the scream of the blade, a shake.
 	owner_car.tint_flash(Color(SOUL.r, SOUL.g, SOUL.b, 0.5), 0.2)
 	var db := float(def.get("sound_db", 0.0))
-	GameFeel.play("special_shadow", global_position, world, -2.0 + db, 0.8, true)
-	GameFeel.play("launch_ghost_missile", global_position, world, -4.0 + db, 0.7, true)
+	# Round 23: its own sound (generated: two heavy whooshes, a blade's ring, a wail), sped up 1.3x so the two
+	# whooshes land on the two laps; played from its start (not synced to its peak, the second whoosh).
+	GameFeel.play("scythe_sweep", global_position, world, db, 1.3)
+	GameFeel.play("launch_ghost_missile", global_position, world, -8.0 + db, 0.7, true)
 	GameFeel.shake(global_position, 0.35)
 	if owner_car.is_player:
 		GameFeel.hitstop(get_tree(), 0.04)

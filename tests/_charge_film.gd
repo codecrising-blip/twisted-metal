@@ -39,7 +39,7 @@ func _run() -> void:
 	me.want_fire_weapon = true
 	var shots: Array[Image] = []
 	var k := 0
-	for f: int in [24, 60, 100, 150, 285, 300, 312]:
+	for f: int in [60, 150, 285, 300, 335, 345, 355, 370]:
 		while k < f:
 			await physics_frame
 			k += 1

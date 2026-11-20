@@ -14,6 +14,7 @@ All files: mono Ogg Vorbis, peak -1 dB, converted from the owner's TM1 / TM2 / T
 | `launch_zoomy` | Zoomy salvo (TM 2012 zoomy_launch) |
 | `launch_napalm_cone` | Sweet Tooth's Napalm Cone (TM1 Sweet Tooth special) |
 | `launch_reaper_skull`, `launch_ghost_missile` | Mr. Grimm's and Spectre's specials (TM2) |
+| `scythe_sweep` | Mr. Grimm's Soul Harvest (round 23; generated with Higgsfield Mirelo SFX: two whooshes, blade ring, wail) |
 | `charge_up` | Napalm Cone charging: five rising beeps (then `taser_loop` hums until you let go) |
 | `missile_flyby` | a missile passing close to the camera (TM 2012) |
 | `special_outlaw`, `taser_loop`, `taser_fizzle` | Outlaw's taser: link (TM2), crackle while held and fizzle at the end (TM 2012 field surge) |
