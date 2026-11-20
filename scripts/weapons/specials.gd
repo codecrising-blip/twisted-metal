@@ -71,7 +71,7 @@ static func _charged_salvo(v: Vehicle, id: String, def: Dictionary) -> void:
 	if red:
 		count = most
 		var rc: Color = def.get("red_color", Color(1.0, 0.12, 0.08))
-		over = {"damage": float(def.get("red_total", 70.0)) / most, "color": rc, "trail": rc.lerp(Color.WHITE, 0.15),
+		over = {"damage": float(def.get("red_total", 70.0)) / most, "color": rc, "trail": rc,
 			"speed": float(def.get("red_speed", 70.0)), "shake": 0.25} # crimson and faster (round 22)
 	var lock := v.target if is_instance_valid(v.target) and not v.target.is_dead else null
 	var gap := float(def.get("salvo_gap", 0.09))

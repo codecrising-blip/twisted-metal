@@ -645,10 +645,12 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   `homing` 0 for the skull and the wheel clamp; `Vehicle.flies_straight()` = bullet or homing <= 0, and those get no
   launch aim at the target (power, skull, clamp, charged cone fly along `level_forward()`); the MG has no aim assist
   and no spread; Rim Shot rolls straight. **Charged missiles:** electric lime (no other missile has it), body 0.65
-  (`model_scale` 0.52), trail 0.65 (`trail_w` 0.39), `glow` 2.5 (emissive body, brighter nose/tail, additive halo in
-  `Projectile`), fire's tracking (1.1, seek 25); red = crimson `red_color`, `red_speed` 70. **Ghost skull:** the skull
+  (`model_scale` 0.52), trail 0.65 (`trail_w` 0.39), `glow` 2.5 (the whole body lit in its colour + a tight additive
+  halo in `Projectile`; emission far above 1 bleaches the hue through ACES: lime went yellow, crimson pink), fire's
+  tracking (1.1, seek 25); red = crimson `red_color` (trail the same, no white), `red_speed` 70. **Ghost skull:** the skull
   mesh drawn with `scripts/fx/ghost_skull.gdshader` (red, unshaded, see-through, bright rim, drifting wisps, flicker),
-  two afterimages (`Projectile._ghost_step`, top-level copies 2/4 physics steps behind), faint aura, thin red streak,
+  two fainter echoes 0.45 / 0.95 m behind (`Projectile._ghost_step`; copies a few physics steps back read as three
+  skulls), faint aura, thin red streak,
   red light, no FoamFire. The owner's reference video was NOT on GitHub (ask again). **Boomerang:** out = light
   homing as before; on turning back it stores Roadkill's position (`_home`), bends to it, and once lined up and past it
   flies straight on (moved away = lost). **Crowd Controller:** radius 10.2 (x0.85), throw = the Remote mine formula

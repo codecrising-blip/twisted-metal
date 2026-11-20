@@ -91,19 +91,21 @@ func _build_visual() -> void:
 				add_child(_wig)
 				holder = _wig
 				_wig_phase = randf() * TAU
-			# Round 22: "glow" > 1 (Roadkill's charged missiles) = the whole missile lit in its colour, that much
-			# brighter, inside a soft additive halo.
+			# Round 22: "glow" > 1 (Roadkill's charged missiles) = the whole missile lit in its colour (a normal
+			# missile only lights its nose and tail), inside a tight additive halo. Pushing the emission much
+			# higher only bleaches the colour through the tonemapper (lime went yellow, crimson went pink).
 			var g := float(def.get("glow", 1.0))
-			var body: Material = MeshKit.mat(Color(0.26, 0.26, 0.28), 0.4, 0.6) if g <= 1.0 else MeshKit.emissive(color, 1.2 * g)
+			var lit := g > 1.0
+			var body: Material = MeshKit.emissive(color, 0.6 * g) if lit else MeshKit.mat(Color(0.26, 0.26, 0.28), 0.4, 0.6)
 			MeshKit.cylinder(holder, 0.12 * s, 0.9 * s, Vector3.ZERO, body, Vector3(90, 0, 0), 8)
-			MeshKit.cylinder(holder, 0.12 * s, 0.3 * s, Vector3(0, 0, -0.6 * s), MeshKit.emissive(color, 3.0 * g), Vector3(-90, 0, 0), 8, 0.0)
-			MeshKit.sphere(holder, 0.13 * s, Vector3(0, 0, 0.5 * s), MeshKit.emissive(color.lerp(Color.WHITE, 0.4), 6.0 * g), Vector3(1, 1, 1.4), 6)
-			if g > 1.0:
-				var halo := MeshKit.emissive(color, 1.5)
+			MeshKit.cylinder(holder, 0.12 * s, 0.3 * s, Vector3(0, 0, -0.6 * s), MeshKit.emissive(color, 1.0 * g if lit else 3.0), Vector3(-90, 0, 0), 8, 0.0)
+			MeshKit.sphere(holder, 0.13 * s, Vector3(0, 0, 0.5 * s), MeshKit.emissive(color.lerp(Color.WHITE, 0.15 if lit else 0.4), 6.0), Vector3(1, 1, 1.4), 6)
+			if lit:
+				var halo := MeshKit.emissive(color, 1.0)
 				halo.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 				halo.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-				halo.albedo_color = Color(color.r, color.g, color.b, 0.35)
-				var hm := MeshKit.sphere(holder, 0.42 * s, Vector3(0, 0, 0.1 * s), halo, Vector3(1, 1, 2.6), 8)
+				halo.albedo_color = Color(color.r, color.g, color.b, 0.3)
+				var hm := MeshKit.sphere(holder, 0.27 * s, Vector3(0, 0, 0.1 * s), halo, Vector3(1, 1, 2.9), 8)
 				hm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			if not def.get("small", false):
 				_add_light(color, 2.0, 5.0)
@@ -183,8 +185,7 @@ func _build_visual() -> void:
 const GHOST_SHADER := preload("res://scripts/fx/ghost_skull.gdshader")
 var _ghosts: Array[MeshInstance3D] = []
 var _ghost_src: Array[MeshInstance3D] = [] # the skull mesh each afterimage copies
-var _ghost_back: Array[int] = [] # how many physics steps behind it trails
-var _ghost_hist: Array[Transform3D] = []
+var _ghost_back: Array[float] = [] # how far behind it trails (m)
 
 
 func _skull_visual(color: Color) -> void:
@@ -199,11 +200,11 @@ func _skull_visual(color: Color) -> void:
 		for mi in _meshes_in(sk):
 			mi.material_override = mat
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			for k in 2: # afterimages, fainter, left a moment behind along the path
+			for k in 2: # echoes, fainter, just behind it: one ghostly smear, not three skulls
 				var g := MeshInstance3D.new()
 				g.mesh = mi.mesh
 				var gm := mat.duplicate() as ShaderMaterial
-				gm.set_shader_parameter("fade", 0.45 if k == 0 else 0.2)
+				gm.set_shader_parameter("fade", 0.32 if k == 0 else 0.14)
 				g.material_override = gm
 				g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 				g.top_level = true
@@ -211,14 +212,14 @@ func _skull_visual(color: Color) -> void:
 				add_child(g)
 				_ghosts.append(g)
 				_ghost_src.append(mi)
-				_ghost_back.append(2 if k == 0 else 4)
+				_ghost_back.append(0.45 if k == 0 else 0.95)
 	var aura := MeshKit.emissive(red, 2.0)
 	aura.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	aura.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	aura.albedo_color = Color(red.r, red.g, red.b, 0.07)
 	var halo := MeshKit.sphere(self, 0.72 * SKULL_SCALE, Vector3.ZERO, aura, Vector3(1, 1, 1.2), 12)
 	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	Streak.attach(self, Color(1.0, 0.1, 0.05), 0.14, 0.45)
+	Streak.attach(self, Color(1.0, 0.1, 0.05), 0.12, 0.2)
 	_add_light(red, 5.0, 12.0)
 
 
@@ -231,18 +232,15 @@ static func _meshes_in(n: Node) -> Array[MeshInstance3D]:
 	return out
 
 
-## The ghost skull's afterimages follow where it was a few physics steps ago.
+## The ghost skull's echoes trail just behind it along its (straight) path, a little bigger each.
 func _ghost_step() -> void:
 	if _ghosts.is_empty():
 		return
-	_ghost_hist.push_front(global_transform)
-	if _ghost_hist.size() > 7:
-		_ghost_hist.resize(7)
 	for i in _ghosts.size():
-		var back := _ghost_back[i]
-		if _ghost_hist.size() > back and is_instance_valid(_ghost_src[i]):
-			var rel := global_transform.affine_inverse() * _ghost_src[i].global_transform
-			_ghosts[i].global_transform = _ghost_hist[back] * rel
+		if is_instance_valid(_ghost_src[i]):
+			var src := _ghost_src[i].global_transform
+			var grow := 1.0 + _ghost_back[i] * 0.08
+			_ghosts[i].global_transform = Transform3D(src.basis.scaled(Vector3.ONE * grow), src.origin - direction * _ghost_back[i])
 			_ghosts[i].visible = true
 
 

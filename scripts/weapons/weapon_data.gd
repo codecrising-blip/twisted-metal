@@ -175,12 +175,12 @@ const DEFS := {
 	# lime), glowing 2.5x brighter than a normal missile (`glow`), the fire missile's tracking (homing 1.1, seek
 	# 25). Red (held 2 s past full): crimson and faster (`red_speed`).
 	"charged_missiles": {
-		"label": "Charged Missiles", "kind": "missile", "handler": "charged_salvo", "color": Color(0.55, 1.0, 0.12), "special": true,
+		"label": "Charged Missiles", "kind": "missile", "handler": "charged_salvo", "color": Color(0.32, 1.0, 0.02), "special": true,
 		"speed": 52.0, "damage": 8.0, "homing": 1.1, "seek": 25.0, "life": 2.8, "push": 1.5,
-		"trail": Color(0.7, 1.0, 0.35), "trail_len": 0.35, "trail_w": 0.39, "model_scale": 0.52, "glow": 2.5,
+		"trail": Color(0.4, 1.0, 0.1), "trail_len": 0.35, "trail_w": 0.39, "model_scale": 0.52, "glow": 2.5,
 		"squish": 0.03, "wobble": 0.2, "shake": 0.15,
 		"charge_time": 2.4, "salvo_max": 6, "salvo_gap": 0.09, "red_after": 2.0, "red_total": 70.0,
-		"red_color": Color(0.86, 0.04, 0.2), "red_speed": 70.0, "cooldown": 1.0, "recharge": 16.0, "sound_db": 3.5,
+		"red_color": Color(0.9, 0.0, 0.06), "red_speed": 70.0, "cooldown": 1.0, "recharge": 16.0, "sound_db": 3.5,
 	},
 	# Roadkill's secondary (round 21; was his special in round 20): Boomerang Blast (design 01). A blade of
 	# welded scrap, light homing, out to "range" m or the first car it cuts, then back toward Roadkill: 16
