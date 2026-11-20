@@ -1806,21 +1806,58 @@ func _update_charge_fx() -> void:
 	if charging_id == "charged_missiles":
 		_rack_fx()
 		return
+	_cone_charge_fx()
+
+
+## Sweet Tooth charging the Napalm Cone (round 23; it was a growing orange ball, "a plain fireball"): the cone
+## itself rises out of the mortar, nose up, turning faster and faster, its scoop burning hotter (the game's own
+## fire growing on it) until at full charge it glows white-hot and throbs.
+func _cone_charge_fx() -> void:
+	var r := charge_ratio()
 	if not is_instance_valid(_charge_fx):
 		_charge_fx = Node3D.new()
 		model.add_child(_charge_fx)
 		_charge_fx.position = model.get_meta("launcher", Vector3(0, 2, -2.5))
-		var ball := MeshKit.sphere(_charge_fx, 0.25, Vector3.ZERO, MeshKit.emissive(Color(1.0, 0.45, 0.1), 4.0), Vector3.ONE, 10)
-		ball.name = "Ball"
-		ball.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		var flames := FxKit.fire(0.7, 20)
-		_charge_fx.add_child(flames)
-		flames.emitting = true
-	var r := charge_ratio()
-	var ball := _charge_fx.get_node("Ball") as MeshInstance3D
-	var pulse := 1.0 + (0.18 * sin(_clock * 30.0) if r >= 1.0 else 0.0)
-	ball.scale = Vector3.ONE * (0.5 + r * 2.2) * pulse
-	(ball.material_override as StandardMaterial3D).emission = Color(1.0, 0.45, 0.1).lerp(Color(1.0, 0.95, 0.8), r)
+		var spin := Node3D.new()
+		spin.name = "Spin"
+		spin.rotation.x = deg_to_rad(35.0) # nose up out of the mortar
+		_charge_fx.add_child(spin)
+		if ModelLib.has("napalm_cone"):
+			var cone := ModelLib.instance("napalm_cone", "cone")
+			cone.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			spin.add_child(cone)
+		var heat := MeshKit.emissive(Color(1.0, 0.45, 0.1), 1.0)
+		heat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		heat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+		heat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		heat.albedo_color = Color(1.0, 0.45, 0.1, 0.0)
+		var glow := MeshKit.sphere(spin, 0.34, Vector3(0, 0, 0.62), heat, Vector3(1, 1, 0.6), 10)
+		glow.name = "Heat"
+		glow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var fire := FoamFire.new()
+		fire.name = "Fire"
+		fire.box = Vector3(0.25, 0.1, 0.25)
+		fire.position = Vector3(0, 0.35, 0.45)
+		fire.rate = 90.0
+		fire.life = 0.4
+		fire.size = 0.6
+		fire.rise = 2.4
+		fire.inherit = 0.6
+		fire.on = true
+		spin.add_child(fire)
+	var spin := _charge_fx.get_node("Spin") as Node3D
+	var e := 1.0 - pow(1.0 - r, 2.0)
+	spin.position = Vector3(0, 0.3 + 0.5 * e, 0) # rising out of the mortar
+	var pulse := 1.0 + (0.08 * sin(_clock * 30.0) if r >= 1.0 else 0.0)
+	spin.scale = Vector3.ONE * lerpf(0.6, 1.6, e) * pulse
+	spin.rotate_object_local(Vector3.FORWARD, get_physics_process_delta_time() * lerpf(2.0, 22.0, r))
+	var fire := spin.get_node("Fire") as FoamFire
+	fire.level = 0.25 + 0.75 * r
+	var heat := spin.get_node("Heat") as MeshInstance3D
+	var hm := heat.material_override as StandardMaterial3D
+	var hot := Color(1.0, 0.45, 0.1).lerp(Color(1.0, 0.92, 0.75), r)
+	hm.albedo_color = Color(hot.r, hot.g, hot.b, 0.05 + 0.13 * r * pulse) # a glow on the scoop, not a ball
+	heat.scale = Vector3(1, 1, 0.6) * (0.8 + 0.3 * r) * pulse
 
 
 ## Roadkill charging (round 23, owner: specials must look special): a rack of glowing darts over his launcher,

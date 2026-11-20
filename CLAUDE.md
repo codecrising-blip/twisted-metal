@@ -685,6 +685,10 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   Charged darts burst in their own colour (`Projectile._dart_burst`: flash, ring, coloured sparks, tiny fireball). Soul
   Harvest sound `audio/sfx/scythe_sweep.ogg` (Higgsfield Mirelo, the last 0.5 credit: the owner's balance is ~0.17 now),
   played from its start at pitch 1.3 so its two whooshes land on the two laps. HUD chip "TYRE DASH n.n".
+  Napalm Cone charging (`Vehicle._cone_charge_fx`, was a growing orange ball): the cone model rises out of the mortar
+  nose up, spinning faster, FoamFire on the scoop growing with the charge, a small scoop glow (a big additive sphere
+  turned the whole thing into a white ball again). `tests/_charge_film.gd -- out.png sweet_tooth napalm_cone
+  20,50,90,125,160,200,215,230 210` films it.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

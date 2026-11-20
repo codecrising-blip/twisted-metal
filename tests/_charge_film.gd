@@ -1,6 +1,7 @@
 extends SceneTree
-## Scratch (round 23): Roadkill holding his charged missiles, filmed from the chase camera at a few hold times,
-## then the release. args: out.png   (run with --fixed-fps 60)
+## Scratch (round 23): a car holding a charged special, filmed from the chase camera at a few hold times, then
+## the release. args: out.png [car weapon frames release_frame]   (run with --fixed-fps 60)
+## Defaults: Roadkill's charged missiles. Sweet Tooth: sweet_tooth napalm_cone 20,50,90,125,160,200,215,230 210
 class Hold:
 	extends RefCounted
 	var on := true
@@ -14,8 +15,14 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
+	var car_id := args[1] if args.size() > 1 else "roadkill"
+	var weapon := args[2] if args.size() > 2 else "charged_missiles"
+	var frames: Array = [60, 150, 285, 300, 335, 345, 355, 370]
+	if args.size() > 3:
+		frames = Array(args[3].split(",")).map(func(x: String) -> int: return int(x))
+	var release := int(args[4]) if args.size() > 4 else 290
 	var main_script: GDScript = load("res://scripts/main.gd")
-	main_script.player_car = "roadkill"
+	main_script.player_car = car_id
 	main_script.opponent_car = "outlaw"
 	var main: Node = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
@@ -31,19 +38,19 @@ func _run() -> void:
 	me.target = foe
 	for i in 90:
 		await physics_frame
-	me.ammo["charged_missiles"] = 3
+	me.ammo[weapon] = 3
 	me._refresh_slots()
-	me.selected = me.weapon_order.find("charged_missiles")
+	me.selected = me.weapon_order.find(weapon)
 	var hold := Hold.new()
 	me.controller = hold
 	me.want_fire_weapon = true
 	var shots: Array[Image] = []
 	var k := 0
-	for f: int in [60, 150, 285, 300, 335, 345, 355, 370]:
+	for f: int in frames:
 		while k < f:
 			await physics_frame
 			k += 1
-			if k == 290:
+			if k == release:
 				hold.on = false # let go: the salvo
 		await process_frame
 		await RenderingServer.frame_post_draw
