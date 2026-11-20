@@ -195,6 +195,10 @@ var _prev_velocity := Vector3.ZERO # before this step's contacts (rams, walls, b
 var _lying_time := 0.0
 var _recover_kick := 0.0
 var shield_time := 0.0 # energy shield up: no damage, no states; guns only
+var dash_time := 0.0 # round 23: Axel's Tyre Dash is on (TyreDash; rules below: _tyres, _wall_hit, _dash_ram)
+var _dash: Dictionary = {}
+var _dash_hit := {} # cars hit this dash since the last wall bounce
+var _dash_fx: TyreDash
 var invisible_time := 0.0 # energy invisibility: no locks on you, AI loses you past 12 m
 var revealed_time := 0.0 # seen anyway for a moment: hit, or caught in headlights
 var headlights_on := false
@@ -630,12 +634,16 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 	if absf(speed - _speed_out) > 0.01:
 		v_f = speed # someone set the speed directly (spawn, tests, teleport): take it
 	var top: float = stats.max_speed
+	var dashing := dash_time > 0.0 and not frozen
+	if dashing: # round 23: the tyre dash drives itself at full tilt
+		throttle = 1.0
+		top *= float(_dash.get("speed_mult", 1.6))
 	var boosting := _turbo_step(signf(throttle) if absf(throttle) > 0.1 else 0.0, dt)
 	if boosting:
 		top *= TURBO_MULT
 	var sliding := clampf(absf(v_l) / 10.0, 0.0, 1.0) # tyres busy holding a slide brake less
 	var launch := 1.0 + (TURBO_LAUNCH - 1.0) * clampf(1.0 - _turbo_run / TURBO_LAUNCH_TIME, 0.0, 1.0)
-	var accel: float = stats.accel * (TURBO_ACCEL * launch if boosting else 1.0)
+	var accel: float = stats.accel * (TURBO_ACCEL * launch if boosting else 1.0) * (2.5 if dashing else 1.0)
 	if _turbo_kick: # the first step of a boost: the shove
 		var rev_top := minf(float(stats.reverse) * 2.0, float(stats.max_speed) * TURBO_MULT)
 		v_f = clampf(v_f + TURBO_KICK * signf(throttle), -rev_top, top)
@@ -682,6 +690,8 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 	var authority := clampf((plane_speed if slide_turn else absf(v_f)) / 7.0, 0.0, 1.0)
 	var turn: float = stats.handling * (float(stats.drift_turn) if handbrake else 1.0)
 	turn *= lerpf(1.0, 0.78, clampf(absf(v_f) / float(stats.max_speed), 0.0, 1.0)) # wider turns when fast
+	if dashing:
+		turn *= float(_dash.get("handling", 0.5)) # owner: half the handling while he is a ball of tyres
 	var yaw := -steer * turn * authority * (1.0 if (v_f >= 0.0 or slide_turn) else -1.0)
 	var w_now := state.angular_velocity.dot(n)
 	if slide_turn:
@@ -892,7 +902,10 @@ func _contacts(state: PhysicsDirectBodyState3D) -> void:
 		var other := state.get_contact_collider_object(k)
 		var n := state.get_contact_local_normal(k)
 		if other is Vehicle:
-			_ram(other as Vehicle, _prev_velocity, n, state.get_contact_collider_position(k))
+			if dash_time > 0.0:
+				_dash_ram(state, other as Vehicle, n, state.get_contact_collider_position(k))
+			else:
+				_ram(other as Vehicle, _prev_velocity, n, state.get_contact_collider_position(k))
 		elif other != null and other.has_method("vehicle_contact"):
 			# Breakables (stands, glass, palms) shatter and barely slow the car.
 			if other.vehicle_contact(self, _prev_velocity):
@@ -933,6 +946,9 @@ func _wall_hit(state: PhysicsDirectBodyState3D, n: Vector3) -> void:
 	if into < 0.05:
 		return
 	_wall_cooldown = 0.25
+	if dash_time > 0.0 and into >= 0.15: # round 23: the tyre dash bounces off walls, no damage
+		_dash_bounce(state, hn, moving, state.transform.origin - hn * 1.4)
+		return
 	var impact := moving.length() * into
 	var mass_factor := 0.75 if weight >= 2.0 else (1.25 if weight < 1.2 else 1.0)
 	var tangent := travel - hn * travel.dot(hn)
@@ -971,6 +987,67 @@ func _unstick(dt: float) -> void:
 		_stuck_time = 0.0
 
 
+## Tyre Dash (round 23, Axel's secondary, the owner's design): 5 s as a ball of two tyres. See TyreDash.
+func start_dash(d: Dictionary) -> void:
+	_dash = d
+	dash_time = float(d.get("time", 5.0))
+	_dash_hit.clear()
+	if is_instance_valid(_dash_fx):
+		_dash_fx.queue_free()
+	_dash_fx = TyreDash.start(self, d)
+	speed = maxf(speed, float(stats.max_speed) * 0.8) # it tears off from a standstill
+
+
+## Thrown back off a wall or a car like a pinball: the speed reflected about the surface, the heading
+## snapped onto it (a ball of tyres has no nose to swing round). A wall bounce re-arms his ram on every car.
+func _dash_bounce(state: PhysicsDirectBodyState3D, hn: Vector3, moving: Vector3, at: Vector3, keep := -1.0, rearm := true) -> void:
+	if keep < 0.0:
+		keep = float(_dash.get("bounce_keep", 0.92))
+	var out := (moving - 2.0 * moving.dot(hn) * hn) * keep
+	if out.length() < 6.0:
+		out = hn * 8.0 # a dead stop against the wall still kicks him off it
+	var lv := state.linear_velocity
+	state.linear_velocity = Vector3(out.x, lv.y, out.z)
+	var turn := flat_forward().signed_angle_to(out.normalized(), Vector3.UP)
+	var xf := state.transform
+	xf.basis = Basis(Vector3.UP, turn) * xf.basis
+	state.transform = xf
+	state.angular_velocity = Vector3(0.0, state.angular_velocity.y * 0.2, 0.0)
+	_prev_velocity = state.linear_velocity
+	_speed_out = out.length()
+	speed = _speed_out
+	_wall_pin = 0.0
+	_yaw_fix = 0.0
+	if rearm:
+		_dash_hit.clear()
+	if is_instance_valid(_dash_fx):
+		_dash_fx.call_deferred("bounce_fx", at, hn, moving.length() / 30.0)
+
+
+## A dashing Axel hits a car: "ram_damage" (30) whatever the speed or the part hit, once per car until he
+## bounces off a wall; the car is thrown along his line and he ricochets off it.
+func _dash_ram(state: PhysicsDirectBodyState3D, other: Vehicle, n: Vector3, at: Vector3) -> void:
+	if other.is_dead or _dash_hit.has(other):
+		return
+	var moving := Vector3(_prev_velocity.x, 0.0, _prev_velocity.z)
+	var hn := Vector3(n.x, 0.0, n.z)
+	if hn.length() < 0.1:
+		hn = (global_position - other.global_position) * Vector3(1, 0, 1)
+	hn = hn.normalized()
+	if moving.length() < 4.0 or moving.dot(-hn) < 1.0:
+		return # not driving into it
+	_dash_hit[other] = true
+	var dmg := float(_dash.get("ram_damage", 30.0))
+	other.take_damage(dmg, self)
+	other.hit_react(-hn, dmg)
+	var line := moving.normalized()
+	other.push(line * 14.0 * other.knockback + Vector3.UP * 4.0)
+	other._knock = maxf(other._knock, KNOCK_TIME)
+	last_ram = {"me": "front", "it": other.hit_part(at), "to_it": dmg, "to_me": 0.0}
+	_ram_feel(other, at, n, moving.length(), dmg, 0.0)
+	_dash_bounce(state, hn, moving, at, 0.7, false)
+
+
 ## Rams (owner, round 6): ramming is a real weapon. Every car has a ram power (Roster "ram", 1-10)
 ## and what part of each car takes the hit matters:
 ##   damage to the other = base x (my power / its power) x ATTACK[my part] x DEFENSE[its part]
@@ -979,7 +1056,7 @@ func _unstick(dt: float) -> void:
 ## stronger car wins; a nose into a side wins unless the side's car is over ~2.3x stronger (Twister
 ## into Axel's side still loses). Once a second per pair; both cars' damage comes from one hit.
 func _ram(other: Vehicle, before: Vector3, n: Vector3, at: Vector3) -> void:
-	if other.is_dead:
+	if other.is_dead or other.dash_time > 0.0: # a dashing Axel deals his own hits (_dash_ram)
 		return
 	var a := get_instance_id()
 	var b := other.get_instance_id()
@@ -1308,6 +1385,8 @@ func _launch_rear(id: String, count: int) -> void:
 
 ## Shield, invisibility and headlights, every tick.
 func _energy_tick(delta: float) -> void:
+	if dash_time > 0.0:
+		dash_time = maxf(0.0, dash_time - delta)
 	if shield_time > 0.0:
 		shield_time -= delta
 		if _shield_mat:
@@ -1477,11 +1556,31 @@ func _shield_hit(dir: Vector3) -> void:
 		FxKit.shield_sparks(get_parent(), global_transform * p, global_basis * d)
 
 
+## A coloured flash over the whole car (round 23: Grimm's rider glows red as the spirit skull leaves him).
+func tint_flash(c: Color, seconds: float) -> void:
+	if is_dead:
+		return
+	if _tint_mat == null:
+		_tint_mat = StandardMaterial3D.new()
+		_tint_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_tint_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_tint_mat.albedo_color = c
+	_tint_on = true
+	_flash_time = maxf(_flash_time, seconds)
+	_apply_overlays()
+
+
+var _tint_mat: StandardMaterial3D
+var _tint_on := false
+
+
 ## The layer drawn over the car's own meshes, wheels included: the white hit flash, else the shield.
 func _apply_overlays() -> void:
 	var over: Material = null
+	if _flash_time <= 0.0:
+		_tint_on = false
 	if _flash_time > 0.0:
-		over = _white
+		over = _tint_mat if _tint_on else _white
 	elif shield_time > 0.0 and _shield_mat:
 		over = _shield_mat
 	for mi in _flash_meshes:
@@ -1704,6 +1803,9 @@ func _update_charge_fx() -> void:
 			_charge_fx.queue_free()
 		_charge_fx = null
 		return
+	if charging_id == "charged_missiles":
+		_rack_fx()
+		return
 	if not is_instance_valid(_charge_fx):
 		_charge_fx = Node3D.new()
 		model.add_child(_charge_fx)
@@ -1719,6 +1821,49 @@ func _update_charge_fx() -> void:
 	var pulse := 1.0 + (0.18 * sin(_clock * 30.0) if r >= 1.0 else 0.0)
 	ball.scale = Vector3.ONE * (0.5 + r * 2.2) * pulse
 	(ball.material_override as StandardMaterial3D).emission = Color(1.0, 0.45, 0.1).lerp(Color(1.0, 0.95, 0.8), r)
+
+
+## Roadkill charging (round 23, owner: specials must look special): a rack of glowing darts over his launcher,
+## one lighting up (with a pop) for every missile loaded, all six pulsing at full charge and turning crimson when
+## they go red. Electric lime like the missiles themselves.
+func _rack_fx() -> void:
+	var d := WeaponData.get_def(charging_id)
+	var most := int(d.get("salvo_max", 6))
+	var full := float(d.get("charge_time", 2.4))
+	var loaded := clampi(1 + int(charge_time / (full / most)), 1, most)
+	var red := charge_time >= full + float(d.get("red_after", 2.0))
+	var col: Color = d.get("red_color", Color(0.9, 0.0, 0.06)) if red else d.get("color", Color(0.32, 1.0, 0.02))
+	if not is_instance_valid(_charge_fx):
+		_charge_fx = Node3D.new()
+		_charge_fx.name = "Rack"
+		model.add_child(_charge_fx)
+		_charge_fx.position = model.get_meta("launcher", Vector3(0, 2, -2.5)) + Vector3(0, 0.45, 0.3)
+		for i in most:
+			var dart := Node3D.new()
+			dart.name = "D%d" % i
+			var x := (float(i) - (most - 1) * 0.5) * 0.36
+			dart.position = Vector3(x, 0.0, 0.0)
+			dart.rotation.y = -x * 0.25 # fanned a little, as they leave
+			var mat := MeshKit.emissive(col, 1.6)
+			MeshKit.cylinder(dart, 0.08, 0.8, Vector3.ZERO, mat, Vector3(90, 0, 0), 6).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			MeshKit.sphere(dart, 0.11, Vector3(0, 0, -0.43), mat, Vector3(1, 1, 1.6), 6).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			dart.visible = false
+			dart.set_meta("mat", mat)
+			_charge_fx.add_child(dart)
+	var pulse := 1.0 + (0.12 * sin(_clock * 28.0) if loaded >= most else 0.0)
+	for i in most:
+		var dart := _charge_fx.get_node_or_null("D%d" % i) as Node3D
+		if dart == null:
+			continue
+		var was := dart.visible
+		dart.visible = i < loaded
+		if dart.visible and not was: # a pop as it loads
+			dart.scale = Vector3.ONE * 1.8
+			FxKit.spark(get_parent(), dart.global_position, Vector3.UP)
+		dart.scale = dart.scale.lerp(Vector3.ONE * pulse, 0.25)
+		var m: StandardMaterial3D = dart.get_meta("mat")
+		m.albedo_color = col
+		m.emission = col
 
 
 ## The next special comes back this many seconds sooner (Roadkill catching his blade).
@@ -1892,6 +2037,8 @@ func take_damage(amount: float, attacker: Vehicle = null) -> void:
 		return
 	if invisible_time > 0.0:
 		revealed_time = maxf(revealed_time, 0.5) # a hit shows where you are for a moment
+	if dash_time > 0.0:
+		amount *= float(_dash.get("armor", 0.5)) # round 23: half damage while a ball of tyres
 	health -= amount
 	if attacker and attacker != self:
 		last_attacker = attacker
@@ -1945,9 +2092,15 @@ func _secondary() -> void:
 			_break_invisibility()
 			var blade := Boomerang.start(self, WeaponData.get_def("boomerang"))
 			blade.refund = cost
-		"rim_shot": # round 21: Axel's secondary
+		"rim_shot": # round 21: Axel's secondary (replaced by the tyre dash in round 23; kept for other cars)
 			_break_invisibility()
 			RimShot.start(self, WeaponData.get_def("rim_shot"))
+		"tyre_dash": # round 23: Axel's secondary
+			_break_invisibility()
+			start_dash(WeaponData.get_def("tyre_dash"))
+		"reaper_sweep": # round 23: Mr. Grimm's Soul Harvest
+			_break_invisibility()
+			ReaperSweep.start(self, WeaponData.get_def("reaper_sweep"))
 	_refresh_slots()
 
 
@@ -2087,6 +2240,7 @@ func _die() -> void:
 	is_dead = true
 	frozen_time = 0.0
 	burn_time = 0.0
+	dash_time = 0.0
 	_burn_fx.on = false
 	_fx.stop()
 	_ice.visible = false

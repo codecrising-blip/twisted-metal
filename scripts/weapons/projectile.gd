@@ -46,6 +46,8 @@ static func spawn(parent: Node, id: String, from: Vector3, dir: Vector3, by: Veh
 	p._build_visual()
 	p._add_streak()
 	p.add_to_group("projectiles") # the AI watches for homing shots coming at it
+	if p.def.get("kind", "") == "skull": # round 23: the rider flares red, faces burst out round the bike
+		SpiritSkull.launch(by, from, p.direction)
 	if p.def.get("kind", "bullet") != "bullet":
 		var col: Color = p.def.get("color", Color(1, 0.6, 0.2))
 		var big := float(p.def.get("damage", 10.0)) >= 40.0
@@ -107,6 +109,13 @@ func _build_visual() -> void:
 				halo.albedo_color = Color(color.r, color.g, color.b, 0.3)
 				var hm := MeshKit.sphere(holder, 0.27 * s, Vector3(0, 0, 0.1 * s), halo, Vector3(1, 1, 2.9), 8)
 				hm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				# Round 23: two sparks orbit it as it flies (the body spins about the flight axis): a charged dart.
+				_body = Node3D.new()
+				holder.add_child(_body)
+				for k in 2:
+					var dot := MeshKit.sphere(_body, 0.05 * s + 0.03, Vector3(cos(PI * k), sin(PI * k), 0.0) * (0.3 * s + 0.12), MeshKit.emissive(color.lerp(Color.WHITE, 0.35), 1.4), Vector3.ONE, 6)
+					dot.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+					Streak.attach(dot, color, 0.12, 0.05)
 			if not def.get("small", false):
 				_add_light(color, 2.0, 5.0)
 		"freeze":
@@ -117,29 +126,7 @@ func _build_visual() -> void:
 			_add_trail(t)
 			_add_light(color, 2.5, 6.0)
 		"cone":
-			# Sweet Tooth's flaming cone, point first and spinning: a scorched waffle cone, a molten
-			# scoop and a fireball halo around it, flames pouring off the back. The charged one is
-			# twice the size and white-hot.
-			var charged: bool = def.get("charged", false)
-			var big := 2.3 if charged else 1.5
-			_body = Node3D.new()
-			add_child(_body)
-			var waffle := MeshKit.mat(Color(0.55, 0.34, 0.14), 0.9)
-			var c1 := MeshKit.cylinder(_body, 0.36 * big, 1.0 * big, Vector3(0, 0, -0.2 * big), waffle, Vector3(-90, 0, 0), 8, 0.02)
-			c1.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			MeshKit.torus(_body, 0.3 * big, 0.38 * big, Vector3(0, 0, 0.12 * big), MeshKit.mat(Color(0.18, 0.1, 0.05), 0.9), Vector3(90, 0, 0))
-			var core := Color(1.0, 0.9, 0.6) if charged else Color(1.0, 0.45, 0.12)
-			MeshKit.sphere(_body, 0.42 * big, Vector3(0, 0, 0.35 * big), MeshKit.emissive(core, 3.5), Vector3.ONE, 10)
-			var halo := MeshKit.emissive(Color(1.0, 0.4, 0.08), 2.0)
-			halo.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			halo.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-			halo.albedo_color = Color(1.0, 0.45, 0.1, 0.35)
-			halo.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			var h := MeshKit.sphere(self, 0.85 * big, Vector3(0, 0, 0.2 * big), halo, Vector3(1, 1, 1.3), 10)
-			h.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			_halo = h
-			_add_trail(FxKit.fire(1.2 * big, int(30 * big)))
-			_add_light(color, 3.0 * big, 8.0)
+			_cone_visual(color)
 		"gas":
 			# A dented red gas can tumbling through the air, leaking fire.
 			var can := MeshKit.mat(Color(0.62, 0.08, 0.06), 0.6, 0.3)
@@ -178,73 +165,122 @@ func _build_visual() -> void:
 			_add_light(color, 2.5, 7.0)
 
 
-## Mr. Grimm's skull. Round 21 gave it the sculpted skull from Blender (tools/blender/build_skull.py);
-## round 22 (owner): not bone, a GHOST: the same skull drawn see-through and glowing red (ghost_skull.gdshader),
-## two fading afterimages behind it, a red glow round it and a red light on the ground under it. It flies
-## dead straight (no tracking).
-const GHOST_SHADER := preload("res://scripts/fx/ghost_skull.gdshader")
-var _ghosts: Array[MeshInstance3D] = []
-var _ghost_src: Array[MeshInstance3D] = [] # the skull mesh each afterimage copies
-var _ghost_back: Array[float] = [] # how far behind it trails (m)
+## Sweet Tooth's Napalm Cone. Round 23 (owner: "the specials must look like special weapons, not plain
+## fireballs"): the Blender cone (tools/blender/build_napalm_cone.py: a waffle cone, scorched tip, molten napalm
+## scoop dripping over the rim) flying point first and spinning, the game's own fire (FoamFire) pouring off the
+## scoop and streaming back, two ribbons of flame spiralling round it as it spins, embers. The charged one is
+## bigger, burns white-hot at the scoop and throws rings of fire behind it as it goes (`_ring_step`).
+func _cone_visual(color: Color) -> void:
+	var charged: bool = def.get("charged", false)
+	var big := 2.3 if charged else 1.5
+	_body = Node3D.new()
+	add_child(_body)
+	if ModelLib.has("napalm_cone"):
+		var m := ModelLib.instance("napalm_cone", "cone")
+		m.scale = Vector3.ONE * big
+		_body.add_child(m)
+		for mi in m.find_children("*", "MeshInstance3D", true, false):
+			(mi as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	else:
+		var waffle := MeshKit.mat(Color(0.55, 0.34, 0.14), 0.9)
+		MeshKit.cylinder(_body, 0.36 * big, 1.0 * big, Vector3(0, 0, -0.2 * big), waffle, Vector3(-90, 0, 0), 8, 0.02)
+		MeshKit.sphere(_body, 0.42 * big, Vector3(0, 0, 0.35 * big), MeshKit.emissive(Color(1.0, 0.45, 0.12), 3.5), Vector3.ONE, 10)
+	# A soft glow round the scoop only (the old halo round the whole cone made it read as a fireball).
+	var core := Color(1.0, 0.85, 0.5) if charged else Color(1.0, 0.45, 0.1)
+	var halo := MeshKit.emissive(core, 1.5)
+	halo.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	halo.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	halo.albedo_color = Color(core.r, core.g, core.b, 0.16 if charged else 0.1)
+	halo.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var h := MeshKit.sphere(self, 0.42 * big, Vector3(0, 0, 0.5 * big), halo, Vector3(1, 1, 1.0), 10)
+	h.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_halo = h
+	# The game's fire off the scoop, streaming back (it keeps most of the cone's speed: a tail, not a column).
+	var fire := FoamFire.new()
+	fire.box = Vector3(0.28, 0.28, 0.18) * big
+	fire.position = Vector3(0, 0, 0.5 * big)
+	fire.rate = 150.0 if charged else 110.0
+	fire.life = 0.3
+	fire.size = 0.62 * big
+	fire.rise = 0.6
+	fire.inherit = 0.93
+	fire.drag = 1.6
+	fire.glow = 0.85
+	fire.on = true
+	add_child(fire)
+	fire.prime(direction * float(def.get("speed", 60.0)))
+	# Two flame ribbons wound round it: points on the spinning body leave a spiral behind.
+	for k in 2:
+		var p := Node3D.new()
+		var a := PI * k
+		p.position = Vector3(cos(a), sin(a), 0.1) * 0.42 * big
+		_body.add_child(p)
+		Streak.attach(p, Color(1.0, 0.55, 0.12) if not charged else Color(1.0, 0.85, 0.45), 0.22, 0.07 * big)
+	_add_trail(_embers(big))
+	_add_light(color, 3.0 * big, 8.0)
 
 
-func _skull_visual(color: Color) -> void:
-	var red := Color(0.95, 0.03, 0.02)
-	var mat := ShaderMaterial.new()
-	mat.shader = GHOST_SHADER
-	mat.set_shader_parameter("tint", red)
-	if ModelLib.has("skull"):
-		var sk := ModelLib.instance("skull", "skull")
-		sk.scale = Vector3.ONE * SKULL_SCALE
-		add_child(sk)
-		for mi in _meshes_in(sk):
-			mi.material_override = mat
-			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			for k in 2: # echoes, fainter, just behind it: one ghostly smear, not three skulls
-				var g := MeshInstance3D.new()
-				g.mesh = mi.mesh
-				var gm := mat.duplicate() as ShaderMaterial
-				gm.set_shader_parameter("fade", 0.32 if k == 0 else 0.14)
-				g.material_override = gm
-				g.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-				g.top_level = true
-				g.visible = false
-				add_child(g)
-				_ghosts.append(g)
-				_ghost_src.append(mi)
-				_ghost_back.append(0.45 if k == 0 else 0.95)
-	var aura := MeshKit.emissive(red, 2.0)
-	aura.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	aura.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
-	aura.albedo_color = Color(red.r, red.g, red.b, 0.07)
-	var halo := MeshKit.sphere(self, 0.72 * SKULL_SCALE, Vector3.ZERO, aura, Vector3(1, 1, 1.2), 12)
-	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	Streak.attach(self, Color(1.0, 0.1, 0.05), 0.12, 0.2)
-	_add_light(red, 5.0, 12.0)
+## Sparks and embers shed from the burning cone (additive: immune to the black-quad bug).
+static func _embers(big: float) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.mesh = FxKit.particle_mesh(true)
+	p.amount = int(20 * big)
+	p.lifetime = 0.45
+	p.local_coords = false
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 0.4 * big
+	p.direction = Vector3.UP
+	p.spread = 180.0
+	p.gravity = Vector3(0, -6.0, 0)
+	p.initial_velocity_min = 1.0
+	p.initial_velocity_max = 4.0
+	p.scale_amount_min = 0.05
+	p.scale_amount_max = 0.12
+	p.color_ramp = FxKit._ramp([Color(1, 0.9, 0.5, 1), Color(1.0, 0.5, 0.12, 0.8), Color(0.9, 0.2, 0.05, 0)])
+	return p
 
 
-static func _meshes_in(n: Node) -> Array[MeshInstance3D]:
-	var out: Array[MeshInstance3D] = []
-	if n is MeshInstance3D:
-		out.append(n)
-	for c in n.get_children():
-		out.append_array(_meshes_in(c))
-	return out
+var _ring_t := 0.0
 
-
-## The ghost skull's echoes trail just behind it along its (straight) path, a little bigger each.
-func _ghost_step() -> void:
-	if _ghosts.is_empty():
+## The charged cone throws a ring of fire behind it every few metres, square to its path, growing and fading.
+func _ring_step(delta: float) -> void:
+	_ring_t -= delta
+	if _ring_t > 0.0:
 		return
-	for i in _ghosts.size():
-		if is_instance_valid(_ghost_src[i]):
-			var src := _ghost_src[i].global_transform
-			var grow := 1.0 + _ghost_back[i] * 0.08
-			_ghosts[i].global_transform = Transform3D(src.basis.scaled(Vector3.ONE * grow), src.origin - direction * _ghost_back[i])
-			_ghosts[i].visible = true
+	_ring_t = 0.07
+	var world := get_parent()
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.albedo_color = Color(1.0, 0.55, 0.15, 0.7)
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.85
+	torus.outer_radius = 1.0
+	torus.rings = 24
+	torus.ring_segments = 4
+	var r := MeshInstance3D.new()
+	r.mesh = torus
+	r.material_override = m
+	r.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	world.add_child(r)
+	r.global_transform = Transform3D(Basis.looking_at(direction, Vector3.UP if absf(direction.y) < 0.98 else Vector3.RIGHT) * Basis(Vector3.RIGHT, PI * 0.5), global_position + direction * 0.6)
+	r.scale = Vector3.ONE * 0.7
+	var tw := r.create_tween().set_parallel(true)
+	tw.tween_property(r, "scale", Vector3.ONE * 2.6, 0.32).set_ease(Tween.EASE_OUT)
+	tw.tween_property(m, "albedo_color:a", 0.0, 0.32)
+	tw.chain().tween_callback(r.queue_free)
 
 
-const SKULL_SCALE := 1.15
+## Mr. Grimm's skull. Round 21 gave it the sculpted bone skull, round 22 a see-through ghost of it; round 23 (owner's
+## Head-On video): a SPIRIT FACE, pinkish red, three faces closing into one, gold sparkles behind (SpiritSkull). It
+## flies dead straight (no tracking at all) and hits for 65.
+func _skull_visual(_color: Color) -> void:
+	add_child(SpiritSkull.new())
+	_add_trail(SpiritSkull.sparkles())
+	_add_light(Color(1.0, 0.15, 0.12), 4.0, 11.0)
+
 
 
 func _add_streak() -> void:
@@ -269,7 +305,6 @@ func _add_light(color: Color, energy: float, light_range: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_ghost_step()
 	_life -= delta
 	if _life <= 0.0:
 		_explode(global_position, Vector3.UP, null)
@@ -286,9 +321,11 @@ func _physics_process(delta: float) -> void:
 	if _wig: # corkscrew, opening up after launch
 		var a := _wig_phase + _age * 22.0
 		_wig.position = Vector3(cos(a), sin(a), 0.0) * minf(0.45, _age * 2.0)
-	if _halo: # the fireball throbs
+	if _halo: # the glow round the scoop throbs
 		var k := 1.0 + 0.14 * sin(_age * 26.0)
-		_halo.scale = Vector3(k, k, k * 1.3)
+		_halo.scale = Vector3(k, k, k * 1.1)
+	if def.get("charged", false) and def.get("kind", "") == "cone":
+		_ring_step(delta)
 	if _drop_mark:
 		var g := Specials.ground_below(get_parent(), global_position)
 		_drop_mark.global_position = g + Vector3.UP * 0.15
@@ -492,6 +529,8 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 			if is_instance_valid(world) and world.is_inside_tree():
 				FxKit.explosion(world, up, 0.9 * big, Color(1.0, 0.38, 0.08), false))
 	elif kind != "gas":
+		if kind == "skull": # round 23: the spirit face blows apart in gold sparks over the fireball
+			SpiritSkull.burst(world, pos)
 		var small: bool = def.get("small", false)
 		FxKit.explosion(world, pos, (0.4 if small else 0.8) + dmg / 40.0, def.get("color", Color(1, 0.5, 0.15)))
 		if small: # zoomy: each of the ten pops white-hot with a spark, so the salvo crackles

@@ -1365,8 +1365,8 @@ func _run() -> void:
 	_check(rk.model.get_meta("wheels", []).size() == 4 and ax.model.get_meta("wheels", []).size() == 2,
 		"Roadkill (four wheels) and Axel (two giant wheels) load their Blender models")
 	_check(ax.model.get_meta("exhaust", []).size() == 2, "Axel has turbo flames (round 21)")
-	_check(rk.special_id == "charged_missiles" and String(rk.stats.secondary) == "boomerang" and String(ax.stats.secondary) == "rim_shot",
-		"Roadkill's special is the charged missiles, the blade his secondary; Axel's secondary is the Rim Shot")
+	_check(rk.special_id == "charged_missiles" and String(rk.stats.secondary) == "boomerang" and String(ax.stats.secondary) == "tyre_dash",
+		"Roadkill's special is the charged missiles, the blade his secondary; Axel's secondary is the Tyre Dash (round 23)")
 	# A fresh Outlaw: the match's one was blown apart by the round 17 checks (no collision left).
 	var ol20: Vehicle = main._spawn("outlaw", Transform3D(Basis.IDENTITY, LosAngelesArena.ground(40, 3, 0.1)), false)
 	for c: Vehicle in [rk, ax, ol20]:
@@ -1438,7 +1438,7 @@ func _run() -> void:
 		"Axel's sphere hits a car for 50 (%.1f) and sets it burning" % ring_dmg)
 	_check(ol20.velocity.x > 4.0, "the sphere throws it away from Axel (%.1f m/s)" % ol20.velocity.x)
 	_check(not is_instance_valid(mine20) or mine20.is_queued_for_deletion(), "mines inside the ring die harmlessly")
-	# Rim Shot: the tyre rolls at a car ahead for 20.
+	# Round 23: Axel's secondary is the Tyre Dash: tyres shut, he tears off; 30 a hit, half damage taken.
 	await _frames(40)
 	ol20.health = ol20.max_health
 	ol20.burn_time = 0.0
@@ -1449,8 +1449,44 @@ func _run() -> void:
 	ax.ammo["crowd_controller"] = 1
 	var r_hp := ol20.health
 	ax.energy_move("secondary")
-	await _frames(40)
-	_check(absf((r_hp - ol20.health) - 20.0) < 0.6, "Axel's Rim Shot rolls into the car for 20 (%.1f)" % (r_hp - ol20.health))
+	_check(ax.dash_time > 4.9 and int(ax.ammo["crowd_controller"]) == 0, "Axel's tyre dash starts (5 s, one special charge)")
+	var a_hp0 := ax.health
+	ax.take_damage(20.0, ol20)
+	_check(absf((a_hp0 - ax.health) - 10.0) < 0.01, "a dashing Axel takes half damage (%.1f of 20)" % (a_hp0 - ax.health))
+	for i in 70:
+		await physics_frame
+	_check(absf((r_hp - ol20.health) - 30.0) < 0.6, "the dash rams the car for 30 (%.1f)" % (r_hp - ol20.health))
+	for i in 300:
+		await physics_frame
+	_check(ax.dash_time <= 0.0, "the dash ends after 5 s")
+	# Round 23: Grimm's Soul Harvest: two passes of the scythe take 25% of a car near him and heal him 25%.
+	var gr: Vehicle = main._spawn("mr_grimm", Transform3D(Basis.IDENTITY, LosAngelesArena.ground(-20, -40, 0.1)), false)
+	gr.controller = null
+	gr.invulnerable_time = 0.0
+	ol20.health = ol20.max_health
+	ol20.burn_time = 0.0
+	_place(gr, -20, -40, 0)
+	_place(ol20, -14, -40, 90)
+	await _frames(5)
+	gr.health = gr.max_health * 0.5
+	gr.ammo["reaper_skull"] = 3
+	var s_hp := ol20.health
+	var gr_hp := gr.health
+	gr.energy_move("secondary")
+	_check(int(gr.ammo["reaper_skull"]) == 1 and main.get_children().any(func(n: Node): return n is ReaperSweep),
+		"Grimm swings the scythe for two special charges")
+	for i in 90:
+		await physics_frame
+	var took := s_hp - ol20.health
+	var gave := gr.health - gr_hp
+	_check(absf(took - ol20.max_health * 0.25) < 1.0, "the scythe tears out 25%% of the car's health (%.1f of %.0f)" % [took, ol20.max_health])
+	_check(absf(gave - gr.max_health * 0.25) < 1.0, "Grimm heals 25%% for it (%.1f of %.0f)" % [gave, gr.max_health])
+	# Round 23: his special is the Head-On spirit skull (faces, no bone), still dead straight.
+	gr.ammo["reaper_skull"] = 1
+	Specials.fire(gr, "reaper_skull")
+	var sk := get_nodes_in_group("projectiles").filter(func(q): return (q as Projectile).weapon_id == "reaper_skull")
+	_check(sk.size() == 1 and (sk[0] as Node).get_children().any(func(n: Node): return n is SpiritSkull),
+		"Grimm's skull is a spirit face (SpiritSkull)")
 
 	# Round 22 (owner): straight weapons have NO tracking at all.
 	var straight_ok := true

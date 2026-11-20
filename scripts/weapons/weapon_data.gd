@@ -136,7 +136,7 @@ const DEFS := {
 	"napalm_cone": {
 		"label": "Napalm Cone", "kind": "cone", "handler": "cone", "color": Color(1.0, 0.5, 0.15), "special": true,
 		"speed": 60.0, "damage": 45.0, "homing": 2.4, "seek": 35.0, "life": 3.0, "burn": 4.0, "push": 6.0,
-		"squish": 0.06, "shake": 0.45, "trail": Color(1.0, 0.32, 0.05), "trail_len": 0.3, "trail_w": 1.1,
+		"squish": 0.06, "shake": 0.45, "trail": Color(1.0, 0.32, 0.05), "trail_len": 0.3, "trail_w": 0.45, # round 23: thinner (the fire is the tail)
 		"charge_time": 2.0, "charged_damage": 90.0, "charged_speed": 64.0,
 		# Held this long PAST the full charge it melts down: no shot, locked 3 s (owner: round 10
 		# 1 s, round 17 2 s).
@@ -162,7 +162,7 @@ const DEFS := {
 	# Mr. Grimm: TM2 flaming skull. Owner (session 4): 65, the hardest single special hit but no
 	# instant kills (a medium car, 280, takes five).
 	"reaper_skull": {
-		"label": "Reaper Skull", "kind": "skull", "color": Color(1.0, 0.55, 0.15), "special": true,
+		"label": "Reaper Skull", "kind": "skull", "color": Color(1.0, 0.3, 0.26), "special": true, # round 23: spirit red
 		"speed": 85.0, "damage": 65.0, "homing": 0.0, "life": 2.5, "cooldown": 3.0, "recharge": 20.0, "push": 8.0, # round 22: no tracking
 		"sound_db": 3.5, # round 21 (owner): the special's sound x1.5 louder
 		"squish": 0.08, "shake": 0.6,
@@ -209,6 +209,21 @@ const DEFS := {
 		"speed": 45.0, "damage": 20.0, "bounces": 3, "max_hits": 2, "life": 4.0, "push": 6.0,
 		"squish": 0.05, "shake": 0.3, "cooldown": 1.0, "sound_db": 3.5,
 	},
+	# Axel's secondary (round 23, owner's design; replaces Rim Shot for him): Tyre Dash. His tyres close in, he
+	# tears off at speed_mult x his top speed for "time" s with "handling" x steering, taking "armor" x damage,
+	# bouncing off walls; each car he hits takes ram_damage, again only after a wall bounce (Vehicle._dash_ram).
+	"tyre_dash": {
+		"label": "Tyre Dash", "kind": "dash", "color": Color(1.0, 0.6, 0.25), "handler": "tyre_dash",
+		"time": 5.0, "speed_mult": 1.6, "handling": 0.5, "armor": 0.5, "ram_damage": 30.0, "bounce_keep": 0.92,
+		"cooldown": 1.0, "sound_db": 3.5,
+	},
+	# Mr. Grimm's secondary (round 23, owner's design): Soul Harvest. A spectral scythe swings round him twice in
+	# 0.8 s at 0.8 of Axel's sphere (10.2 x 0.8 = 8.16 m); each pass takes steal / spins of a car's full health
+	# (25% for both), and Grimm heals heal / spins of his own per car it cuts (ReaperSweep).
+	"reaper_sweep": {
+		"label": "Soul Harvest", "kind": "scythe", "color": Color(0.45, 1.0, 0.62), "handler": "reaper_sweep",
+		"radius": 8.16, "spins": 2, "time": 0.8, "steal": 0.25, "heal": 0.25, "cooldown": 1.0, "sound_db": 3.5,
+	},
 	# Spectre: ghost missile that flies through walls.
 	"ghost_missile": {
 		"label": "Ghost Missile", "kind": "ghost", "color": Color(0.5, 0.9, 1.0), "special": true,
@@ -224,7 +239,7 @@ const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "
 	"napalm", "napalm", "remote", "remote", "zoomy", "zoomy", "sat"]
 
 ## Secondary weapons (design 1.6): paid in charges of the car's special, Sweet Bot two, the rest one.
-const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1, "boomerang": 1, "rim_shot": 1}
+const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1, "boomerang": 1, "rim_shot": 1, "reaper_sweep": 2, "tyre_dash": 1}
 const BOT_HEALTH := 59.0 # owner, round 16: a power missile and a fire missile (45 + 14) take it down
 const BOT_MISSILES := 20
 const BOT_GAP := 0.1 # seconds between missiles: the barrage lasts two seconds

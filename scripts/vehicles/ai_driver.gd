@@ -215,6 +215,15 @@ func _energy_moves(v: Vehicle, delta: float) -> void:
 	if second == "boomerang" and charges >= 2 and to.length() < 45.0 and ahead < deg_to_rad(25.0) and randf() < 0.25 * aggression:
 		v.want_move = "secondary"
 		return
+	# Round 23: Grimm's scythe when a car is close, any side (two charges; keep one for the skull).
+	if second == "reaper_sweep" and charges >= 3 and to.length() < 7.0 and randf() < 0.35 * aggression:
+		v.want_move = "secondary"
+		return
+	# Round 23: Axel's tyre dash at a car ahead (he bounces round tight spots on his own).
+	if second == "tyre_dash" and charges >= 2 and v.dash_time <= 0.0 and to.length() < 35.0 and ahead < deg_to_rad(20.0) \
+			and randf() < 0.25 * aggression:
+		v.want_move = "secondary"
+		return
 	if second == "rim_shot" and charges >= 2 and to.length() < 40.0 and ahead < deg_to_rad(15.0) and randf() < 0.25 * aggression:
 		v.want_move = "secondary"
 		return

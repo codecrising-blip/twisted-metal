@@ -92,7 +92,7 @@ const CARS := {
 		"name": "Axel", "ram": 9.5, "engine": "tank", "driver": "Axel",
 		"spd": 4, "arm": 7, "hnd": 7, "spc": 6, "class": "medium",
 		"special": "crowd_controller",
-		"secondary": "rim_shot",
+		"secondary": "tyre_dash", # round 23 (owner): was Rim Shot
 		"stable": 1.0, # round 21 (owner): a short, tall frame that flipped on every kicker and edge
 		"size": Vector3(3.8, 2.8, 2.8), "camera": [5.4, 11.5],
 		"hood": Vector2(0.5, -0.9), "glass": Vector2(1.7, -0.2), "glass_n": Vector3(0, 0.2, -0.98),
@@ -109,6 +109,7 @@ const CARS := {
 		"name": "Mr. Grimm", "ram": 2.5, "engine": "moto", "driver": "Mr. Grimm",
 		"spd": 8, "arm": 1, "hnd": 6, "spc": 9, "class": "light",
 		"special": "reaper_skull",
+		"secondary": "reaper_sweep", # round 23 (owner): the scythe swings round him twice, stealing health
 		"stable": 1.0, # round 21 (owner): a narrow bike that rolled over at the slightest touch (Vehicle._stabilise)
 		"size": Vector3(2.0, 1.9, 3.2), "camera": [3.8, 9.0],
 		"tagline": "Death rides a motorcycle.",

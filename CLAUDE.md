@@ -656,6 +656,32 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   flies straight on (moved away = lost). **Crowd Controller:** radius 10.2 (x0.85), throw = the Remote mine formula
   (`launch` heights by class, falloff `k`, `push` 24, `blast_knock`). **Opponent pick:** pause menu keys 6 7 8 9 0
   (`pick_6..pick_10`, `HUD.opponent_requested`, `main.opponent_car`), mirror matches allowed.
+- **Round 23, full text `docs/design/28-owner-round-23.md`:** **Grimm's special = Head-On's spirit skull** (owner's
+  video `docs/reference/videos/mr grimm video.mp4`, bottom half = Head-On): a camera-facing picture of our own sculpted
+  skull (`tools/blender/build_spirit_skull.py` renders skull.glb from the front, lit by AO x the baked albedo, red
+  ramp, see-through hollows, blurred red aura -> `assets/fx/spirit_skull.png`, mipmaps on) drawn by
+  `scripts/fx/spirit_face.gdshader` (billboard keeping scale, waver, flicker, `tint` pulls pink back to red: ACES
+  bleaches it). `SpiritSkull` (child of the Projectile): main face 3.1 m + two side faces closing in behind it as
+  echoes, red aura, gold sparkles (the Projectile's `_trail`); `launch()` = rider `Vehicle.tint_flash` red, pink
+  ground glow, three faces burst round the bike; `burst()` at the hit. No GameFeel.flash at launch (a big flash
+  sphere is a white dome). The bone/ghost skull of rounds 21-22 is gone (`ghost_skull.gdshader` deleted).
+  **Axel's secondary = Tyre Dash** (`tyre_dash`, 1 charge; Rim Shot stays in the code, unused): `Vehicle.start_dash`,
+  `dash_time` 5 s: gas held for him, top x1.6, accel x2.5, steering x0.5, damage taken x0.5; walls bounce him
+  (`_dash_bounce`: velocity reflected, heading snapped, no wall damage, re-arms his ram); each car he hits takes 30
+  once (`_dash_ram`; `_ram` skips pairs with a dasher) until a wall bounce; `TyreDash` = the look (wheel pivots slide
+  in to 0.3 of their x, body squeezed to 0.32 wide, sparks, streaks, whine, bang at bounces). **Grimm's secondary =
+  Soul Harvest** (`reaper_sweep`, 2 charges): `ReaperSweep`, a spectral scythe (black shaft, raised crescent blade,
+  pale soul-green with a white-hot edge, blade raised 55 deg: flat it was a line from the chase camera) twice round
+  him in 0.8 s at 8.16 m; each pass over a car = 12.5% of its max health, Grimm heals 12.5% of his per pass when
+  red soul wisps reach him; narrow crescent swoosh (rim + soft body), faint green reach ring. `tests/_special_film.gd
+  -- car weapon out.png frames [secondary]` (env FOE_AT = the Outlaw's z) films a special from the chase camera.
+  **Special looks (owner: "special weapons, not plain fireballs"):** Napalm Cone = Blender model
+  (`build_napalm_cone.py` -> `napalm_cone.glb` "cone": waffle shell + raised lattice tubes both ways, burnt tip,
+  rolled rim, molten glow scoop with drips; ~8k tris) in `Projectile._cone_visual`: FoamFire off the scoop (inherit
+  0.93, primed), two spiral Streak ribbons on the spinning body, embers as the `_trail`, a small scoop glow (the old big
+  halo read as a fireball); charged = fire rings behind it (`_ring_step`). Roadkill: `Vehicle._rack_fx` = six darts over
+  the launcher lighting up as missiles load (crimson when red); charged missiles carry two orbiting sparks.
+  `tests/_proj_shot.gd -- weapon out.png [charged]` = one projectile up close; `tests/_charge_film.gd` = Roadkill's charge.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
