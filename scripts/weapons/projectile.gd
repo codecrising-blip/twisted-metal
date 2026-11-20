@@ -53,7 +53,7 @@ static func spawn(parent: Node, id: String, from: Vector3, dir: Vector3, by: Veh
 		# launch sound with its peak on this frame, and the car kicks back and dips a little.
 		var small: bool = p.def.get("small", false)
 		GameFeel.muzzle(parent, from, col, 1.6 if big else (0.5 if small else 1.0))
-		GameFeel.play("launch_" + id, from, parent, 0.0, 1.0, true)
+		GameFeel.play("launch_" + id, from, parent, float(p.def.get("sound_db", 0.0)), 1.0, true)
 		if not small:
 			FxKit.puff(parent, from - p.direction * 0.6, 0.5 if big else 0.35)
 		if p.def.get("kind", "") == "cone": # the mortar coughs out a ball of flame with it
@@ -166,22 +166,35 @@ func _build_visual() -> void:
 			_add_light(color, 2.5, 7.0)
 
 
-## Mr. Grimm's flaming skull (TM2): bone skull, dark eye holes, a row of teeth, fire behind.
+## Mr. Grimm's flaming skull (TM2). Round 21 (owner: "it looks like a fireball, not a skull attack"): the
+## sculpted skull from Blender (tools/blender/build_skull.py: old bone, deep dark sockets with an ember in
+## each, teeth, the jaw hanging open) flies face first, and the game's fire streams back off the top and
+## back of its head like a mane, so the skull itself is always what you see.
 func _skull_visual(color: Color) -> void:
-	var bone := MeshKit.emissive(Color(0.95, 0.9, 0.78), 0.6)
-	var black := MeshKit.mat(Color(0.02, 0.02, 0.02))
-	MeshKit.sphere(self, 0.6, Vector3(0, 0.08, 0.05), bone, Vector3(1, 1.05, 1.1), 12)
-	MeshKit.box(self, Vector3(0.62, 0.32, 0.5), Vector3(0, -0.38, -0.22), bone) # jaw
-	for side in [-1.0, 1.0]:
-		MeshKit.sphere(self, 0.17, Vector3(0.22 * side, 0.12, -0.5), black, Vector3(1.1, 1.0, 0.5), 8)
-		MeshKit.sphere(self, 0.05, Vector3(0.22 * side, 0.12, -0.56), MeshKit.emissive(Color(1.0, 0.3, 0.05), 6.0), Vector3.ONE, 6)
-	MeshKit.prism(self, Vector3(0.16, 0.18, 0.1), Vector3(0, -0.08, -0.6), black, Vector3(180, 0, 0))
-	for i in 6:
-		MeshKit.box(self, Vector3(0.07, 0.12, 0.06), Vector3(-0.2 + i * 0.08, -0.32, -0.48), MeshKit.mat(Color(0.98, 0.95, 0.85)))
-	var flames := FxKit.fire(1.6, 48)
-	flames.position = Vector3(0, 0.2, 0.4)
-	_add_trail(flames)
+	if ModelLib.has("skull"):
+		var sk := ModelLib.instance("skull", "skull")
+		sk.scale = Vector3.ONE * SKULL_SCALE
+		add_child(sk)
+	else:
+		var bone := MeshKit.emissive(Color(0.95, 0.9, 0.78), 0.6)
+		MeshKit.sphere(self, 0.6, Vector3(0, 0.08, 0.05), bone, Vector3(1, 1.05, 1.1), 12)
+	var mane := FoamFire.new()
+	mane.box = Vector3(0.38, 0.22, 0.3) * SKULL_SCALE
+	mane.position = Vector3(0, 0.3, 0.32) * SKULL_SCALE # over the top and back of the cranium
+	mane.rate = 170.0
+	mane.life = 0.26
+	mane.size = 0.7 * SKULL_SCALE
+	mane.rise = 0.8
+	mane.inherit = 0.96 # it keeps nearly all the skull's speed: a mane over its head, trailing ~1.5 m
+	mane.drag = 1.5
+	mane.glow = 0.85
+	mane.on = true
+	add_child(mane)
+	mane.prime(direction * float(def.get("speed", 85.0)))
 	_add_light(color, 4.0, 10.0)
+
+
+const SKULL_SCALE := 1.15
 
 
 func _add_streak() -> void:
@@ -239,6 +252,8 @@ func _physics_process(delta: float) -> void:
 		var homing: float = def.get("homing", 0.0)
 		if homing > 0.0 and is_instance_valid(target) and not target.is_dead and not target.is_hidden():
 			var to_t := target.aim_point() - global_position
+			if homing <= 0.6: # round 21: a straight weapon (the skull) only bends sideways, it keeps its level
+				to_t.y = direction.y * Vector2(to_t.x, to_t.z).length() / maxf(Vector2(direction.x, direction.z).length(), 0.01)
 			var desired := to_t.normalized()
 			var angle := direction.angle_to(desired)
 			if def.has("seek") and rad_to_deg(angle) > float(def["seek"]):
@@ -263,7 +278,13 @@ func _physics_process(delta: float) -> void:
 	var hit := get_world_3d().direct_space_state.intersect_ray(query)
 	if def.get("kind", "bullet") == "bullet":
 		# Round 12 (owner): machine-gun rounds meet a car's box made 10% bigger than its body.
-		var car_hit := _bullet_car(from, to, hit)
+		var car_hit := _bullet_car(from, to, hit, STRAIGHT_REACH_UP)
+		if not car_hit.is_empty():
+			hit = car_hit
+	elif float(def.get("homing", 0.0)) <= 0.6 and def.get("kind", "") in ["missile", "cone", "skull"]:
+		# Round 21: straight shots fly level (zero angle) from launchers of every height, so a car's box
+		# reaches up STRAIGHT_REACH_UP higher for them: a level shot from a tall truck still hits a low car.
+		var car_hit := _bullet_car(from, to, hit, STRAIGHT_REACH_UP)
 		if not car_hit.is_empty():
 			hit = car_hit
 	if not hit.is_empty():
@@ -278,7 +299,9 @@ func _physics_process(delta: float) -> void:
 ## whatever the ray hit. Returns a ray-style hit ({position, normal, collider}) or {}.
 const BULLET_BOX := 1.1
 
-func _bullet_car(from: Vector3, to: Vector3, ray_hit: Dictionary) -> Dictionary:
+const STRAIGHT_REACH_UP := 1.4 # round 21: m a car's box reaches up for level shots (launchers up to ~3 m)
+
+func _bullet_car(from: Vector3, to: Vector3, ray_hit: Dictionary, reach_up := 0.0) -> Dictionary:
 	var limit := 1.0
 	if not ray_hit.is_empty():
 		limit = from.distance_to(ray_hit.position) / maxf(from.distance_to(to), 0.0001)
@@ -289,8 +312,8 @@ func _bullet_car(from: Vector3, to: Vector3, ray_hit: Dictionary) -> Dictionary:
 		if v == null or v == shooter or v.is_dead or v.global_position.distance_squared_to(from) > 40000.0:
 			continue
 		var size: Vector3 = v.stats.get("size", Vector3(2.2, 1.8, 5.0))
-		var half := Vector3(size.x, size.y - Vehicle.BODY_CLEARANCE, size.z) * 0.5 * BULLET_BOX
-		var centre := Vector3(0.0, (size.y + Vehicle.BODY_CLEARANCE) * 0.5, 0.0)
+		var half := Vector3(size.x, size.y - Vehicle.BODY_CLEARANCE + reach_up, size.z) * 0.5 * BULLET_BOX
+		var centre := Vector3(0.0, (size.y + Vehicle.BODY_CLEARANCE + reach_up) * 0.5, 0.0)
 		var inv := v.global_transform.affine_inverse()
 		var t := segment_box(inv * from - centre, inv * to - centre, half)
 		if t >= 0.0 and t < best_t:

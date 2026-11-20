@@ -164,24 +164,45 @@ const DEFS := {
 	"reaper_skull": {
 		"label": "Reaper Skull", "kind": "skull", "color": Color(1.0, 0.55, 0.15), "special": true,
 		"speed": 85.0, "damage": 65.0, "homing": 0.6, "life": 2.5, "cooldown": 3.0, "recharge": 20.0, "push": 8.0,
+		"sound_db": 3.5, # round 21 (owner): the special's sound x1.5 louder
 		"squish": 0.08, "shake": 0.6,
 	},
-	# Roadkill (Marcus Kane): Boomerang Blast (design 01). A blade of welded scrap, light homing, out to
-	# "range" m or the first car it cuts, then back toward Roadkill: 16 out, 32 back (48 if one car takes
-	# both). Walls break it; props are cut through. Caught on the way back = next special 5 s sooner.
-	"boomerang": {
-		"label": "Boomerang Blast", "kind": "blade", "color": Color(1.0, 0.6, 0.25), "special": true, "handler": "boomerang",
-		"speed": 45.0, "return_speed": 50.0, "homing": 1.0, "range": 55.0, "life": 4.5,
-		"damage": 16.0, "return_damage": 32.0, "push": 3.0, "catch_bonus": 5.0,
-		"squish": 0.04, "shake": 0.3, "cooldown": 1.0, "recharge": 15.0,
+	# Roadkill's special (round 21, owner: the charged missiles are his MAIN weapon, the blade his secondary;
+	# numbers from round 16): hold fire and a missile loads every charge_time / salvo_max s, up to 6 ("MAX
+	# MISSILE CHARGE"); let go and they stream out, 80% of homing's tracking, 8 each (48 if all hit). Held
+	# red_after s more they turn red: 70 for the six. A tap fires one.
+	"charged_missiles": {
+		"label": "Charged Missiles", "kind": "missile", "handler": "charged_salvo", "color": Color(1.0, 0.62, 0.2), "special": true,
+		"speed": 52.0, "damage": 8.0, "homing": 2.56, "seek": 45.0, "life": 2.8, "push": 1.5,
+		"trail": Color(1.0, 0.75, 0.4), "trail_len": 0.35, "trail_w": 0.6, "model_scale": 0.8,
+		"squish": 0.03, "wobble": 0.2, "shake": 0.15,
+		"charge_time": 2.4, "salvo_max": 6, "salvo_gap": 0.09, "red_after": 2.0, "red_total": 70.0,
+		"red_color": Color(1.0, 0.12, 0.08), "cooldown": 1.0, "recharge": 16.0, "sound_db": 3.5,
 	},
-	# Axel: Crowd Controller (design 01). 0.4 s of sparks off the tyres (the warning), then a ring of
-	# electric fire races out to 12 m in 0.35 s: 16 near him, 8 at the rim, a hard throw away (not a super
-	# heavy) and burning. Kills mines inside it and breaks any grab on Axel. Jump it to dodge.
+	# Roadkill's secondary (round 21; was his special in round 20): Boomerang Blast (design 01). A blade of
+	# welded scrap, light homing, out to "range" m or the first car it cuts, then back toward Roadkill: 16
+	# out, 32 back (48 if one car takes both). Walls break it; props are cut through. Round 21 (owner): its
+	# cutting reach is 2.5x (HIT_RADIUS), and caught on the way back it gives its special charge back at once.
+	"boomerang": {
+		"label": "Boomerang Blast", "kind": "blade", "color": Color(1.0, 0.6, 0.25), "handler": "boomerang",
+		"speed": 45.0, "return_speed": 50.0, "homing": 1.0, "range": 55.0, "life": 4.5,
+		"damage": 16.0, "return_damage": 32.0, "push": 3.0,
+		"squish": 0.04, "shake": 0.3, "cooldown": 1.0, "sound_db": 3.5,
+	},
+	# Axel: Crowd Controller. Round 21 (owner: "sooo weak, a huge delay"): it goes off at once, a 360
+	# degree sphere of electric fire out to 12 m in 0.35 s, 50 to every car inside it (no weaker edge), a
+	# hard throw away (not a super heavy) and burning. Kills mines inside it and breaks any grab on Axel.
 	"crowd_controller": {
-		"label": "Crowd Controller", "kind": "ring", "color": Color(0.5, 0.75, 1.0), "special": true, "handler": "crowd_ring",
-		"windup": 0.4, "spread": 0.35, "radius": 12.0, "damage": 16.0, "edge_damage": 8.0, "push": 20.0, "burn": 3.0,
-		"cooldown": 1.0, "recharge": 15.0,
+		"label": "Crowd Controller", "kind": "ring", "color": Color(1.0, 0.55, 0.25), "special": true, "handler": "crowd_ring",
+		"spread": 0.35, "radius": 12.0, "damage": 50.0, "push": 20.0, "burn": 4.0,
+		"cooldown": 1.0, "recharge": 15.0, "sound_db": 3.5,
+	},
+	# Axel's secondary: Rim Shot (design 01). A spiked tyre rolls along the ground at 45 m/s and bounces
+	# off walls up to 3 times in 4 s: 20 to each car it rolls through (it goes on), 2 cars at most.
+	"rim_shot": {
+		"label": "Rim Shot", "kind": "tyre", "color": Color(0.85, 0.85, 0.8), "handler": "rim_shot",
+		"speed": 45.0, "damage": 20.0, "bounces": 3, "max_hits": 2, "life": 4.0, "push": 6.0,
+		"squish": 0.05, "shake": 0.3, "cooldown": 1.0, "sound_db": 3.5,
 	},
 	# Spectre: ghost missile that flies through walls.
 	"ghost_missile": {
@@ -198,7 +219,7 @@ const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "
 	"napalm", "napalm", "remote", "remote", "zoomy", "zoomy", "sat"]
 
 ## Secondary weapons (design 1.6): paid in charges of the car's special, Sweet Bot two, the rest one.
-const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1}
+const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1, "boomerang": 1, "rim_shot": 1}
 const BOT_HEALTH := 59.0 # owner, round 16: a power missile and a fire missile (45 + 14) take it down
 const BOT_MISSILES := 20
 const BOT_GAP := 0.1 # seconds between missiles: the barrage lasts two seconds

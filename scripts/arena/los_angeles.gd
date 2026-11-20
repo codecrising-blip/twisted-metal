@@ -358,6 +358,18 @@ static func on_mesh(x: float, z: float, lift := 0.0) -> Vector3:
 	return Vector3(x, mesh_height(x, z) + lift, z)
 
 
+## Round 21 (owner: grass showed through the road on the west hill at (-132, -54)): the road strips
+## and the 2 m ground mesh are cut into triangles along different lines, so on a hill's curve the
+## grass poked a few cm through the asphalt in diagonal bands. Over the road hills everything laid on
+## the ground (road, lines, curbs, sidewalk) sits this much higher.
+const HILL_LIFT := 0.12
+
+static func hill_lift(x: float, z: float) -> float:
+	if edge_distance(x, z) > -2.0:
+		return 0.0 # the battleground and its edge: not a road hill
+	return HILL_LIFT * clampf(height_at(x, z) / 0.4, 0.0, 1.0)
+
+
 ## Distance from (x, z) to the road centerline (m).
 static func road_distance(x: float, z: float) -> float:
 	var best := INF
@@ -698,7 +710,7 @@ func _drape(points: PackedVector3Array, width: float, lift: float, mat: Material
 			if surface.is_valid(): # a known plane (ramps): the 2 m ground mesh rounds their edges off
 				row.append(Vector3(q.x, float(surface.call(q.x, q.z)) + lift, q.z))
 			else:
-				row.append(on_mesh(q.x, q.z, lift))
+				row.append(on_mesh(q.x, q.z, lift + hill_lift(q.x, q.z)))
 		rows.append(row)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -869,10 +881,10 @@ func _curbs() -> void:
 			var a_out := pts[i] + nrm[i] * o_out
 			var b_out := pts[j] + nrm[j] * o_out
 			var h := 0.14
-			var ya := mesh_height(a_in.x, a_in.z)
-			var yb := mesh_height(b_in.x, b_in.z)
-			var yao := mesh_height(a_out.x, a_out.z)
-			var ybo := mesh_height(b_out.x, b_out.z)
+			var ya := mesh_height(a_in.x, a_in.z) + hill_lift(a_in.x, a_in.z)
+			var yb := mesh_height(b_in.x, b_in.z) + hill_lift(b_in.x, b_in.z)
+			var yao := mesh_height(a_out.x, a_out.z) + hill_lift(a_out.x, a_out.z)
+			var ybo := mesh_height(b_out.x, b_out.z) + hill_lift(b_out.x, b_out.z)
 			mb.quad(mat, Vector3(a_in.x, ya + h, a_in.z), Vector3(b_in.x, yb + h, b_in.z), Vector3(b_out.x, ybo + h, b_out.z), Vector3(a_out.x, yao + h, a_out.z), Vector3.UP)
 			mb.quad(mat, Vector3(a_in.x, ya - 0.05, a_in.z), Vector3(b_in.x, yb - 0.05, b_in.z), Vector3(b_in.x, yb + h, b_in.z), Vector3(a_in.x, ya + h, a_in.z), -nrm[i] * side)
 	batch_builder(mb, false, 0.5)

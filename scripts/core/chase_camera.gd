@@ -11,6 +11,7 @@ var target: Vehicle
 var distance := 9.5
 var height := 3.4
 var smoothing := 7.0
+const MAX_FALL_BACK := 1.335 # round 21: the furthest the camera gets, x its resting distance (0.85 x 1.57)
 
 const MODES := ["near", "far", "car"]
 static var mode := "near" # kept across restarts
@@ -71,6 +72,14 @@ func _physics_process(delta: float) -> void:
 		# tighter, so the sudden shove doesn't open a gap behind the car.
 		var follow := smoothing * (1.8 if target._boosting else 1.0)
 		global_position = global_position.lerp(desired, 1.0 - exp(-follow * delta))
+		# Round 21 (owner: "the camera gets way too far with turbo"): at speed it fell back to ~1.57x its
+		# resting distance (Sweet Tooth: 13 m -> 20.4 m). Now it never gets further than 0.85 of that.
+		var flat := global_position - target.global_position
+		var h := flat.y
+		flat.y = 0.0
+		var cap := distance * (1.6 if mode == "far" else 1.0) * MAX_FALL_BACK
+		if flat.length() > cap:
+			global_position = target.global_position + flat.normalized() * cap + Vector3.UP * h
 
 	var look := target.global_position + fwd * 4.0 + Vector3.UP * height * 0.45
 	look_at(look)
@@ -98,10 +107,20 @@ func looking_back() -> bool:
 	return rear_view or Input.is_action_pressed("look_back")
 
 
+## Round 21 (owner: Grimm flipped on the hill "and the camera rotated with him"): while the car is
+## tumbling, on its side or on its roof, the camera keeps the heading it had and doesn't spin with it.
+var _last_fwd := Vector3.FORWARD
+
 func _target_forward() -> Vector3:
-	var f := -target.global_transform.basis.z
+	var b := target.global_transform.basis
+	if b.y.y < 0.6:
+		return _last_fwd
+	var f := -b.z
 	f.y = 0.0
-	return f.normalized()
+	if f.length() < 0.2:
+		return _last_fwd
+	_last_fwd = _last_fwd.slerp(f.normalized(), 1.0 if b.y.y > 0.85 else 0.15).normalized()
+	return _last_fwd
 
 
 ## Speed as the camera feels it: up to the car's top speed in full, anything turbo adds on top

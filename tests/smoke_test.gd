@@ -1359,12 +1359,16 @@ func _run() -> void:
 	me.take_damage(99999.0, ol17)
 	_check(me.is_dead and count_corpses.call() == bodies0 + 1, "destroyed in the air: the driver is thrown out of the car")
 
-	# Round 20: Roadkill's Boomerang Blast and Axel's Crowd Controller.
+	# Round 20/21: Roadkill (charged missiles, the blade as secondary) and Axel (the sphere, Rim Shot).
 	var rk: Vehicle = main._spawn("roadkill", Transform3D(Basis.IDENTITY, LosAngelesArena.ground(40, 26, 0.1)), false)
 	var ax: Vehicle = main._spawn("axel", Transform3D(Basis.IDENTITY, LosAngelesArena.ground(-40, -20, 0.1)), false)
 	_check(rk.model.get_meta("wheels", []).size() == 4 and ax.model.get_meta("wheels", []).size() == 2,
 		"Roadkill (four wheels) and Axel (two giant wheels) load their Blender models")
-	var ol20: Vehicle = main.enemies.filter(func(e: Vehicle): return e.car_id == "outlaw")[0]
+	_check(ax.model.get_meta("exhaust", []).size() == 2, "Axel has turbo flames (round 21)")
+	_check(rk.special_id == "charged_missiles" and String(rk.stats.secondary) == "boomerang" and String(ax.stats.secondary) == "rim_shot",
+		"Roadkill's special is the charged missiles, the blade his secondary; Axel's secondary is the Rim Shot")
+	# A fresh Outlaw: the match's one was blown apart by the round 17 checks (no collision left).
+	var ol20: Vehicle = main._spawn("outlaw", Transform3D(Basis.IDENTITY, LosAngelesArena.ground(40, 3, 0.1)), false)
 	for c: Vehicle in [rk, ax, ol20]:
 		c.is_dead = false
 		c.health = c.max_health
@@ -1375,10 +1379,10 @@ func _run() -> void:
 	_place(ol20, 40, 3, 0)
 	await _frames(5)
 	rk.target = ol20
-	rk.ammo["boomerang"] = 1
-	rk._special_timer = 0.0
+	rk.ammo["charged_missiles"] = 1
 	var b_hp := ol20.health
-	Specials.fire(rk, "boomerang")
+	rk.energy_move("secondary")
+	_check(int(rk.ammo["charged_missiles"]) == 0, "the blade costs Roadkill a special charge")
 	var blade := main.get_children().filter(func(n: Node): return n is Boomerang)
 	_check(blade.size() == 1, "Roadkill throws his blade")
 	var why := [""]
@@ -1391,22 +1395,62 @@ func _run() -> void:
 		await _frames(1)
 		if not is_instance_valid(flying):
 			break
-	_check(not is_instance_valid(flying) and rk._special_timer >= 5.0,
-		"it swings back and Roadkill catches it: his next special comes 5 s sooner (%.1f s; %s)" % [rk._special_timer, why[0]])
+	_check(not is_instance_valid(flying) and int(rk.ammo["charged_missiles"]) == 1,
+		"it swings back, Roadkill catches it and gets the charge back at once (%s)" % why[0])
+	# Charged missiles: six for a full charge (8 each), red after 2 s more (70 for the six).
+	await _frames(30)
+	ol20.health = ol20.max_health
+	_place(ol20, 40, 3, 0)
+	await _frames(3)
+	var c_hp := ol20.health
+	rk.auto_target = false
+	rk.target = ol20
+	rk.released_hold = 2.5
+	Specials.fire(rk, "charged_missiles")
+	for i in 100: # physics steps: the six stream out 0.09 s apart and fly 23 m
+		await physics_frame
+	var six := c_hp - ol20.health
+	_check(six > 39.0 and six < 49.0, "a full charge sends six missiles at 8 (%.1f)" % six)
+	ol20.health = ol20.max_health
+	_place(ol20, 40, 3, 0)
+	await _frames(3)
+	c_hp = ol20.health
+	rk.released_hold = 4.6
+	Specials.fire(rk, "charged_missiles")
+	for i in 100:
+		await physics_frame
+	var red := c_hp - ol20.health
+	_check(red > 58.0 and red < 71.0, "held 2 s more, the six are red and hit for 70 (%.1f)" % red)
 
 	_place(ax, -40, -20, 0)
 	_place(ol20, -33, -20, 0)
 	await _frames(5)
 	ol20.health = ol20.max_health
+	ol20.burn_time = 0.0
 	var mine20 := Mine.drop(ol20, WeaponData.get_def("remote"))
 	var a_hp := ol20.health
 	Specials.fire(ax, "crowd_controller")
-	await _frames(50)
+	await _frames(1)
+	_check(main.get_children().filter(func(n: Node): return n is CrowdRing).size() == 1, "Axel's sphere goes off the moment it is fired")
+	await _frames(30)
 	var ring_dmg := a_hp - ol20.health
-	_check(ring_dmg >= 8.0 and ring_dmg <= 16.5 and ol20.burn_time > 0.0,
-		"Axel's ring hits a car close by (%.1f, 8-16) and sets it burning" % ring_dmg)
-	_check(ol20.velocity.x > 4.0, "the ring throws it away from Axel (%.1f m/s)" % ol20.velocity.x)
+	_check(ring_dmg >= 49.5 and ring_dmg <= 52.5 and ol20.burn_time > 0.0,
+		"Axel's sphere hits a car for 50 (%.1f) and sets it burning" % ring_dmg)
+	_check(ol20.velocity.x > 4.0, "the sphere throws it away from Axel (%.1f m/s)" % ol20.velocity.x)
 	_check(not is_instance_valid(mine20) or mine20.is_queued_for_deletion(), "mines inside the ring die harmlessly")
+	# Rim Shot: the tyre rolls at a car ahead for 20.
+	await _frames(40)
+	ol20.health = ol20.max_health
+	ol20.burn_time = 0.0
+	_place(ax, -40, 0, 0)
+	_place(ol20, -40, -18, 0)
+	await _frames(5)
+	ax.target = ol20
+	ax.ammo["crowd_controller"] = 1
+	var r_hp := ol20.health
+	ax.energy_move("secondary")
+	await _frames(40)
+	_check(absf((r_hp - ol20.health) - 20.0) < 0.6, "Axel's Rim Shot rolls into the car for 20 (%.1f)" % (r_hp - ol20.health))
 
 	print("")
 	if _failures.is_empty():

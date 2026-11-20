@@ -1,100 +1,95 @@
 class_name CrowdRing
 extends Node3D
-## Axel's Crowd Controller (design 01, Axel): "windup" seconds of sparks off both tyres while Axel rises a
-## little (the warning: jump it or get out of range), then a ring of electric fire races out along the
-## ground to "radius" m in "spread" s. Each car it meets takes "damage" near Axel down to "edge_damage"
-## at the rim, is thrown hard away from him (a super heavy only takes the damage) and burns. Mines inside
-## the ring die harmlessly, and any grab on Axel breaks (a taser link, a wheel clamp, a chain bomb on him).
-## A car more than 1.6 m off the ground (jumping) when the ring passes is missed.
+## Axel's Crowd Controller. Round 21 (owner: "sooo weak, a huge delay, the tip of it does nothing"): it
+## goes off THE MOMENT it is fired. A 360 degree sphere of electric fire races out from Axel to "radius"
+## m in "spread" s: a hollow shell, bright at its rim from every side (not a ball), with a ring racing
+## along the ground under it and lightning crawling over it. Every car it reaches, on the ground or in
+## the air, takes the same "damage" (no weaker edge), is thrown hard away from Axel (a super heavy only
+## takes the damage) and burns. Mines inside it die harmlessly, and any grab on Axel breaks (a taser
+## link, a wheel clamp, a chain bomb on him).
 
-const LIFT := 3.0 # m/s Axel is lifted during the windup
+const COLOR := Color(1.0, 0.55, 0.25) # the ring's electric orange (round 20), now the whole sphere
+const BOLT_TINT := Color(0.35, 0.6, 1.0)
 
 var owner_car: Vehicle
 var def := {}
 
 var _t := 0.0
-var _fired := false
 var _hit := {}
+var _centre := Vector3.ZERO
+var _shell: MeshInstance3D
+var _shell_mat: ShaderMaterial
 var _ring: MeshInstance3D
 var _ring_mat: StandardMaterial3D
 var _bolt: Bolt
-var _spark_t := 0.0
+
+static var _shader: Shader
 
 
 static func start(v: Vehicle, d: Dictionary) -> CrowdRing:
 	var r := CrowdRing.new()
 	r.owner_car = v
 	r.def = d
-	v.add_child(r) # rides with Axel during the windup, then stays where it went off
-	GameFeel.play("special_axel", v.global_position + Vector3.UP, v, 0.0, 1.0, true)
-	if v.is_on_floor():
-		v.push(Vector3.UP * LIFT)
+	v.get_parent().add_child(r)
+	r._fire()
 	return r
 
 
 func _ready() -> void:
 	_bolt = Bolt.new()
+	_bolt.tint = BOLT_TINT
 	add_child(_bolt)
 
 
-func _physics_process(delta: float) -> void:
-	_t += delta
-	var windup := float(def.get("windup", 0.4))
-	if not is_instance_valid(owner_car) or (owner_car.is_dead and not _fired):
-		queue_free()
-		return
-	if not _fired:
-		_windup_fx(delta)
-		if _t >= windup:
-			_fire()
-		return
-	var spread := float(def.get("spread", 0.35))
-	var k := clampf((_t - windup) / spread, 0.0, 1.0)
-	var radius := float(def.get("radius", 12.0)) * k
-	_reach(radius)
-	_ring.scale = Vector3(maxf(radius, 0.5), 1.0, maxf(radius, 0.5))
-	_ring_mat.albedo_color.a = 0.85 * (1.0 - k * k)
-	_bolt.begin()
-	if k < 1.0:
-		for i in 10: # lightning crawling along the front of the ring
-			var a := TAU * (i + randf()) / 10.0
-			var p := _ring.global_position + Vector3(cos(a), 0.0, sin(a)) * radius
-			var q := _ring.global_position + Vector3(cos(a + 0.35), 0.0, sin(a + 0.35)) * radius
-			_bolt.strand(Bolt.jagged(p + Vector3.UP * 0.2, q + Vector3.UP * randf_range(0.2, 1.4), 3, 0.45), 0.09, 0.03, 0.9)
-	_bolt.finish()
-	if _t >= windup + spread + 0.25:
-		queue_free()
-
-
-## The warning: sparks off both tyres where they meet the ground, a crackle running up the spokes.
-func _windup_fx(delta: float) -> void:
-	_spark_t -= delta
-	_bolt.begin()
-	var size: Vector3 = owner_car.stats.get("size", Vector3(3.8, 2.8, 2.8))
-	for sx in [-1.0, 1.0]:
-		var foot := owner_car.global_transform * Vector3(sx * size.x * 0.4, 0.15, 0.0)
-		var hub := owner_car.global_transform * Vector3(sx * size.x * 0.4, size.y * 0.5, 0.0)
-		_bolt.strand(Bolt.jagged(foot, hub, 3, 0.5), 0.07, 0.02, 0.8)
-		if _spark_t <= 0.0:
-			FxKit.spark(owner_car.get_parent(), foot, (Vector3.UP + owner_car.global_basis.x * sx).normalized())
-	if _spark_t <= 0.0:
-		_spark_t = 0.06
-	_bolt.finish()
+## A sphere drawn only near its outline: wherever you look from, it reads as a glowing ring round a
+## clear middle, with fine lightning bands sliding over it.
+static func shell_shader() -> Shader:
+	if _shader == null:
+		_shader = Shader.new()
+		_shader.code = """
+shader_type spatial;
+render_mode unshaded, blend_add, cull_disabled, depth_draw_never;
+uniform vec4 tint : source_color = vec4(1.0, 0.55, 0.25, 1.0);
+uniform float fade = 1.0;
+void fragment() {
+	float facing = abs(dot(normalize(NORMAL), normalize(VIEW)));
+	float rim = pow(1.0 - facing, 3.0);
+	vec3 w = (INV_VIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
+	float bands = smoothstep(0.82, 1.0, sin(w.y * 3.0 + TIME * 14.0 + sin(w.x * 0.7 + TIME * 5.0) * 2.0));
+	float a = (rim * 1.4 + 0.06 + bands * 0.18 * (1.0 - facing)) * fade;
+	ALBEDO = mix(tint.rgb, vec3(1.0, 0.95, 0.85), rim * rim * 0.6) * a;
+}
+"""
+	return _shader
 
 
 func _fire() -> void:
-	_fired = true
 	var world := owner_car.get_parent()
-	var at := Specials.ground_below(world, owner_car.global_position + Vector3.UP)
-	# The ring stays where it went off, it doesn't follow Axel.
-	top_level = true
-	global_transform = Transform3D(Basis.IDENTITY, at)
+	_centre = owner_car.global_position + Vector3.UP * 1.2
+	global_position = _centre
+	var ground := Specials.ground_below(world, _centre)
+	# The sphere shell.
+	_shell_mat = ShaderMaterial.new()
+	_shell_mat.shader = shell_shader()
+	_shell_mat.set_shader_parameter("tint", COLOR)
+	var sphere := SphereMesh.new()
+	sphere.radius = 1.0
+	sphere.height = 2.0
+	sphere.radial_segments = 40
+	sphere.rings = 20
+	_shell = MeshInstance3D.new()
+	_shell.mesh = sphere
+	_shell.material_override = _shell_mat
+	_shell.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_shell)
+	_shell.scale = Vector3.ONE * 0.5
+	# The ring racing along the ground under it.
 	_ring_mat = StandardMaterial3D.new()
 	_ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_ring_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_ring_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_ring_mat.albedo_color = Color(1.0, 0.55, 0.25, 0.85)
+	_ring_mat.albedo_color = Color(COLOR.r, COLOR.g, COLOR.b, 0.85)
 	var torus := TorusMesh.new()
 	torus.inner_radius = 0.9
 	torus.outer_radius = 1.0
@@ -105,40 +100,73 @@ func _fire() -> void:
 	_ring.material_override = _ring_mat
 	_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_ring)
-	_ring.global_position = at + Vector3.UP * 0.25
-	GameFeel.flash(world, at + Vector3.UP, 3.0, Color(0.7, 0.85, 1.0), 0.12)
-	GameFeel.shockwave(world, at, float(def.get("radius", 12.0)) * 1.15, Color(0.45, 0.7, 1.0))
-	GameFeel.shake(at, 0.5)
-	GameFeel.play("lightning", at, world, -4.0, 1.2, true)
-	FxKit.dust_ring(world, at, 2.0)
+	_ring.global_position = ground + Vector3.UP * 0.25
+	# The release beat (juice guide): a white-hot flash, the shockwave, the crack of it, a shake.
+	var sound_db := float(def.get("sound_db", 0.0))
+	GameFeel.play("special_axel", _centre, world, sound_db, 1.0, true)
+	GameFeel.play("lightning", _centre, world, -4.0 + sound_db, 1.2, true)
+	GameFeel.flash(world, _centre, 3.0, Color(1.0, 0.85, 0.6), 0.12)
+	GameFeel.shockwave(world, ground, float(def.get("radius", 12.0)) * 1.15, COLOR)
+	GameFeel.shake(_centre, 0.55)
+	FxKit.dust_ring(world, ground, 2.0)
+	for sx in [-1.0, 1.0]: # sparks off both tyres
+		FxKit.spark(world, owner_car.global_transform * Vector3(sx * 1.6, 0.2, 0.0), Vector3.UP)
+	if owner_car.is_player:
+		GameFeel.hitstop(get_tree(), 0.05)
 	_break_grabs()
-	_clear_mines(at)
+	_clear_mines()
 
 
+func _physics_process(delta: float) -> void:
+	if _shell == null:
+		return
+	_t += delta
+	var spread := float(def.get("spread", 0.35))
+	var full := float(def.get("radius", 12.0))
+	var k := clampf(_t / spread, 0.0, 1.0)
+	var radius := full * (1.0 - pow(1.0 - k, 2.0)) # fast out, easing at the edge
+	_reach(radius)
+	var r := maxf(radius, 0.5)
+	_shell.scale = Vector3.ONE * r
+	_ring.scale = Vector3(r, 1.0, r)
+	var fade := 1.0 - clampf((_t - spread * 0.6) / (spread * 0.9), 0.0, 1.0)
+	_shell_mat.set_shader_parameter("fade", fade)
+	_ring_mat.albedo_color.a = 0.85 * fade
+	_bolt.begin()
+	if fade > 0.05:
+		for i in 9: # lightning crawling over the shell
+			var a := TAU * (i + randf()) / 9.0
+			var e := randf_range(-0.6, 0.9)
+			var p := _centre + Vector3(cos(a) * cos(e), sin(e), sin(a) * cos(e)) * r
+			var q := _centre + Vector3(cos(a + 0.3) * cos(e + 0.25), sin(e + 0.25), sin(a + 0.3) * cos(e + 0.25)) * r
+			_bolt.strand(Bolt.jagged(p, q, 3, 0.4), 0.1 * fade, 0.03, 0.9 * fade)
+	_bolt.finish()
+	if _t >= spread * 1.6:
+		queue_free()
+
+
+## Everything the sphere has reached: the same damage everywhere inside it, a throw, burning.
 func _reach(radius: float) -> void:
-	var centre := _ring.global_position
 	for node in get_tree().get_nodes_in_group("vehicles"):
 		var o := node as Vehicle
 		if o == null or o == owner_car or o.is_dead or _hit.has(o):
 			continue
-		var rel := o.global_position - centre
-		var flat := Vector2(rel.x, rel.z).length()
-		if flat > radius + o.stats.get("size", Vector3(2, 2, 5)).z * 0.3:
+		var rel := o.aim_point() - _centre
+		var size: Vector3 = o.stats.get("size", Vector3(2, 2, 5))
+		if rel.length() > radius + size.z * 0.3:
 			continue
 		_hit[o] = true
-		if rel.y > 1.6 and not o.is_on_floor():
-			continue # jumped it (the counter)
-		var t := clampf(flat / float(def.get("radius", 12.0)), 0.0, 1.0)
-		var dmg := lerpf(float(def.get("damage", 16.0)), float(def.get("edge_damage", 8.0)), t) * WeaponData.DAMAGE_SCALE
+		var dmg := float(def.get("damage", 50.0)) * WeaponData.DAMAGE_SCALE
 		o.take_damage(dmg, owner_car)
 		var away := Vector3(rel.x, 0.0, rel.z)
 		away = away.normalized() if away.length() > 0.3 else o.flat_forward()
 		o.hit_react(away, dmg)
 		if o.stats.get("class", "medium") != "super":
-			var push := float(def.get("push", 20.0)) * (1.0 - 0.5 * t) * o.knockback
+			var push := float(def.get("push", 20.0)) * o.knockback
 			o.blast_knock(away * push + Vector3.UP * push * 0.3, 0.0, false)
-		o.ignite(float(def.get("burn", 3.0)), owner_car)
+		o.ignite(float(def.get("burn", 4.0)), owner_car)
 		FxKit.spark(get_parent(), o.aim_point(), -away)
+		GameFeel.flash(get_parent(), o.aim_point(), 1.6, Color(1.0, 0.75, 0.4), 0.08)
 		if o.is_player or owner_car.is_player:
 			GameFeel.hitstop(get_tree(), 0.04)
 
@@ -154,8 +182,8 @@ func _break_grabs() -> void:
 		owner_car.release_clamp()
 
 
-func _clear_mines(at: Vector3) -> void:
+func _clear_mines() -> void:
 	var r := float(def.get("radius", 12.0))
 	for node in get_tree().get_nodes_in_group(&"mines"):
-		if node is Mine and (node as Node3D).global_position.distance_to(at) <= r:
+		if node is Mine and (node as Node3D).global_position.distance_to(_centre) <= r + 1.5:
 			(node as Mine).fizzle()

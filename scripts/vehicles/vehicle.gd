@@ -56,6 +56,13 @@ const RECOVER_ROLL := 7.0 # rad/s roll when gas + left/right rights a flipped ca
 const WALL_DAMAGE := 0.3 # per m/s of impact over 10: a 25 m/s square slam costs about 4.5
 const CHARGE_SILENT := 0.25 # a tap shorter than this makes no charging sound
 const KNOCK_TIME := 0.6 # after a blast the tyres let the car fly instead of gripping it back in line
+## Round 21 (owner): Axel (a short, tall frame) and Mr. Grimm (a narrow bike) rolled over at the slightest
+## touch: a kicker, a hill crossed at an angle, an edge. Cars with Roster "stable" get a stabiliser: their
+## pitch and roll spin is damped (yaw stays free) and a tilt is pulled back level (toward the ground under
+## them, or toward world up in the air, weaker). Designed flips (power missile, blasts) switch it off.
+const STAB_DAMP := 6.0 # 1/s: pitch / roll spin damping at stable 1
+const STAB_RIGHT := 14.0 # rad/s^2 per radian of tilt: the pull back level at stable 1
+const STAB_AIR := 0.35 # share of the pull while in the air
 const RECOVER_HOP := 5.5 # m/s lift as the roll starts (again every half second until it is back up)
 const FREEZE_COST := 50.0
 # Energy moves (design 5.2, owner's combos play-test 1).
@@ -135,6 +142,8 @@ var special_id := ""
 var special_charges := 4 # the most specials this car can hold (Roster.special_max)
 var charging_id := "" # weapon being charged while the fire button is held (Napalm Cone)
 var charge_time := 0.0
+var released_hold := 0.0 # seconds the last charge was held when let go (Roadkill's missiles count it)
+var _charge_note := 0 # charged missiles: 1 = told MAX MISSILE CHARGE, 2 = told RED MISSILES
 
 var model: Node3D
 var _visual: Node3D
@@ -221,6 +230,7 @@ var _locked := {} # weapon id -> seconds left of a meltdown lock
 var _charge_hum: AudioStreamPlayer3D
 var _charge_hum_t := 0.0
 var _knock := 0.0 # seconds left of "thrown": tyres barely grip, so blasts carry the car sideways
+var _designed_spin := 0.0 # seconds left of a flip a weapon gave the car (the stabiliser keeps out)
 var _wheel_rest: Dictionary = {} # wheel node -> its resting position
 var _lean := 0.0
 var _squish := Vector3.ZERO # elastic dip from a hit (rotation vector, car space)
@@ -577,6 +587,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		_air_vy = 0.0
 	_ground_n = (normal_sum / maxf(1.0, touching)).normalized() if touching > 0 else Vector3.UP
 	v = _upside_watch(dt, up, state, v)
+	_stabilise(state, dt, up)
 	if _grounded:
 		_air_steer_w = 0.0
 		v = _tyres(state, v, dt)
@@ -798,6 +809,25 @@ func _turbo_step(dir: float, dt: float) -> bool:
 
 ## On the roof or the side and resting there: "flipped". Gas (or reverse) + left/right rolls the
 ## car back over (owner, round 5); it slides on its roof with real friction meanwhile.
+func _stabilise(state: PhysicsDirectBodyState3D, dt: float, up: Vector3) -> void:
+	_designed_spin -= dt
+	var s := float(stats.get("stable", 0.0))
+	if s <= 0.0 or flipped or _designed_spin > 0.0 or frozen_time > 0.0:
+		return
+	var b := state.transform.basis
+	var w := b.inverse() * state.angular_velocity # body frame: x pitch, y yaw, z roll
+	var damp := exp(-STAB_DAMP * s * dt)
+	w.x *= damp
+	w.z *= damp
+	var wv := b * w
+	var want := _ground_n if _grounded else Vector3.UP
+	var axis := up.cross(want)
+	if axis.length() > 0.0005 and up.dot(want) > 0.0:
+		var tilt := asin(clampf(axis.length(), 0.0, 1.0))
+		wv += axis.normalized() * tilt * STAB_RIGHT * s * (1.0 if _grounded else STAB_AIR) * dt
+	state.angular_velocity = wv
+
+
 func _upside_watch(dt: float, up: Vector3, state: PhysicsDirectBodyState3D, v: Vector3) -> Vector3:
 	var lying := up.y < 0.4 and state.get_contact_count() > 0
 	if lying:
@@ -1066,6 +1096,7 @@ func blast_knock(push_v: Vector3, flip := 0.0, by_weight := true) -> void:
 	if flip <= 0.0 or dv.y < 2.0:
 		return
 	var air := maxf(0.5, 2.0 * dv.y / GRAVITY)
+	_designed_spin = air + 0.4
 	var axis := Vector3.UP.cross(Vector3(dv.x, 0.0, dv.z))
 	if axis.length() < 0.1:
 		axis = global_basis.x
@@ -1109,6 +1140,36 @@ func aim_forward() -> Vector3:
 		return flat_forward() # on its side or roof: level
 	var pitch := clampf(atan2(f.y, flat.length()), deg_to_rad(-35.0), deg_to_rad(35.0))
 	return (flat.normalized() * cos(pitch) + Vector3.UP * sin(pitch)).normalized()
+
+
+## Round 21 (owner: "the angle of attack of the straight weapons must be zero"): power missiles, machine
+## guns, the skull and the charged cone fly along the ground the car stands on, level on flat ground,
+## whatever the body is doing (bouncing on its springs, pitching over a bump, a bike's lean). On a
+## ramp they follow the ramp (level would hit it), in the air they fly level.
+func level_forward() -> Vector3:
+	var f := flat_forward()
+	if not _grounded:
+		return f
+	var n := _ground_n
+	var d := f - n * f.dot(n)
+	return d.normalized() if d.length() > 0.2 else f
+
+
+## Where a level shot leaves from (round 21): the muzzle or launcher, but never higher than STRAIGHT_FIRE_H
+## over the ground under the car, or a level shot from a tall truck's roof (Sweet Tooth's mortar is 3.8 m
+## up) would fly over every car.
+const STRAIGHT_FIRE_H := 1.7
+
+func straight_from(p: Vector3) -> Vector3:
+	var up := _ground_n if _grounded else Vector3.UP
+	var h := (p - global_position).dot(up)
+	return p - up * (h - STRAIGHT_FIRE_H) if h > STRAIGHT_FIRE_H else p
+
+
+## Weapons that fly straight (no or very light homing) use level_forward() (round 21).
+static func flies_straight(id: String) -> bool:
+	var d := WeaponData.get_def(id)
+	return d.get("kind", "") == "bullet" or float(d.get("homing", 0.0)) <= 0.6
 
 
 func aim_point() -> Vector3:
@@ -1163,11 +1224,13 @@ func _combat(delta: float) -> void:
 			charge_time = minf(charge_time + delta, charge_full(charging_id))
 			_charge_hold += delta
 			_charge_sound(delta)
+			_charge_notes()
 			var melt := meltdown_at(charging_id)
 			if melt > 0.0 and _charge_hold >= melt:
 				_meltdown(charging_id)
 		else:
 			var full := charge_time >= charge_full(charging_id)
+			released_hold = _charge_hold
 			_cancel_charge()
 			_fire_selected(full)
 
@@ -1490,7 +1553,26 @@ func locked_left(id: String) -> float:
 	return float(_locked.get(id, 0.0))
 
 
+## Roadkill's missiles (round 21, TMB's "MAX MISSILE CHARGE"): say when all six are loaded, and when
+## they have turned red.
+func _charge_notes() -> void:
+	var d := WeaponData.get_def(charging_id)
+	if not d.has("salvo_max"):
+		return
+	var full := charge_full(charging_id)
+	if _charge_note < 1 and charge_time >= full:
+		_charge_note = 1
+		if is_player:
+			notice.emit(self, "MAX MISSILE CHARGE")
+	if _charge_note < 2 and _charge_hold >= full + float(d.get("red_after", 2.0)):
+		_charge_note = 2
+		if is_player:
+			notice.emit(self, "RED MISSILES")
+			GameFeel.play("charge_up", launch_point(), self, -2.0, 2.3)
+
+
 func _cancel_charge() -> void:
+	_charge_note = 0
 	charging_id = ""
 	charge_time = 0.0
 	_charge_hold = 0.0
@@ -1508,8 +1590,9 @@ func _charge_sound(delta: float) -> void:
 		return
 	var full := charge_full(charging_id)
 	var start := CHARGE_SILENT
-	var step := (full - start) / 5.0
-	while _charge_beeps < 5 and charge_time >= start + step * _charge_beeps:
+	var beeps := int(WeaponData.get_def(charging_id).get("salvo_max", 5)) # a beep per missile (round 21)
+	var step := (full - start) / float(beeps)
+	while _charge_beeps < beeps and charge_time >= start + step * _charge_beeps:
 		GameFeel.play("charge_up", launch_point(), self, -6.0 + _charge_beeps * 1.0, 1.0 + 0.16 * _charge_beeps)
 		_charge_beeps += 1
 	if charge_time >= full:
@@ -1517,7 +1600,7 @@ func _charge_sound(delta: float) -> void:
 		# silence), climbing in pitch as the meltdown nears.
 		var melt := meltdown_at(charging_id)
 		if melt <= 0.0:
-			melt = full + 1.0
+			melt = full + float(WeaponData.get_def(charging_id).get("red_after", 1.0))
 		var near := clampf((_charge_hold - full) / maxf(melt - full, 0.1), 0.0, 1.0)
 		if _charge_hum == null:
 			_charge_hum = GameFeel.loop("taser_loop", self, -3.0, 10.0)
@@ -1670,14 +1753,19 @@ func _fire_guns() -> void:
 	if muzzles.is_empty():
 		return
 	_gun_index = (_gun_index + 1) % muzzles.size()
-	var from := model.to_global(muzzles[_gun_index])
-	var dir := flat_forward()
-	# Light aim assist: bend shots toward a target that is almost dead ahead.
+	var from := straight_from(model.to_global(muzzles[_gun_index]))
+	var dir := level_forward()
+	# Light aim assist: bend shots toward a target that is almost dead ahead (round 21: sideways only,
+	# the rounds stay level with the ground, no spread up or down).
 	if is_instance_valid(target) and not target.is_dead:
 		var to_t := (target.aim_point() - from)
 		if to_t.length() < 90.0 and dir.angle_to(to_t.normalized()) < AIM_ASSIST_CONE:
-			dir = to_t.normalized()
-	dir = (dir + Vector3(randf_range(-1, 1), randf_range(-0.5, 0.5), randf_range(-1, 1)) * 0.012).normalized()
+			var side := to_t - dir * to_t.dot(dir)
+			var up := Vector3.UP if not _grounded else _ground_n
+			side -= up * side.dot(up)
+			dir = (dir * to_t.dot(dir) + side).normalized()
+	var spread := dir.cross(Vector3.UP if not _grounded else _ground_n).normalized()
+	dir = (dir + spread * randf_range(-1, 1) * 0.012).normalized()
 	_break_invisibility()
 	Projectile.spawn(get_parent(), "guns", from, dir, self, null)
 	_fx.gun_fired(_gun_index)
@@ -1739,12 +1827,18 @@ func launch(id: String, lock: Vehicle) -> void:
 	_break_invisibility()
 	var from := launch_point()
 	var dir := aim_forward()
+	if flies_straight(id):
+		from = straight_from(from)
+		dir = level_forward()
 	var homing := float(WeaponData.get_def(id).get("homing", 0.0)) > 0.0
 	if is_instance_valid(lock) and not lock.is_dead:
 		var to_t := lock.aim_point() - from
 		# Start roughly toward the target so homing doesn't have to U-turn. Round 12 (owner): only
 		# homing weapons; straight ones (power) leave along the nose, or they looked half-homing.
-		if homing and dir.angle_to(to_t.normalized()) < deg_to_rad(60):
+		if flies_straight(id): # the skull: turned toward it sideways only, it stays level (round 21)
+			var n := _ground_n if _grounded else Vector3.UP
+			to_t -= n * to_t.dot(n)
+		if homing and to_t.length() > 0.5 and dir.angle_to(to_t.normalized()) < deg_to_rad(60):
 			dir = dir.lerp(to_t.normalized(), 0.6).normalized()
 	else:
 		lock = null
@@ -1860,6 +1954,21 @@ func _secondary() -> void:
 			launch("wheel_clamp", target)
 			if is_player:
 				notice.emit(self, "WHEEL CLAMP")
+		"boomerang": # round 21: Roadkill's secondary; caught on its way back, the charge comes back
+			_break_invisibility()
+			var blade := Boomerang.start(self, WeaponData.get_def("boomerang"))
+			blade.refund = cost
+		"rim_shot": # round 21: Axel's secondary
+			_break_invisibility()
+			RimShot.start(self, WeaponData.get_def("rim_shot"))
+	_refresh_slots()
+
+
+## Special charges handed back (Roadkill catching his blade, round 21): at once, up to the car's most.
+func refund_special(n: int) -> void:
+	if n <= 0 or is_dead:
+		return
+	ammo[special_id] = mini(int(ammo.get(special_id, 0)) + n, special_charges)
 	_refresh_slots()
 
 

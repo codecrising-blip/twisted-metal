@@ -80,7 +80,8 @@ const CARS := {
 	"roadkill": {
 		"name": "Roadkill", "ram": 6.5, "engine": "suv", "driver": "Marcus Kane",
 		"spd": 6, "arm": 5, "hnd": 7, "spc": 6, "class": "medium",
-		"special": "boomerang",
+		"special": "charged_missiles", # round 21 (owner): his main weapon; the blade is the secondary
+		"secondary": "boomerang",
 		"pickup_energy": 8.0, # owner, round 11: +8 energy for every weapon he picks up
 		"size": Vector3(2.2, 1.35, 5.4), "camera": [3.9, 10.0],
 		"hood": Vector2(0.92, -1.7), "glass": Vector2(1.16, -0.3), "glass_n": Vector3(0, 0.84, -0.55),
@@ -91,6 +92,8 @@ const CARS := {
 		"name": "Axel", "ram": 9.5, "engine": "tank", "driver": "Axel",
 		"spd": 4, "arm": 7, "hnd": 7, "spc": 6, "class": "medium",
 		"special": "crowd_controller",
+		"secondary": "rim_shot",
+		"stable": 1.0, # round 21 (owner): a short, tall frame that flipped on every kicker and edge
 		"size": Vector3(3.8, 2.8, 2.8), "camera": [5.4, 11.5],
 		"hood": Vector2(0.5, -0.9), "glass": Vector2(1.7, -0.2), "glass_n": Vector3(0, 0.2, -0.98),
 		"tagline": "Twenty years between two wheels.",
@@ -106,6 +109,7 @@ const CARS := {
 		"name": "Mr. Grimm", "ram": 2.5, "engine": "moto", "driver": "Mr. Grimm",
 		"spd": 8, "arm": 1, "hnd": 6, "spc": 9, "class": "light",
 		"special": "reaper_skull",
+		"stable": 1.0, # round 21 (owner): a narrow bike that rolled over at the slightest touch (Vehicle._stabilise)
 		"size": Vector3(2.0, 1.9, 3.2), "camera": [3.8, 9.0],
 		"tagline": "Death rides a motorcycle.",
 	},

@@ -210,6 +210,14 @@ func _energy_moves(v: Vehicle, delta: float) -> void:
 			and randf() < 0.2 * aggression:
 		v.want_move = "secondary" # the robot fires by itself for an AI owner
 		return
+	# Round 21: Roadkill's blade at a car ahead in its reach; Axel's tyre at one dead ahead.
+	var ahead := v.flat_forward().angle_to(Vector3(to.x, 0.0, to.z).normalized())
+	if second == "boomerang" and charges >= 2 and to.length() < 45.0 and ahead < deg_to_rad(25.0) and randf() < 0.25 * aggression:
+		v.want_move = "secondary"
+		return
+	if second == "rim_shot" and charges >= 2 and to.length() < 40.0 and ahead < deg_to_rad(15.0) and randf() < 0.25 * aggression:
+		v.want_move = "secondary"
+		return
 	# Only while driving on forward: never into its own mine while backing out of a corner.
 	if behind and to.length() < 30.0 and v.speed > 10.0 and _reverse <= 0.0 and randf() < 0.35 * aggression:
 		if v.energy >= Vehicle.REAR_ATTACK_COST + 25.0 and randf() < 0.5:
@@ -700,6 +708,11 @@ func _shoot(v: Vehicle, delta: float) -> void:
 		if v.special_id == "napalm_cone" and angle < 0.12 and dist > 18.0 and dist < 50.0 and randf() < 0.35:
 			_hold = Vehicle.charge_full("napalm_cone") + 0.1 # charged shot: straight, double damage
 			v.in_fire_weapon = true
+		elif v.special_id == "charged_missiles": # round 21: Roadkill loads some missiles before letting go
+			var full := Vehicle.charge_full("charged_missiles")
+			var roll := randf()
+			_hold = full + 2.1 if roll < 0.25 else (full + 0.1 if roll < 0.8 else full * 0.5)
+			v.in_fire_weapon = true
 		return
 	if _weapon_timer <= 0.0:
 		# Round 14: the weapon worth most at this range (damage x the chance it lands), usually; now and
@@ -772,10 +785,10 @@ func _special_makes_sense(v: Vehicle, dist: float, angle: float) -> bool:
 			return dist < 80.0 and angle < 0.12 and _clear_shot(v, v.target)
 		"ghost_missile":
 			return dist < 70.0
-		"boomerang": # out and back along a line: thrown at a target ahead, in reach of the blade
-			return dist < 50.0 and angle < 0.45 and _clear_shot(v, v.target)
+		"charged_missiles": # homing salvo: anything ahead in reach
+			return dist < 65.0 and angle < 0.6
 		"crowd_controller": # design: when a car is right on him or something holds him
-			return dist < 10.0 or v.clamped_time > 0.0 or _held_by_taser(v)
+			return dist < 11.0 or v.clamped_time > 0.0 or _held_by_taser(v)
 	return dist < 60.0 and angle < 0.3
 
 

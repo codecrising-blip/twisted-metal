@@ -616,6 +616,31 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   (`main.PREVIEW_PICKS`: Sweet Tooth, Outlaw, Mr. Grimm, Roadkill, Axel) against Outlaw (Sweet Tooth if you are
   Outlaw). Not built yet: their secondaries (Roadkill's charged missiles, Axel's Rim Shot), Axel's Pivot and Wheel
   Hop, Roadkill's Scavenger icons. Bug fixed: the chain bomb's `recharge` 15 was inside a comment (it used 20).
+- **Round 21, full text `docs/design/26-owner-round-21.md`:** **Grimm's skull** = a Blender sculpt
+  (`tools/blender/build_skull.py` -> `skull.glb`: old cracked bone, deep square sockets with embers, heart-shaped nose
+  hole, uneven teeth, open jaw; the cut walls take the cutter's dark material via the boolean's `material_mode`
+  TRANSFER) + a FoamFire mane (inherit 0.96, `FoamFire.prime()` the velocity or its first puffs stand at the launch
+  point); film fast effects with `--fixed-fps 60` (xvfb runs several physics steps per frame). **West road hill**
+  (-135, -58): grass showed through the road in diagonal bands (road strips and the 2 m ground mesh triangulate
+  differently): `LosAngelesArena.hill_lift()` raises everything draped on the road hills by `HILL_LIFT` 0.12.
+  **Stabiliser** (`Vehicle._stabilise`, Roster `"stable"`: Axel, Mr. Grimm): pitch/roll spin damped (`STAB_DAMP` 6),
+  tilt pulled level (`STAB_RIGHT` 14, x`STAB_AIR` 0.35 in the air), off during a weapon's flip (`_designed_spin`).
+  Angled kicker crossings: Axel 114-135 deg -> 18. `tests/_hill_drive.gd -- id yaw [turbo] x z frames`.
+  **Straight weapons fly level** (owner: "angle of attack zero"): `Vehicle.flies_straight(id)` (bullets, homing <= 0.6:
+  power, skull, charged cone) use `level_forward()` (along the ground under the car, level when flat, in the air level)
+  and leave from `straight_from()` (no higher than `STRAIGHT_FIRE_H` 1.7 m: Sweet Tooth's mortar is 3.8 m up); the skull
+  homes sideways only; their car box reaches `Projectile.STRAIGHT_REACH_UP` 1.4 m higher. Homing weapons keep
+  `aim_forward()` (the HOLLYWOOD shot still works). MG: no up/down spread, aim assist sideways only. **Specials' sound**
+  `sound_db` 3.5 (x1.5) for Grimm, Roadkill, Axel. **Camera:** never further than `ChaseCamera.MAX_FALL_BACK` 1.335 x
+  its resting distance (was ~1.57 at speed; the owner's "0.85" read as 0.85 of the old max, to confirm).
+  **Roadkill:** special = `charged_missiles` (hold: one per 0.4 s up to 6, 8 each, 2.56 tracking; held 2 s more = red,
+  70 for six; `Vehicle.released_hold`, `_charge_notes` MAX MISSILE CHARGE / RED MISSILES, a beep per missile;
+  `Specials._charged_salvo`); secondary = `boomerang` (R L U, 1 charge; `HIT_RADIUS` 5.5 = 2.5x; caught =
+  `Vehicle.refund_special`). **Axel:** `crowd_controller` = `CrowdRing` rewritten: instant, a 360 deg sphere shell
+  (fresnel rim shader, lightning, ground ring) to 12 m in 0.35 s, 50 to every car inside (3D distance, air too) +
+  burn 4 s + throw; secondary `rim_shot` (`RimShot`: spiked tyre 45 m/s, 3 wall bounces, 20 a car, 2 cars). Axel's
+  turbo flames: `BlenderCars.EXTRA_EXHAUST`. Tests waiting on projectiles must count physics frames (headless
+  process frames run several times faster).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

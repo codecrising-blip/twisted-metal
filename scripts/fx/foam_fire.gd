@@ -69,6 +69,12 @@ func _ready() -> void:
 	_mesh.global_transform = Transform3D.IDENTITY
 
 
+## Start with this emitter velocity already known (round 21: a fire on something that is fast from its
+## first frame, Grimm's skull, left its first puffs standing at the launch point as a column of fire).
+func prime(velocity: Vector3) -> void:
+	_ev = velocity
+
+
 ## True while flames (or their last puffs) are showing.
 func burning() -> bool:
 	return _s > 0.01 or not _pos.is_empty()

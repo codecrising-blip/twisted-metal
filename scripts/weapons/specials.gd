@@ -25,6 +25,10 @@ static func fire(v: Vehicle, id: String, charged := false) -> void:
 			SatStrike.start(v, id, def)
 		"boomerang":
 			Boomerang.start(v, def)
+		"rim_shot":
+			RimShot.start(v, def)
+		"charged_salvo":
+			_charged_salvo(v, id, def)
 		"crowd_ring":
 			CrowdRing.start(v, def)
 		_:
@@ -36,13 +40,16 @@ static func _cone(v: Vehicle, id: String, def: Dictionary, charged: bool) -> voi
 	if not charged:
 		v.launch(id, v.target)
 		return
-	var from := v.launch_point()
-	var dir := v.aim_forward()
+	var from := v.straight_from(v.launch_point())
+	var dir := v.level_forward() # round 21: straight shots fly level with the ground
 	var t := v.target
 	if is_instance_valid(t) and not t.is_dead:
-		var to_t := (t.aim_point() - from).normalized()
-		if dir.angle_to(to_t) < deg_to_rad(25.0):
-			dir = to_t # aimed at launch like a power missile, then no tracking
+		# Aimed sideways at launch like a power missile, kept level with the ground (round 21), no tracking.
+		var n := v.get_floor_normal() if v.is_on_floor() else Vector3.UP
+		var to_t := t.aim_point() - from
+		to_t -= n * to_t.dot(n)
+		if to_t.length() > 0.5 and dir.angle_to(to_t.normalized()) < deg_to_rad(25.0):
+			dir = to_t.normalized()
 	Projectile.spawn(v.get_parent(), id, from, dir, v, null, {
 		"damage": def.get("charged_damage", 90.0), "speed": def.get("charged_speed", 64.0),
 		"homing": 0.0, "charged": true, "push": 11.0, "squish": 0.1, "shake": 0.8, "trail_w": 1.8, "trail_len": 0.4,
@@ -57,6 +64,36 @@ static func _throw(v: Vehicle, id: String, def: Dictionary) -> void:
 	var vel := fwd * float(def.get("throw", 30.0)) + carry + Vector3.UP * float(def.get("lift", 10.0))
 	var p := Projectile.spawn_lob(v.get_parent(), id, v.launch_point() + Vector3.UP * 0.4, vel, v)
 	v.set_live_special(p, id)
+
+
+## Roadkill's charged missiles (round 21): one missile for every charge_time / salvo_max s the button
+## was held (a tap = one), up to salvo_max; held red_after s past the full charge they are red and the six
+## share red_total. They stream out in a narrow fan, all chasing the same lock.
+static func _charged_salvo(v: Vehicle, id: String, def: Dictionary) -> void:
+	var hold := v.released_hold
+	var most := int(def.get("salvo_max", 6))
+	var full := float(def.get("charge_time", 2.4))
+	var count := clampi(1 + int(hold / (full / most)), 1, most)
+	var red := hold >= full + float(def.get("red_after", 2.0))
+	var over := {}
+	if red:
+		count = most
+		var rc: Color = def.get("red_color", Color(1.0, 0.12, 0.08))
+		over = {"damage": float(def.get("red_total", 70.0)) / most, "color": rc, "trail": rc, "trail_w": 0.75, "shake": 0.25}
+	var lock := v.target if is_instance_valid(v.target) and not v.target.is_dead else null
+	var gap := float(def.get("salvo_gap", 0.09))
+	for i in count:
+		var one := func() -> void:
+			if not is_instance_valid(v) or v.is_dead or not v.is_inside_tree():
+				return
+			var fan := (float(i) - (count - 1) * 0.5) * 0.06
+			var dir := v.aim_forward().rotated(Vector3.UP, fan) + Vector3.UP * 0.05
+			var aim: Vehicle = lock if is_instance_valid(lock) and not lock.is_dead else null
+			Projectile.spawn(v.get_parent(), id, v.launch_point() + v.global_basis.x * fan * 4.0, dir, v, aim, over)
+		if i == 0:
+			one.call()
+		else:
+			v.get_tree().create_timer(i * gap, false, true).timeout.connect(one)
 
 
 ## Zoomy: ten light missiles in a quick fan, all chasing the same lock.

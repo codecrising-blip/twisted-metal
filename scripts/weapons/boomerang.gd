@@ -4,10 +4,10 @@ extends Node3D
 ## light homing, out to "range" metres or until it cuts a car, then it swings back toward where Roadkill
 ## is NOW. Going out it deals "damage", coming back "return_damage" (twice, as in the series); one car can
 ## take both. Walls break it either way; palms, street lights and stands are cut through. If Roadkill
-## drives through his returning blade he catches it: the next special comes back "catch_bonus" s sooner.
+## drives through his returning blade he catches it: the special charge it cost comes back at once (round 21).
 
 const HEIGHT := 1.2 # flies this high over the ground
-const HIT_RADIUS := 2.2 # a car's aim point this close is cut
+const HIT_RADIUS := 5.5 # a car's aim point this close is cut (round 21, owner: 2.5x the first 2.2)
 const CATCH_RADIUS := 3.0
 const BACK_TURN := 7.0 # rad/s it bends toward Roadkill on the way back
 
@@ -23,6 +23,7 @@ var _cut := {} # car -> true, per leg (out / back)
 var _blade: Node3D
 var _whirr: AudioStreamPlayer3D
 var _done := false
+var refund := 0 # special charges given back when Roadkill catches it (it was paid for as a secondary)
 var end_reason := "" # "caught", "wall <name>", "time" (tests read it)
 
 
@@ -40,7 +41,7 @@ static func start(v: Vehicle, d: Dictionary) -> Boomerang:
 		if to.length() > 1.0 and b._dir.angle_to(to.normalized()) < deg_to_rad(50.0):
 			b._dir = b._dir.slerp(to.normalized(), 0.6).normalized()
 	b.global_position = v.global_position + v.flat_forward() * (size.z * 0.5 + 0.8) + Vector3.UP * HEIGHT
-	GameFeel.play("special_roadkill", b.global_position, v.get_parent(), -2.0, 1.0, true)
+	GameFeel.play("special_roadkill", b.global_position, v.get_parent(), -2.0 + float(d.get("sound_db", 0.0)), 1.0, true)
 	GameFeel.muzzle(v.get_parent(), b.global_position, Color(1.0, 0.6, 0.25), 1.2)
 	if v.is_player and GameFeel.camera:
 		GameFeel.camera.add_shake(0.12)
@@ -186,11 +187,11 @@ var _rearm: Vehicle # the car cut going out: cut again only after the blade has 
 func _catch() -> void:
 	_done = true
 	end_reason = "caught"
-	owner_car.special_bonus(float(def.get("catch_bonus", 5.0)))
+	owner_car.refund_special(refund) # round 21 (owner): the charge comes back at once
 	GameFeel.play("weapon_switch", global_position, get_parent(), -2.0, 0.7)
 	FxKit.spark(get_parent(), global_position, Vector3.UP)
 	if owner_car.is_player:
-		owner_car.notice.emit(owner_car, "BLADE CAUGHT - SPECIAL SOONER")
+		owner_car.notice.emit(owner_car, "BLADE CAUGHT - CHARGE BACK")
 	_finish()
 
 

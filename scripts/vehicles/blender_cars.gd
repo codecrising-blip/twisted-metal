@@ -10,6 +10,9 @@ const EXHAUST_DIR := {"sweet_tooth": Vector3.UP}
 const SHADOW := {"sweet_tooth": Vector2(3.2, 7.4), "outlaw": Vector2(2.7, 5.6), "mr_grimm": Vector2(2.4, 3.6)}
 ## How far the body rolls in turns (radians). Grimm's bike has a sidecar bolted on: it barely leans.
 const LEAN := {"mr_grimm": 0.08}
+## Turbo flames for models with no exhaust markers (round 21, owner: Axel had no turbo flames): out of
+## Axel's back feet, low, under the tail lights.
+const EXTRA_EXHAUST := {"axel": [Vector3(0.55, 0.3, 1.08), Vector3(-0.55, 0.3, 1.08)]}
 
 
 static func has(id: String) -> bool:
@@ -72,6 +75,8 @@ static func build(id: String) -> Node3D:
 	m.set_meta("guns", guns)
 	if not spinners.is_empty():
 		m.set_meta("gun_spinners", spinners)
+	if exhaust.is_empty() and EXTRA_EXHAUST.has(id):
+		exhaust.assign(EXTRA_EXHAUST[id])
 	m.set_meta("exhaust", exhaust)
 	m.set_meta("exhaust_dir", EXHAUST_DIR.get(id, Vector3.BACK))
 	if marks.has("m_launcher"):
