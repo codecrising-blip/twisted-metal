@@ -13,12 +13,16 @@ const CLOSE_TIME := 0.18
 const OPEN_TIME := 0.3
 const CLOSED_X := 0.3 # the tyres move in to this share of their rest distance from the middle
 const BODY_SQUEEZE := 0.32 # Axel and his frame squeezed to this width between them
+const GROW := 1.3 # round 24 (owner: "he looks smaller when it starts"): the closed tyres swell this much
+const POP := 0.18 # ...overshooting by this much as they slam shut
 
 var car: Vehicle
 var def := {}
 var _pivots: Array[Node3D] = []
 var _rest_x: Array[float] = []
+var _rest_y: Array[float] = []
 var _body: Node3D
+var _body_y := 0.0
 var _k := 0.0
 var _closing := true
 var _spark_t := 0.0
@@ -42,16 +46,25 @@ func _ready() -> void:
 		if pivot and not _pivots.has(pivot):
 			_pivots.append(pivot)
 			_rest_x.append(pivot.position.x)
+			_rest_y.append(pivot.position.y)
 	for c in model.get_children(): # the body: the first child that is not a wheel pivot
 		if c is Node3D and not _pivots.has(c):
 			_body = c
+			_body_y = (c as Node3D).position.y
 			break
 	var world := car.get_parent()
 	var db := float(def.get("sound_db", 0.0))
 	GameFeel.play("ram_impact", car.global_position, world, -2.0 + db, 0.6, true)
 	GameFeel.play("special_axel", car.global_position, world, -6.0 + db, 1.3, true)
-	FxKit.dust_ring(world, car.global_position, 1.4)
-	GameFeel.shake(car.global_position, 0.3)
+	FxKit.dust_ring(world, car.global_position, 2.4)
+	GameFeel.shockwave(world, car.global_position + Vector3.UP * 0.2, 9.0, Color(1.0, 0.65, 0.3))
+	GameFeel.flash(world, car.global_position + Vector3.UP * 1.4, 1.8, Color(1.0, 0.8, 0.55), 0.08)
+	for sx: float in [-1.0, 1.0]: # the tyres slam together: sparks off both
+		for k in 3:
+			FxKit.spark(world, car.global_transform * Vector3(sx * 0.6, 1.4, 0.0), Vector3(-sx, 0.6, 0).normalized())
+	GameFeel.shake(car.global_position, 0.5)
+	if car.is_player:
+		GameFeel.hitstop(car.get_tree(), 0.05)
 	_whine = GameFeel.loop("skid_loop", self, -6.0, 14.0)
 	if _whine:
 		_whine.pitch_scale = 1.6
@@ -78,13 +91,18 @@ func _process(delta: float) -> void:
 	else:
 		_k = maxf(0.0, _k - delta / OPEN_TIME)
 	var e := _k * _k * (3.0 - 2.0 * _k)
+	# Bigger as they shut (owner, round 24): the tyres swell round him with a pop, rising so they stay on the
+	# ground; he and his frame are squeezed between them.
+	var grow := 1.0 + (GROW - 1.0) * e + (POP * sin(PI * e) if _closing else 0.0)
 	for i in _pivots.size():
 		var p := _pivots[i]
 		if is_instance_valid(p):
-			p.position.x = _rest_x[i] * lerpf(1.0, CLOSED_X, e)
-			p.scale = Vector3(1.0 + 0.22 * e, 1.0 - 0.06 * e, 1.0 - 0.06 * e) # squashed together, a little fatter
+			p.position.x = _rest_x[i] * lerpf(1.0, CLOSED_X, e) * grow
+			p.position.y = _rest_y[i] * grow
+			p.scale = Vector3(grow * (1.0 + 0.12 * e), grow, grow) # squashed together, fatter
 	if is_instance_valid(_body):
-		_body.scale = Vector3(lerpf(1.0, BODY_SQUEEZE, e), 1.0 - 0.1 * e, 1.0 - 0.05 * e)
+		_body.scale = Vector3(lerpf(1.0, BODY_SQUEEZE, e), 1.0, 1.0) # squeezed thin, never shorter
+		_body.position.y = _body_y + (_rest_y[0] if not _rest_y.is_empty() else 1.0) * (grow - 1.0) # rides up with the hubs
 	if not _closing and _k <= 0.0:
 		queue_free()
 		return

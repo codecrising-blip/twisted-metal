@@ -166,6 +166,7 @@ const DEFS := {
 		"speed": 85.0, "damage": 65.0, "homing": 0.0, "life": 2.5, "cooldown": 3.0, "recharge": 20.0, "push": 8.0, # round 22: no tracking
 		"sound_db": 3.5, # round 21 (owner): the special's sound x1.5 louder
 		"squish": 0.08, "shake": 0.6,
+		"hit_widen": 1.25, # round 24: one face as wide as Sweet Tooth (2.5 m): a car's box reaches out this far to it
 	},
 	# Roadkill's special (round 21, owner: the charged missiles are his MAIN weapon, the blade his secondary;
 	# numbers from round 16): hold fire and a missile loads every charge_time / salvo_max s, up to 6 ("MAX
@@ -222,7 +223,7 @@ const DEFS := {
 	# (25% for both), and Grimm heals heal / spins of his own per car it cuts (ReaperSweep).
 	"reaper_sweep": {
 		"label": "Soul Harvest", "kind": "scythe", "color": Color(0.45, 1.0, 0.62), "handler": "reaper_sweep",
-		"radius": 8.16, "spins": 2, "time": 0.8, "steal": 0.25, "heal": 0.25, "cooldown": 1.0, "sound_db": 3.5,
+		"radius": 5.4, "spins": 2, "time": 0.8, "steal": 0.25, "heal": 0.25, "cooldown": 1.0, "sound_db": 3.5, # round 24: one Roadkill length
 	},
 	# Spectre: ghost missile that flies through walls.
 	"ghost_missile": {

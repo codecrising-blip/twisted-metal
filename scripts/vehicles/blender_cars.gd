@@ -81,6 +81,12 @@ static func build(id: String) -> Node3D:
 	m.set_meta("exhaust_dir", EXHAUST_DIR.get(id, Vector3.BACK))
 	if marks.has("m_launcher"):
 		m.set_meta("launcher", (marks["m_launcher"] as Transform3D).origin)
+	if marks.has("m_slot_0"): # round 24: Roadkill's six charge slots on his nose strip
+		var slots: Array = []
+		for k in 8:
+			if marks.has("m_slot_%d" % k):
+				slots.append((marks["m_slot_%d" % k] as Transform3D).origin)
+		m.set_meta("slots", slots)
 	if marks.has("m_top"):
 		m.set_meta("top", (marks["m_top"] as Transform3D).origin)
 	if marks.has("m_head"):

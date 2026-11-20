@@ -1667,7 +1667,6 @@ func _charge_notes() -> void:
 		_charge_note = 2
 		if is_player:
 			notice.emit(self, "RED MISSILES")
-			GameFeel.play("charge_up", launch_point(), self, -2.0, 2.3)
 
 
 func _cancel_charge() -> void:
@@ -1686,6 +1685,12 @@ func _cancel_charge() -> void:
 ## going and climbs until you let go or it melts down.
 func _charge_sound(delta: float) -> void:
 	if not is_player:
+		return
+	if charging_id == "charged_missiles": # round 24: the owner's barrage charge sound, looped until let go
+		if _charge_hum == null and _charge_hold >= CHARGE_SILENT:
+			_charge_hum = GameFeel.loop("barrage_charge", self, -3.0, 12.0)
+			if _charge_hum:
+				_charge_hum.play()
 		return
 	var full := charge_full(charging_id)
 	var start := CHARGE_SILENT
@@ -1868,8 +1873,11 @@ func _rack_fx() -> void:
 	var most := int(d.get("salvo_max", 6))
 	var full := float(d.get("charge_time", 2.4))
 	var loaded := clampi(1 + int(charge_time / (full / most)), 1, most)
-	var red := charge_time >= full + float(d.get("red_after", 2.0))
+	var red := _charge_hold >= full + float(d.get("red_after", 2.0)) # the hold, not charge_time (capped at full)
 	var col: Color = d.get("red_color", Color(0.9, 0.0, 0.06)) if red else d.get("color", Color(0.32, 1.0, 0.02))
+	if model.has_meta("slots"):
+		_slot_fx(model.get_meta("slots"), loaded, col)
+		return
 	if not is_instance_valid(_charge_fx):
 		_charge_fx = Node3D.new()
 		_charge_fx.name = "Rack"
@@ -1901,6 +1909,59 @@ func _rack_fx() -> void:
 		var m: StandardMaterial3D = dart.get_meta("mat")
 		m.albedo_color = col
 		m.emission = col
+
+
+## Round 24 (owner): the charge shows in the six slots on Roadkill's own nose (the Blender model's m_slot_0..5):
+## they light up one by one as the missiles load, pulse when all six are ready and turn crimson when they go red.
+## Each lit slot also throws a small glow up over the car (the nose is behind the cabin from the chase camera).
+func _slot_fx(slots: Array, loaded: int, col: Color) -> void:
+	if not is_instance_valid(_charge_fx):
+		_charge_fx = Node3D.new()
+		_charge_fx.name = "Slots"
+		model.add_child(_charge_fx)
+		for i in slots.size():
+			var lens := Node3D.new()
+			lens.name = "S%d" % i
+			lens.position = slots[i]
+			lens.rotation.x = deg_to_rad(14.0) # the strip leans back toward the windshield
+			var mat := MeshKit.emissive(col, 2.2)
+			MeshKit.box(lens, Vector3(0.18, 0.02, 0.1), Vector3.ZERO, mat).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			var glow := StandardMaterial3D.new()
+			glow.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			glow.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			glow.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			glow.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
+			glow.billboard_keep_scale = true
+			glow.albedo_texture = FxKit.soft_texture()
+			glow.albedo_color = Color(col.r, col.g, col.b, 0.55)
+			var halo := MeshInstance3D.new()
+			var q := QuadMesh.new()
+			q.size = Vector2.ONE * 0.75
+			halo.mesh = q
+			halo.material_override = glow
+			halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			halo.position = Vector3(0, 0.25, 0)
+			lens.add_child(halo)
+			lens.visible = false
+			lens.set_meta("mat", mat)
+			lens.set_meta("glow", glow)
+			_charge_fx.add_child(lens)
+	var pulse := 1.0 + (0.2 * sin(_clock * 28.0) if loaded >= slots.size() else 0.0)
+	for i in slots.size():
+		var lens := _charge_fx.get_node_or_null("S%d" % i) as Node3D
+		if lens == null:
+			continue
+		var was := lens.visible
+		lens.visible = i < loaded
+		if lens.visible and not was: # it lights with a pop
+			lens.scale = Vector3.ONE * 1.6
+			FxKit.spark(get_parent(), lens.global_position, Vector3.UP)
+		lens.scale = lens.scale.lerp(Vector3.ONE * pulse, 0.25)
+		var m: StandardMaterial3D = lens.get_meta("mat")
+		m.albedo_color = col
+		m.emission = col
+		var g: StandardMaterial3D = lens.get_meta("glow")
+		g.albedo_color = Color(col.r, col.g, col.b, 0.55)
 
 
 ## The next special comes back this many seconds sooner (Roadkill catching his blade).

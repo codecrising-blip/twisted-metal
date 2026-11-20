@@ -109,6 +109,11 @@ func _build_visual() -> void:
 				halo.albedo_color = Color(color.r, color.g, color.b, 0.3)
 				var hm := MeshKit.sphere(holder, 0.27 * s, Vector3(0, 0, 0.1 * s), halo, Vector3(1, 1, 2.9), 8)
 				hm.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				# Round 24: the owner's barrage travel sound rides with each dart (quiet: six fly together).
+				var hiss := GameFeel.loop("barrage_travel", self, -9.0, 10.0)
+				if hiss:
+					hiss.pitch_scale = randf_range(0.94, 1.06)
+					hiss.play()
 				# Round 23: two sparks orbit it as it flies (the body spins about the flight axis): a charged dart.
 				_body = Node3D.new()
 				holder.add_child(_body)
@@ -396,7 +401,7 @@ func _physics_process(delta: float) -> void:
 	elif float(def.get("homing", 0.0)) <= 0.0 and def.get("kind", "") in ["missile", "cone", "skull", "clamp"]:
 		# Round 21: straight shots fly level (zero angle) from launchers of every height, so a car's box
 		# reaches up STRAIGHT_REACH_UP higher for them: a level shot from a tall truck still hits a low car.
-		var car_hit := _bullet_car(from, to, hit, STRAIGHT_REACH_UP)
+		var car_hit := _bullet_car(from, to, hit, STRAIGHT_REACH_UP, float(def.get("hit_widen", 0.0)))
 		if not car_hit.is_empty():
 			hit = car_hit
 	if not hit.is_empty():
@@ -413,7 +418,7 @@ const BULLET_BOX := 1.1
 
 const STRAIGHT_REACH_UP := 1.4 # round 21: m a car's box reaches up for level shots (launchers up to ~3 m)
 
-func _bullet_car(from: Vector3, to: Vector3, ray_hit: Dictionary, reach_up := 0.0) -> Dictionary:
+func _bullet_car(from: Vector3, to: Vector3, ray_hit: Dictionary, reach_up := 0.0, widen := 0.0) -> Dictionary:
 	var limit := 1.0
 	if not ray_hit.is_empty():
 		limit = from.distance_to(ray_hit.position) / maxf(from.distance_to(to), 0.0001)
@@ -424,7 +429,7 @@ func _bullet_car(from: Vector3, to: Vector3, ray_hit: Dictionary, reach_up := 0.
 		if v == null or v == shooter or v.is_dead or v.global_position.distance_squared_to(from) > 40000.0:
 			continue
 		var size: Vector3 = v.stats.get("size", Vector3(2.2, 1.8, 5.0))
-		var half := Vector3(size.x, size.y - Vehicle.BODY_CLEARANCE + reach_up, size.z) * 0.5 * BULLET_BOX
+		var half := Vector3(size.x, size.y - Vehicle.BODY_CLEARANCE + reach_up, size.z) * 0.5 * BULLET_BOX + Vector3(widen, widen * 0.5, widen)
 		var centre := Vector3(0.0, (size.y + Vehicle.BODY_CLEARANCE + reach_up) * 0.5, 0.0)
 		var inv := v.global_transform.affine_inverse()
 		var t := segment_box(inv * from - centre, inv * to - centre, half)
@@ -563,9 +568,15 @@ func _explode(pos: Vector3, normal: Vector3, collider: Object) -> void:
 		GameFeel.play("explosion", pos, world, -6.0, 1.5, true)
 		_dart_burst(world, pos, c)
 		FxKit.explosion(world, pos, 0.35, c, false)
+	elif kind == "skull":
+		# Round 24 (owner: it mustn't set the car burning): the spirit face blows apart, no fireball, no embers.
+		SpiritSkull.burst(world, pos)
+		GameFeel.play("explosion_big", pos, world, -6.0, 0.8, true)
+		GameFeel.shockwave(world, pos - Vector3.UP * 0.8, 7.0, SpiritSkull.PINK)
+		if _trail and is_instance_valid(_trail):
+			_trail.queue_free() # its gold sparkles go with it (left on the car they read as burning)
+			_trail = null
 	elif kind != "gas":
-		if kind == "skull": # round 23: the spirit face blows apart in gold sparks over the fireball
-			SpiritSkull.burst(world, pos)
 		var small: bool = def.get("small", false)
 		FxKit.explosion(world, pos, (0.4 if small else 0.8) + dmg / 40.0, def.get("color", Color(1, 0.5, 0.15)))
 		if small: # zoomy: each of the ten pops white-hot with a spark, so the salvo crackles

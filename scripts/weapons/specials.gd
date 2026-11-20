@@ -73,6 +73,8 @@ static func _charged_salvo(v: Vehicle, id: String, def: Dictionary) -> void:
 		var rc: Color = def.get("red_color", Color(1.0, 0.12, 0.08))
 		over = {"damage": float(def.get("red_total", 70.0)) / most, "color": rc, "trail": rc,
 			"speed": float(def.get("red_speed", 70.0)), "shake": 0.25} # crimson and faster (round 22)
+	# Round 24: the owner's barrage sounds: "lock" for a max-damage (crimson) salvo, "fire" for any other.
+	GameFeel.play("barrage_lock" if red else "barrage_fire", v.launch_point(), v, float(def.get("sound_db", 0.0)), 1.0)
 	var lock := v.target if is_instance_valid(v.target) and not v.target.is_dead else null
 	var gap := float(def.get("salvo_gap", 0.09))
 	for i in count:

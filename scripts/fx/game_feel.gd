@@ -33,20 +33,53 @@ static func _slow(tree: SceneTree, seconds: float, scale: float) -> void:
 		return # tests run in real time
 	_time_until = maxi(_time_until, Time.get_ticks_msec() + int(seconds * 1000.0))
 	Engine.time_scale = minf(Engine.time_scale, scale)
-	if not is_instance_valid(_ticker):
-		_ticker = _Ticker.new()
-		_ticker.process_mode = Node.PROCESS_MODE_ALWAYS
-		tree.root.add_child(_ticker)
+	_ensure_ticker(tree)
 
 
 static var _ticker: Node
 
 
-## Puts the clock back to normal speed when the hit-stop / slow motion is over (real time).
+## Puts the clock back to normal speed when the hit-stop / slow motion is over (real time), and keeps the
+## looping sounds' distance fade soft as they and the camera move (round 24).
 class _Ticker extends Node:
 	func _process(_delta: float) -> void:
 		if Engine.time_scale < 1.0 and Time.get_ticks_msec() >= GameFeel._time_until:
 			Engine.time_scale = 1.0
+		GameFeel._soften_loops()
+
+
+static func _ensure_ticker(tree: SceneTree) -> void:
+	if tree != null and not is_instance_valid(_ticker):
+		_ticker = _Ticker.new()
+		_ticker.process_mode = Node.PROCESS_MODE_ALWAYS
+		tree.root.add_child(_ticker)
+
+
+## Round 24 (owner: "sounds get too weak far away; make the distance effect 50% of what it is"). Godot's inverse
+## distance fade drops 20 log10(d / unit) dB at d m; a player whose unit is d^(1 - s) x unit^s drops s times that.
+## A one-shot gets it at its start; loops are kept up to date every frame (`_soften_loops`).
+const FALLOFF_SHARE := 0.5
+static var _loops: Array = []
+
+
+static func _listener(p: Node3D) -> Vector3:
+	var vp := p.get_viewport()
+	var cam := vp.get_camera_3d() if vp else null
+	return cam.global_position if cam else p.global_position
+
+
+static func _soften(p: AudioStreamPlayer3D, unit0: float) -> void:
+	var d := maxf(p.global_position.distance_to(_listener(p)), unit0)
+	p.unit_size = pow(d, 1.0 - FALLOFF_SHARE) * pow(unit0, FALLOFF_SHARE)
+
+
+static func _soften_loops() -> void:
+	var keep: Array = []
+	for p in _loops:
+		if is_instance_valid(p) and (p as Node).is_inside_tree():
+			_soften(p, float((p as Node).get_meta("unit0", 12.0)))
+			keep.append(p)
+	_loops = keep
 
 
 ## Camera shake that fades with distance from the camera (amount ~0.1 small .. 1.0 huge).
@@ -106,6 +139,7 @@ static func play(name: String, pos: Vector3, parent: Node, volume_db := 0.0, pit
 	p.unit_size = 18.0
 	parent.add_child(p)
 	p.global_position = pos
+	_soften(p, 18.0) # round 24: half the distance fade
 	p.finished.connect(p.queue_free)
 	p.play(maxf(0.0, stream_peak(p.stream) - SYNC_LEAD) if sync else 0.0)
 	return p
@@ -176,8 +210,11 @@ static func loop(name: String, parent: Node3D, volume_db := 0.0, unit_size := 12
 	p.stream = s
 	p.volume_db = volume_db
 	p.unit_size = unit_size
-	p.max_distance = unit_size * 8.0
+	p.max_distance = unit_size * 16.0 # round 24: the fade is half as steep, so it is heard twice as far
 	parent.add_child(p)
+	p.set_meta("unit0", unit_size)
+	_loops.append(p)
+	_ensure_ticker(p.get_tree())
 	return p
 
 

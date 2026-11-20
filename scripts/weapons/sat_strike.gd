@@ -167,6 +167,7 @@ func _approach(delta: float) -> void:
 		if _incoming:
 			_incoming.pitch_scale = 1.0
 			_incoming.unit_size = 30.0
+			GameFeel._soften(_incoming, 30.0) # round 24: half the distance fade
 			_incoming.create_tween().tween_property(_incoming, "volume_db", 4.0, 0.7).set_ease(Tween.EASE_OUT)
 	# Guide beam: thin and faint at first, thicker and brighter as the strike nears.
 	_guide.scale.x = lerpf(0.6, 2.4, p * p)

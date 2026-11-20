@@ -9,7 +9,7 @@
     /tmp/bpy3.13/bin/python tools/blender/build_roadkill.py              # build, bake, export
     /tmp/bpy3.13/bin/python tools/blender/build_roadkill.py --shape a.png  # quick look, no bake
 Blender space: +Y forward, +Z up. Nodes: body, wheel_f, wheel_r; markers m_wheel_fr/fl/rr/rl, m_gun_l/r,
-m_launcher, m_top, m_head, m_exh_l/r."""
+m_launcher, m_top, m_head, m_exh_l/r, m_slot_0..5 (round 24: the six charge slots on the nose strip)."""
 import math
 import os
 import sys
@@ -108,8 +108,12 @@ for bx, bz in ((-0.17, 0.66), (0.17, 0.66), (-0.73, 0.55), (-0.36, 0.55), (0.0, 
     body.append(T.sphere(0.036, loc=(bx, NOSE + 0.02 - (bz - 0.6) * 0.21, bz), mat=tm2_metal, n=10, scale=(1, 0.6, 1)))  # its bolts, two over five
 body.append(T.box((1.3, 0.24, 0.22), loc=(0, NOSE - 0.2, 0.4), mat=tm2, bevel=0.01))   # the dark apron under the nose
 body.append(T.box((1.86, 0.16, 0.05), loc=(0, NOSE - 0.12, 0.775), rot=(-14, 0, 0), mat=tm2, bevel=0.01))   # the slotted strip on the nose
-for k in range(11):  # its slots, cut in (dark, flush with the strip)
-    body.append(T.box((0.05, 0.11, 0.012), loc=((k - 5) * 0.16, NOSE - 0.12, 0.802), rot=(-14, 0, 0), mat=dark))
+# Round 24 (owner): the row of slots on the nose is where the charged missiles load: six slots, each lit from the
+# game (Vehicle._rack_fx) as a missile loads; markers m_slot_0..5 sit on each slot's face.
+for k in range(6):  # its slots, cut in (dark, flush with the strip)
+    sx_ = (k - 2.5) * 0.27
+    body.append(T.box((0.19, 0.11, 0.012), loc=(sx_, NOSE - 0.12, 0.802), rot=(-14, 0, 0), mat=dark, bevel=0.004))
+    markers.append(T.marker("m_slot_%d" % k, (sx_, NOSE - 0.12 + 0.003, 0.81)))
 lamp = T.glow((0.9, 0.85, 0.65))
 for sx in (1, -1):  # a dark recess at each upper corner of the plate with two round-ended lamps in it
     body.append(T.box((0.27, 0.03, 0.09), loc=(sx * 0.62, NOSE + 0.03, 0.665), rot=(12, 0, 0), mat=dark, bevel=0.008))

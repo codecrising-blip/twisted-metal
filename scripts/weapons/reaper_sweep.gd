@@ -1,18 +1,20 @@
 class_name ReaperSweep
 extends Node3D
 ## Mr. Grimm's secondary (round 23, owner's design), "Soul Harvest": a giant spectral scythe swings round Grimm
-## twice in "time" s at "radius" m (0.8 of Axel's sphere). Every pass of the blade over an opponent inside the
+## twice in "time" s at "radius" m (round 24, owner: one Roadkill car length, 5.4 m). Every pass of the blade over an opponent inside the
 ## circle tears out "steal" / "spins" of that car's full health, and Grimm heals "heal" / "spins" of his own for
 ## each: an opponent caught by both passes loses 25%, and Grimm gains 25% per opponent (360 degrees, any number).
-## The look (owner: "flashy and intimidating, a grim reaper"): a pale soul-green blade with a white-hot edge on a
-## black shaft, a wide crescent swoosh behind it, a ring on the ground marking its reach, red sparks and a red
+## The look (owner: "flashy and intimidating, a grim reaper"; round 24: whitish with a tiny tone of red, the slash
+## filling the arc, a smaller blade head): a white-hot blade on a black shaft, the slash filling the arc it swept
+## from near Grimm out to the blade, a faint ring on the ground marking its reach, red sparks and a red
 ## flash where it cuts, souls (red wisps) torn out of the victims flying into Grimm, Grimm flaring green as they
 ## arrive. The scythe follows Grimm while he drives.
 
-const EDGE := Color(0.85, 1.0, 0.9) # the white-hot cutting edge
+const EDGE := Color(1.0, 0.96, 0.94) # the white-hot cutting edge (round 24: white with a hint of red)
+const SLASH := Color(1.0, 0.78, 0.76) # the slash filling the arc it sweeps: whitish, a tiny tone of red
 const SOUL := Color(0.45, 1.0, 0.62) # pale soul green
 const BLOOD := Color(1.0, 0.12, 0.08)
-const BLADE_LEN := 4.6 # m of curved blade at the end of the shaft
+const BLADE_LEN := 1.9 # m of curved blade at the end of the shaft (round 24: 4.6 was "ridiculously big")
 const TRAIL_ARC := 2.4 # rad of swoosh drawn behind the blade
 const TRAIL_STEPS := 28
 
@@ -47,7 +49,7 @@ static func start(v: Vehicle, d: Dictionary) -> ReaperSweep:
 
 
 func _radius() -> float:
-	return float(def.get("radius", 8.16))
+	return float(def.get("radius", 5.4))
 
 
 func _centre() -> Vector3:
@@ -67,7 +69,7 @@ func _begin() -> void:
 	add_child(_arm)
 	var shaft := MeshKit.box(_arm, Vector3(r - 1.4, 0.16, 0.16), Vector3((r + 1.4) * 0.5, 0.0, 0.0), MeshKit.mat(Color(0.03, 0.035, 0.035), 0.6, 0.3))
 	shaft.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	var glowline := MeshKit.box(_arm, Vector3(r - 1.6, 0.05, 0.05), Vector3((r + 1.4) * 0.5, 0.11, 0.0), MeshKit.emissive(SOUL, 1.4))
+	var glowline := MeshKit.box(_arm, Vector3(r - 1.6, 0.05, 0.05), Vector3((r + 1.4) * 0.5, 0.11, 0.0), MeshKit.emissive(SLASH, 1.2))
 	glowline.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var blade := MeshInstance3D.new()
 	blade.mesh = _blade(r)
@@ -103,7 +105,7 @@ func _begin() -> void:
 	_ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_ring_mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
 	_ring_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_ring_mat.albedo_color = Color(0.25, 0.85, 0.45, 0.45)
+	_ring_mat.albedo_color = Color(0.9, 0.6, 0.58, 0.4)
 	var torus := TorusMesh.new()
 	torus.inner_radius = 0.985
 	torus.outer_radius = 1.0
@@ -118,7 +120,7 @@ func _begin() -> void:
 	_ring.global_position = ground + Vector3.UP * 0.2
 	_ring.scale = Vector3(r, 1.0, r)
 	# The release: a cold flash on Grimm, the scream of the blade, a shake.
-	owner_car.tint_flash(Color(SOUL.r, SOUL.g, SOUL.b, 0.5), 0.2)
+	owner_car.tint_flash(Color(SLASH.r, SLASH.g, SLASH.b, 0.5), 0.2)
 	var db := float(def.get("sound_db", 0.0))
 	# Round 23: its own sound (generated: two heavy whooshes, a blade's ring, a wail), sped up 1.3x so the two
 	# whooshes land on the two laps; played from its start (not synced to its peak, the second whoosh).
@@ -145,12 +147,12 @@ static func _blade(r: float) -> ArrayMesh:
 	var edge: Array[Vector3] = []
 	for i in n + 1:
 		var t := float(i) / n
-		var c := Vector3(r + 0.3 - 1.5 * t * t, 0.18 * t, -BLADE_LEN * t) # the curve of the blade
-		var tan := Vector3(-3.0 * t, 0.18, -BLADE_LEN).normalized()
+		var c := Vector3(r + 0.15 - 0.62 * t * t, 0.08 * t, -BLADE_LEN * t) # the curve of the blade
+		var tan := Vector3(-1.24 * t, 0.08, -BLADE_LEN).normalized()
 		var out := tan.cross(Vector3.UP).normalized() # away from the edge side
 		if out.x < 0.0:
 			out = -out
-		var w := 1.2 * pow(1.0 - t, 0.75) + 0.03
+		var w := 0.5 * pow(1.0 - t, 0.75) + 0.02
 		spine.append(c + out * w * 0.55)
 		edge.append(c - out * w * 0.45)
 	for i in n:
@@ -173,11 +175,11 @@ static func _shader() -> Shader:
 shader_type spatial;
 render_mode unshaded, blend_mix, cull_disabled, depth_draw_opaque, shadows_disabled;
 void fragment() {
-	// White-hot edge, soul green behind it, a smoky near-black spine; flickering wisps run along it.
+	// White-hot edge (a hint of red), a pale red glow behind it, a near-black steel spine; wisps run along it.
 	float e = UV.y;
-	vec3 edge = vec3(0.92, 1.0, 0.94) * 1.6;
-	vec3 soul = vec3(0.35, 1.0, 0.55) * 1.2;
-	vec3 spine = vec3(0.03, 0.08, 0.06);
+	vec3 edge = vec3(1.0, 0.95, 0.93) * 1.5;
+	vec3 soul = vec3(1.0, 0.62, 0.6) * 1.1;
+	vec3 spine = vec3(0.06, 0.04, 0.04);
 	vec3 c = mix(edge, soul, smoothstep(0.0, 0.25, e));
 	c = mix(c, spine, smoothstep(0.35, 0.9, e));
 	float wisp = 0.5 + 0.5 * sin(UV.x * 40.0 - TIME * 30.0 + e * 6.0);
@@ -204,7 +206,7 @@ func _physics_process(delta: float) -> void:
 	_cut()
 	_draw_trail(u)
 	var fade := 1.0 - clampf((u - 0.85) / 0.15, 0.0, 1.0)
-	_ring_mat.albedo_color.a = 0.45 * fade * (0.7 + 0.3 * sin(_t * 40.0))
+	_ring_mat.albedo_color.a = 0.4 * fade * (0.7 + 0.3 * sin(_t * 40.0))
 	_ring.global_position = Specials.ground_below(get_parent(), global_position + Vector3.UP) + Vector3.UP * 0.2
 	if u >= 1.0:
 		_end()
@@ -320,8 +322,10 @@ func _draw_trail(u: float) -> void:
 	var fade := 1.0 - clampf((u - 0.8) / 0.2, 0.0, 1.0)
 	var c := global_position + Vector3.UP * 0.25
 	# [inner radius, outer radius, colour at the inner edge, colour at the outer edge]
-	var bands := [[r - 2.4, r - 0.35, Color(SOUL.r, SOUL.g, SOUL.b, 0.0), Color(SOUL.r, SOUL.g, SOUL.b, 0.5)],
-		[r - 0.35, r + 0.3, Color(EDGE.r, EDGE.g, EDGE.b, 0.95), Color(EDGE.r, EDGE.g, EDGE.b, 0.0)]]
+	# Round 24 (owner: "not too hollow in between"): the slash fills the swept arc from near Grimm out to the
+	# blade, faint inside and brighter toward the rim, then the white-hot rim itself.
+	var bands := [[r * 0.2, r - 0.25, Color(SLASH.r, SLASH.g, SLASH.b, 0.14), Color(SLASH.r, SLASH.g, SLASH.b, 0.55)],
+		[r - 0.25, r + 0.25, Color(EDGE.r, EDGE.g, EDGE.b, 0.95), Color(EDGE.r, EDGE.g, EDGE.b, 0.0)]]
 	for band in bands:
 		_im.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
 		for i in TRAIL_STEPS + 1:
