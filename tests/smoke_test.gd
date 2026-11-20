@@ -1527,6 +1527,50 @@ func _run() -> void:
 		"the blade returns to Roadkill's old spot, not to him: moved away, he loses it (%s)" % why1[0])
 	_check(InputMap.has_action("pick_10") and main.has_method("_pick_opponent"), "the pause menu picks the opponent (keys 6-0)")
 
+	# Round 24: the front end. Main menu -> players -> the world map -> driver select; the picks reach main.gd.
+	main.queue_free()
+	await _frames(2)
+	var fe: FrontEnd = load("res://scenes/front_end.tscn").instantiate()
+	root.add_child(fe)
+	await _frames(3)
+	_check(fe._screen == "main" and fe._items.size() == 4, "the game opens on the main menu: story, deathmatch, options, quit")
+	_check(ProjectSettings.get_setting("application/run/main_scene") == "res://scenes/front_end.tscn", "the front end is the main scene")
+	fe._activate("story")
+	fe._players = 3
+	fe._show_players()
+	_check(fe._players == 2, "story mode takes 1 or 2 players (3 asked, %d kept)" % fe._players)
+	fe._mode = "deathmatch"
+	fe._players = 4
+	fe._show_stage()
+	fe._stage = 4
+	fe._focus_stage(false)
+	_check(fe._pins.size() == FrontEnd.STAGES.size() and fe._leg.get_point_count() > 2, "the world map pins every stage and draws the leg into the chosen one")
+	fe._stage = 0
+	fe._show_cars()
+	var looks_ok := true
+	for i in FrontEnd.CARS.size():
+		fe._car_i = i
+		fe._show_car()
+		var id: String = FrontEnd.CARS[i]
+		looks_ok = looks_ok and FrontEnd._portrait_tex(id, "idle") != null and FrontEnd._portrait_tex(id, "select") != null
+	await _frames(2)
+	_check(looks_ok and fe._stand.get_child_count() >= 1, "every driver has a picture before and after the pick, and the car turns on the stand")
+	fe.queue_free()
+	await _frames(2)
+	main_script.full_roster = false
+	main_script.menu_mode = "deathmatch"
+	main_script.menu_cars = ["roadkill", "roadkill"]
+	main_script.player_car = "roadkill"
+	main = await _new_game()
+	var field: Array = main.enemies.map(func(e: Vehicle): return e.car_id)
+	_check(main.player.car_id == "roadkill" and field.size() == 4 and field[0] == "roadkill",
+		"the menu's picks start the match: player 2's car (a mirror here) + the rest, four enemies in LA (%s)" % [field])
+	main_script.menu_mode = ""
+	main_script.menu_cars = []
+	main_script.player_car = "sweet_tooth"
+	main_script.full_roster = true
+	_check(InputMap.has_action("main_menu") and main.has_method("_to_menu"), "the pause menu goes back to the main menu")
+
 	print("")
 	if _failures.is_empty():
 		print("ALL TESTS PASSED")

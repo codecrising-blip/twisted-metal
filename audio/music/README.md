@@ -18,6 +18,7 @@ M in the pause menu tries the other tracks on the current stage, in story order 
 | `amazonia` | Amazonia | |
 | `minion` | vs Minion (Amazonia sub boss) | |
 | `calypso` | The blimp vs Calypso (final) | |
+| `main_menu` | The front end (main menu, players, world map, driver select) | round 24: Head-On "Los Angeles Revisited", the owner's `audio/reference/music/main_menu.mp3`, 258 s |
 | `unpicked/unpicked_1`, `unpicked/unpicked_2` | not placed yet | playable with M for testing |
 
 Not decided yet: Chernobyl, London, Primeval, New York, Athens. Plan and suggestions: `docs/design/10-music-plan.md`.

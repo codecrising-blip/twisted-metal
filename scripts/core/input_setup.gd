@@ -33,6 +33,7 @@ const KEYS := {
 	"dir_right": [KEY_D, KEY_RIGHT],
 	"pause": [KEY_ESCAPE],
 	"restart": [KEY_ENTER],
+	"main_menu": [KEY_BACKSPACE], # round 24: pause menu -> back to the front end
 	"toggle_help": [KEY_F1],
 	"toggle_graphics": [KEY_G], # pause menu: graphics LOW / HIGH
 	"cycle_music": [KEY_M], # pause menu: try another theme on this stage (owner's music test)
@@ -88,6 +89,7 @@ const PAD_BUTTONS := {
 	"dir_right": [JOY_BUTTON_DPAD_RIGHT],
 	"pause": [JOY_BUTTON_START, JOY_BUTTON_TOUCHPAD],
 	"restart": [JOY_BUTTON_BACK], # only read while paused or after the match
+	"main_menu": [JOY_BUTTON_Y], # Triangle, only read while paused or after the match (round 24)
 }
 
 # action -> [[axis, direction], ...]

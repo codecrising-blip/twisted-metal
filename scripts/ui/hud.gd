@@ -9,6 +9,7 @@ signal restart_requested
 signal driver_requested(index: int)
 signal opponent_requested(index: int) # round 22: pause menu 6 7 8 9 0
 signal music_requested # pause menu M: try the next theme
+signal menu_requested # round 24: pause menu BACKSPACE / Triangle -> the front end
 
 var music_label := "" # shown in the pause menu
 
@@ -308,6 +309,10 @@ func _handle_input() -> void:
 	if Input.is_action_just_pressed("restart") and (game_over or get_tree().paused):
 		get_tree().paused = false
 		restart_requested.emit()
+	if (game_over or get_tree().paused) and Input.is_action_just_pressed("main_menu"):
+		GameFeel.ui("menu_select", get_tree())
+		menu_requested.emit()
+		return
 	if get_tree().paused and not game_over and Input.is_action_just_pressed("toggle_graphics"):
 		GraphicsSettings.toggle(get_tree())
 		_show_pause()
@@ -343,7 +348,7 @@ func _heading_name(f: Vector3) -> String:
 
 
 func _show_pause() -> void:
-	show_message("PAUSED", "ESC / OPTIONS to resume   ENTER / CREATE to restart   G graphics: %s\nM music: %s\n%s\n\n%s" % [GraphicsSettings.label(), music_label, AudioSettings.label(), _driver_menu()])
+	show_message("PAUSED", "ESC / OPTIONS to resume   ENTER / CREATE to restart   BACKSPACE / TRIANGLE main menu\nG graphics: %s\nM music: %s\n%s\n\n%s" % [GraphicsSettings.label(), music_label, AudioSettings.label(), _driver_menu()])
 
 
 func _driver_menu() -> String:

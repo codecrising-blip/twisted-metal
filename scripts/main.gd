@@ -27,6 +27,12 @@ static var full_roster := false # true = FULL_DRIVERS (tests, `-- full`)
 ## Music test (owner, session 6): M in the pause menu swaps the stage's theme for any other track in
 ## audio/music (unpicked ones too), to hear whether it fits. "" = the stage's own theme. Kept until quit.
 static var music_pick := ""
+## Round 24: the front end (scenes/front_end.tscn) starts the match through these. "" = no menu (tests, the editor's
+## F6 on main.tscn): the preview match as before. Players 2-4's picks join as AI cars until split screen exists.
+static var menu_mode := "" # "story" | "deathmatch"
+static var menu_cars: Array = []
+const FRONT_END := "res://scenes/front_end.tscn"
+const LA_ENEMIES := 4 # owner, session 3: LA has 4 enemies
 
 var state := "playing" # playing | won | lost
 var lives := START_LIVES # counts the life in use; spare lives = lives - 1
@@ -51,6 +57,15 @@ func _ready() -> void:
 	if full_roster or "full" in OS.get_cmdline_user_args():
 		drivers = FULL_DRIVERS
 		picks = FULL_DRIVERS
+	elif menu_mode != "":
+		# The other players' cars (driven by the AI for now), then the rest of the remade cars, LA_ENEMIES in all.
+		var foes: Array = menu_cars.slice(1)
+		for id: String in PREVIEW_PICKS:
+			if foes.size() >= LA_ENEMIES:
+				break
+			if id != player_car and not foes.has(id):
+				foes.append(id)
+		drivers = [player_car] + foes
 	else:
 		var foe := opponent_car if opponent_car != "" else ("sweet_tooth" if player_car == "outlaw" else "outlaw")
 		drivers = [player_car, foe] # a mirror match is allowed
@@ -64,8 +79,8 @@ func _ready() -> void:
 	player.controller = PlayerController.new()
 	player.protect()
 	var enemy_cars: Array = drivers.filter(func(id: String): return id != player_car)
-	if drivers.size() == 2 and drivers[0] == player_car:
-		enemy_cars = [drivers[1]] # the preview's opponent (it may be the same car: a mirror match)
+	if drivers[0] == player_car and not (full_roster or "full" in OS.get_cmdline_user_args()):
+		enemy_cars = drivers.slice(1) # the preview's opponent / the menu's field (the same car may come twice)
 	for i in enemy_cars.size():
 		var e := _spawn(enemy_cars[i], arena.spawn_points[(i + 1) % arena.spawn_points.size()], false)
 		var brain := AIDriver.new()
@@ -90,6 +105,7 @@ func _ready() -> void:
 	GameFeel.hud = hud
 	hud.bind(player, camera)
 	hud.restart_requested.connect(_restart)
+	hud.menu_requested.connect(_to_menu)
 	hud.driver_requested.connect(_pick_driver)
 	hud.music_requested.connect(_cycle_music)
 	hud.drivers.assign(picks.map(func(id: String): return String(Roster.get_car(id).get("name", id))))
@@ -297,7 +313,7 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 			state = "lost"
 			hud.game_over = true
 			hud.set_lives(0)
-			hud.show_message("GAME OVER")
+			hud.show_message("GAME OVER", "ENTER / CREATE restart     BACKSPACE / TRIANGLE main menu")
 			return
 		# Round 12 (owner): no countdown and no text; the camera stays on the wreck for the 6 s.
 		hud.set_lives(lives - 1)
@@ -315,6 +331,11 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 
 func _restart() -> void:
 	get_tree().reload_current_scene()
+
+
+func _to_menu() -> void:
+	get_tree().paused = false
+	get_tree().change_scene_to_file(FRONT_END)
 
 
 func _pick_opponent(index: int) -> void:

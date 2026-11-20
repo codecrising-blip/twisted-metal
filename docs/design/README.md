@@ -19,6 +19,7 @@ and Warhawk fights, Outlaw/Grimm/Shadow/Slam special changes, Tokyo/London/Antar
 | Owner revisions 3: sub bosses | [07-owner-revisions-3.md](07-owner-revisions-3.md) | **Authoritative** (wins over 05, 06 and ch3) |
 | Owner revisions 4: first play-test | [09-owner-playtest-1.md](09-owner-playtest-1.md) | **Authoritative, not built yet** (AI, Napalm Cone, movement, turbo, pickups, energy combos, pad layout) |
 | Owner round 9: obstacles, items, SAT, taser, weapon looks | [13-owner-round-9.md](13-owner-round-9.md) | **Built** (session 7) |
+| Owner round 24: one skull, scythe, slots, barrage sounds, main menu, world map, driver select | [29-owner-round-24.md](29-owner-round-24.md) | **Built** (split screen not yet) |
 
 Written in Arabic for the owner; names of characters, stages and weapons stay in English.
 Only what the owner asked for is built; see `CLAUDE.md` for what exists in code.

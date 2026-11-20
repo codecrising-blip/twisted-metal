@@ -79,7 +79,9 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 - **Owner's download (GitHub "Download ZIP"):** `.gitattributes` `export-ignore` keeps `docs/reference/`,
   `audio/reference/` and `docs/screenshots/` out of the zip (285 -> 102 MB; the reference videos broke it). Put new
   study material in those folders; check with `git archive --format=zip -o /tmp/t.zip HEAD` + `unzip -tq`.
-- The game starts in the **preview match** (Sweet Tooth vs Outlaw only). `-- full` = all five cars (tests use it).
+- The game starts in the **front end** (round 24: main menu, players, world map, driver select; `scenes/front_end.tscn`).
+  Running `scenes/main.tscn` directly (tests, F6) = the **preview match** (Sweet Tooth vs Outlaw only). `-- full` = all
+  five cars (tests use it).
   `-- high` / `-- low` force a graphics level for one run.
 
 ## Owner play-test feedback (session 1)
@@ -689,6 +691,35 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   nose up, spinning faster, FoamFire on the scoop growing with the charge, a small scoop glow (a big additive sphere
   turned the whole thing into a white ball again). `tests/_charge_film.gd -- out.png sweet_tooth napalm_cone
   20,50,90,125,160,200,215,230 210` films it.
+- **Round 24, full text `docs/design/29-owner-round-24.md`:** **Spirit skull = ONE face** (`SpiritSkull`, 2.5 m wide =
+  Sweet Tooth's hurtbox, `hit_widen` 1.25 on its car box), no burning on the car it hits. **Soul Harvest** radius 5.4
+  (one Roadkill length), filled slash (pale band from near Grimm to the rim + white-hot edge band), smaller blade
+  (`BLADE_LEN` 1.9), white with a red tint; still 2 charges, 12.5% of full health a lap (owner: test first).
+  **Tyre Dash** tyres swell `GROW` 1.3 with a `POP` as they shut (Axel looked smaller). **Roadkill:** 6 slots modelled on
+  the nose (`build_roadkill.py`, markers `m_slot_0..5` -> model meta `slots`), `Vehicle._slot_fx` lights one per loaded
+  missile, crimson after the 2 s hold (`_charge_hold`, not the capped `charge_time`). Owner's sounds `barrage_charge`
+  (loops while charging), `barrage_fire` / `barrage_lock` (red), `barrage_travel` (each charged missile).
+  **Sound falloff halved:** `GameFeel._soften` sets `unit_size = d^(1-s) * unit0^s` (s = `FALLOFF_SHARE` 0.5) every
+  frame for loops and at start for one-shots, so the inverse-distance drop is half of Godot's.
+  **Front end = the main scene now** (`scenes/front_end.tscn`, `FrontEnd` in `scripts/ui/front_end.gd`, all in code):
+  main menu over the panning LA backdrop with embers + `audio/music/main_menu.ogg` (Head-On "Los Angeles Revisited");
+  options (graphics, music, SFX); players (story 1-2, deathmatch 1-4; split screen NOT built: players 2-4's picks drive
+  as AI); world-map stage select (`assets/ui/world_map.webp` from `tools/make_world_map.py` + Natural Earth 50m land,
+  equirectangular, `FrontEnd.map_point`; pins in story order, zoom + an arc from the previous stage, only LA open);
+  TM2-style driver select per player (portrait idle -> select with flash/punch/shake, the car turning on a stand in a
+  SubViewport, stat bars, special/secondary/driver/tagline); title card; then `main.gd` statics `menu_mode`,
+  `menu_cars`, `player_car` and `change_scene_to_file(main.tscn)`. `main.gd` with `menu_mode` set = the player + the
+  other picks + the rest of `PREVIEW_PICKS` up to `LA_ENEMIES` 4. Pause / game over: BACKSPACE / Triangle =
+  `main_menu` -> back to the front end. Tests still load `main.tscn` directly (menu_mode "" = the preview match).
+  **Portraits** (`assets/portraits/<car>_idle|select.webp`, `tools/make_portraits.py --sr EDSR_x4.pb [cars]`): the
+  owner's references (Outlaw TM2, Sweet Tooth TMB frames from `story_tmb_sweet_tooth.mp4`, Axel TM2, Roadkill Head-On,
+  Grimm Head-On: select screen frame + `story_headon_mr_grimm.mp4` skull), denoised, upscaled x4 with OpenCV's EDSR
+  (`opencv-contrib-python-headless<5`: 5.x can't read the TF .pb; weights from github Saafke/EDSR_Tensorflow; ~1 min a
+  small image on CPU, so big sources skip it), graded as one set. They are cleaned-up references, NOT new art: real
+  new art needs a paid image tool (owner's approval) or bigger sources. Running a downloaded native upscaler binary
+  (Real-ESRGAN ncnn) was refused by this environment: don't. `static.wikia.nocookie.net` is blocked.
+  `tests/_menu_shot.gd -- out_dir` shoots every screen. Gotcha: `set_anchors_preset()` alone leaves a code-built
+  Control at size 0 (text drawn from x 0); use `FrontEnd._wide()` / `_fill()` (anchors + offsets).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -742,6 +773,7 @@ scripts/fx/                 FxKit (fire/smoke/explosions + debris, shatter, shar
                             column, crash burst), GameFeel (hit-stop, slow-mo, shake, flash, shockwave, scorch, sound
                             hooks, synced sounds), SoundPeaks (generated), Streak (missile trail ribbons),
                             FlickerLight, Blinker, ZigLine (chains, cables), Bolt (lightning, one draw call)
+scripts/ui/front_end.gd     the front end (main scene, round 24): menu, options, players, world map, driver select
 scripts/ui/hud.gd           HUD layout (target, feed, messages, help, countdown, pause) + grain/vignette shader
 scripts/ui/hud_status.gd    bottom-left panel: name, lives, segmented health (trail), turbo, energy, state chips
 scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, ammo), other weapons as chips
