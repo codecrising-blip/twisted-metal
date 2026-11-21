@@ -720,6 +720,28 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   (Real-ESRGAN ncnn) was refused by this environment: don't. `static.wikia.nocookie.net` is blocked.
   `tests/_menu_shot.gd -- out_dir` shoots every screen. Gotcha: `set_anchors_preset()` alone leaves a code-built
   Control at size 0 (text drawn from x 0); use `FrontEnd._wide()` / `_fill()` (anchors + offsets).
+- **Round 25, full text `docs/design/30-owner-round-25.md`:** **Menu pad:** Godot's `ui_accept` / `ui_cancel` carry no
+  pad buttons, so the pad did nothing: `FrontEnd` polls its own `menu_up/down/left/right/ok/back/done` (InputSetup:
+  Cross OK, Circle back, D-pad + left stick at `MENU_DEADZONE` 0.5, Triangle / Options / Tab = fight now).
+  **Opponent pick:** after the players, the driver screen picks `FrontEnd.foe_slots(players)` = 4 - (players - 1)
+  opponents ("OPPONENT n OF m", VS strip, mirrors allowed, Triangle = fight with those so far, none = the usual
+  field) -> `main.menu_foes`. **AI roles** (`AIDriver.new_role`, every `ROLE_TIME` 9-14 s): the player
+  `player_focus` 0.8 of the time (tests set 1.0), else another car (last attacker / nearest); on the player a
+  role: brawler (attack runs, at most `MAX_BRAWLERS` 2), sniper (`_snipe`: ring at `SNIPE_AT` 42 m, turns in to fire,
+  backs off inside 28 m), scavenger (`_scavenge`: weapons / turbo first, then snipes). One opponent = always a brawler.
+  **Lag with 5 cars (measured):** AI ~0.4 ms a frame for all four (not it); draws avg 241 -> 261 but spikes to 399 with
+  up to 77 AudioStreamPlayer3D and ~100 CPUParticles3D in a brawl. `GameFeel.play` caps voices (`VOICES_SAME` 3 of a
+  name, `VOICES_ALL` 28; `VOICE_EXEMPT` screams/SAT/barrage), `FxKit._budget` (deferred from `ghost_guard`, one-shot
+  bursts still emitting = not a car's reusable emitter) thins bursts past `BUDGET_FAR` 60 m, hides them past 170 m,
+  halves them when > `BUDGET_LIVE` 40 are alive. This container's timing swings +-20% run to run: ask the owner for
+  F3 numbers if it still lags. `tests/_cars_perf.gd -- n [cluster] [noai] [render]`, `tests/_fight_spikes.gd -- secs
+  n` (slowest frames + census of particles / sounds / fires). **Portraits = the owner's own art**
+  (`docs/reference/portraits/owner_<car>.webp`, before | after sheets), fixed by `tools/portraits/build.sh`
+  (replaces `make_portraits.py`): Grimm and Sweet Tooth as drawn; Roadkill after-pick clowns removed (rembg
+  isnet-anime cut-out + background rebuilt from the before-picture's own grunge, darker); Axel's first pose closer
+  (head to knees, EDSR) with the AXEL lettering put back; Outlaw in a police uniform (navy recolour with a bilateral
+  clean-up, black leather strap/duty belt, torn sleeve closed, gold badge + POLICE patch drawn in code). The owner's red
+  frames stay; `FrontEnd._set_portrait` sizes the box to each picture (after-pick ones are wider).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

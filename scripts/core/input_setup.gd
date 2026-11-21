@@ -34,6 +34,14 @@ const KEYS := {
 	"pause": [KEY_ESCAPE],
 	"restart": [KEY_ENTER],
 	"main_menu": [KEY_BACKSPACE], # round 24: pause menu -> back to the front end
+	# Round 25: the front end's own actions (Godot's ui_accept / ui_cancel have no pad buttons, so the pad did nothing).
+	"menu_up": [KEY_UP, KEY_W],
+	"menu_down": [KEY_DOWN, KEY_S],
+	"menu_left": [KEY_LEFT, KEY_A],
+	"menu_right": [KEY_RIGHT, KEY_D],
+	"menu_ok": [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE],
+	"menu_back": [KEY_ESCAPE, KEY_BACKSPACE],
+	"menu_done": [KEY_TAB], # driver select: fight now with the opponents picked so far
 	"toggle_help": [KEY_F1],
 	"toggle_graphics": [KEY_G], # pause menu: graphics LOW / HIGH
 	"cycle_music": [KEY_M], # pause menu: try another theme on this stage (owner's music test)
@@ -90,6 +98,13 @@ const PAD_BUTTONS := {
 	"pause": [JOY_BUTTON_START, JOY_BUTTON_TOUCHPAD],
 	"restart": [JOY_BUTTON_BACK], # only read while paused or after the match
 	"main_menu": [JOY_BUTTON_Y], # Triangle, only read while paused or after the match (round 24)
+	"menu_up": [JOY_BUTTON_DPAD_UP],
+	"menu_down": [JOY_BUTTON_DPAD_DOWN],
+	"menu_left": [JOY_BUTTON_DPAD_LEFT],
+	"menu_right": [JOY_BUTTON_DPAD_RIGHT],
+	"menu_ok": [JOY_BUTTON_A], # Cross
+	"menu_back": [JOY_BUTTON_B], # Circle
+	"menu_done": [JOY_BUTTON_Y, JOY_BUTTON_START], # Triangle / Options
 }
 
 # action -> [[axis, direction], ...]
@@ -100,7 +115,12 @@ const PAD_AXES := {
 	"brake": [[JOY_AXIS_LEFT_Y, 1.0]],
 	"steer_left": [[JOY_AXIS_LEFT_X, -1.0]],
 	"steer_right": [[JOY_AXIS_LEFT_X, 1.0]],
+	"menu_up": [[JOY_AXIS_LEFT_Y, -1.0]],
+	"menu_down": [[JOY_AXIS_LEFT_Y, 1.0]],
+	"menu_left": [[JOY_AXIS_LEFT_X, -1.0]],
+	"menu_right": [[JOY_AXIS_LEFT_X, 1.0]],
 }
+const MENU_DEADZONE := 0.5 # the stick has to be pushed well over before a menu moves
 
 
 static func setup() -> void:
@@ -130,6 +150,8 @@ static func setup() -> void:
 			ev.axis = pair[0]
 			ev.axis_value = pair[1]
 			InputMap.action_add_event(action, ev)
+	for action in ["menu_up", "menu_down", "menu_left", "menu_right"]:
+		InputMap.action_set_deadzone(action, MENU_DEADZONE)
 
 
 static func _ensure(action: String) -> void:

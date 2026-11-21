@@ -131,12 +131,19 @@ static func play(name: String, pos: Vector3, parent: Node, volume_db := 0.0, pit
 	var list := streams(name)
 	if list.is_empty():
 		return null
+	# Round 25 (owner: lag with five cars fighting): five cars' guns stacked a dozen ricochets and shells at
+	# once, each a new node. At most VOICES_SAME of one sound and VOICES_ALL in all; the rest are skipped.
+	if not VOICE_EXEMPT.has(name) and (int(_voices.get(name, 0)) >= VOICES_SAME or _voices_all >= VOICES_ALL):
+		return null
 	var p := AudioStreamPlayer3D.new()
 	p.bus = AudioSettings.SFX_BUS
 	p.stream = list.pick_random()
 	p.volume_db = volume_db
 	p.pitch_scale = pitch * randf_range(0.92, 1.08)
 	p.unit_size = 18.0
+	_voices[name] = int(_voices.get(name, 0)) + 1
+	_voices_all += 1
+	p.tree_exiting.connect(Callable(GameFeel, "_voice_done").bind(name))
 	parent.add_child(p)
 	p.global_position = pos
 	_soften(p, 18.0) # round 24: half the distance fade
@@ -146,6 +153,16 @@ static func play(name: String, pos: Vector3, parent: Node, volume_db := 0.0, pit
 
 
 const SYNC_LEAD := 0.02 # a synced sound starts this long before its peak (the attack still sounds)
+const VOICES_SAME := 3
+const VOICES_ALL := 28
+const VOICE_EXEMPT := ["sat_incoming", "death_male", "death_female", "barrage_lock", "barrage_fire"]
+static var _voices := {} # sound name -> players alive
+static var _voices_all := 0
+
+
+static func _voice_done(name: String) -> void:
+	_voices[name] = maxi(0, int(_voices.get(name, 0)) - 1)
+	_voices_all = maxi(0, _voices_all - 1)
 
 
 ## Seconds from the start of a sound file to its loudest moment (tests/sound_peaks.py).

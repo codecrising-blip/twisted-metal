@@ -42,6 +42,8 @@ var _players := 1
 var _stage := 0
 var _cars: Array[String] = []
 var _picking := 0 # which player is choosing a driver
+var _picking_foes := false # round 25 (owner): after the players, they pick who they fight
+var _foes: Array[String] = []
 var _car_i := 0
 var _index := 0 # highlighted entry on list screens
 var _items: Array = [] # [label, action] on list screens
@@ -248,6 +250,7 @@ func _start_music() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	_read_input()
 	var vs := _view()
 	if _bg: # the city drifts slowly behind the menus
 		_bg.position.x = -60.0 + sin(_t * 0.05) * 60.0
@@ -280,20 +283,20 @@ func _process(delta: float) -> void:
 
 # ------------------------------------------------------------------ input
 
-func _input(event: InputEvent) -> void:
-	if _busy or event.is_echo():
+## The menus read their own actions every frame (keys, D-pad, left stick, Cross = OK, Circle = back,
+## Triangle / Options / Tab = fight now on the driver select).
+func _read_input() -> void:
+	if _busy:
 		return
-	if not (event is InputEventKey or event is InputEventJoypadButton or event is InputEventJoypadMotion):
+	var up := Input.is_action_just_pressed("menu_up")
+	var down := Input.is_action_just_pressed("menu_down")
+	var left := Input.is_action_just_pressed("menu_left")
+	var right := Input.is_action_just_pressed("menu_right")
+	var ok := Input.is_action_just_pressed("menu_ok")
+	var back := Input.is_action_just_pressed("menu_back")
+	var done := Input.is_action_just_pressed("menu_done")
+	if not (up or down or left or right or ok or back or done):
 		return
-	var up := event.is_action_pressed("ui_up")
-	var down := event.is_action_pressed("ui_down")
-	var left := event.is_action_pressed("ui_left")
-	var right := event.is_action_pressed("ui_right")
-	var ok := event.is_action_pressed("ui_accept")
-	var back := event.is_action_pressed("ui_cancel")
-	if not (up or down or left or right or ok or back):
-		return
-	get_viewport().set_input_as_handled()
 	match _screen:
 		"main", "options":
 			if up or down:
@@ -326,7 +329,9 @@ func _input(event: InputEvent) -> void:
 				if STAGES[_stage].get("open", false):
 					_sound("menu_select")
 					_cars.clear()
+					_foes.clear()
 					_picking = 0
+					_picking_foes = false
 					_show_cars()
 				else:
 					_sound("not_available")
@@ -340,8 +345,19 @@ func _input(event: InputEvent) -> void:
 				_show_car()
 			elif ok:
 				_pick_car()
+			elif done and _picking_foes:
+				_sound("menu_select")
+				_show_loading() # fight now: the opponents picked so far (none = the usual field)
 			elif back:
-				if _picking > 0:
+				if _picking_foes and not _foes.is_empty():
+					_foes.pop_back()
+					_show_cars()
+				elif _picking_foes:
+					_picking_foes = false
+					_cars.pop_back()
+					_picking = _cars.size()
+					_show_cars()
+				elif _picking > 0:
 					_picking -= 1
 					_cars.pop_back()
 					_show_cars()
@@ -383,7 +399,7 @@ func _show_main() -> void:
 	var tag := _label(_root, "CALYPSO'S TOURNAMENT", 30, FIRE, HORIZONTAL_ALIGNMENT_CENTER)
 	_wide(tag, 222, 44)
 	_list([["STORY MODE", "story"], ["DEATHMATCH", "deathmatch"], ["OPTIONS", "options"], ["QUIT", "quit"]], 340)
-	_hint("UP / DOWN choose     ENTER / CROSS select")
+	_hint("D-PAD choose     CROSS select")
 
 
 func _list(entries: Array, top: float) -> void:
@@ -418,7 +434,7 @@ func _show_options() -> void:
 	_title("OPTIONS")
 	_list([["", "graphics"], ["", "music"], ["", "sfx"], ["BACK", "back"]], 220)
 	_refresh_options()
-	_hint("UP / DOWN choose     LEFT / RIGHT change     ESC / CIRCLE back")
+	_hint("D-PAD UP / DOWN choose     LEFT / RIGHT change     CIRCLE back")
 
 
 func _refresh_options() -> void:
@@ -468,7 +484,7 @@ func _show_players() -> void:
 	if _players > 1:
 		var note := _label(_root, "SPLIT SCREEN IS NOT BUILT YET: PLAYERS 2-%d PICK THEIR CARS, THE AI DRIVES THEM FOR NOW" % _players, 22, DIM, HORIZONTAL_ALIGNMENT_CENTER)
 		_wide(note, vs.y * 0.6, 34)
-	_hint("LEFT / RIGHT players     ENTER / CROSS continue     ESC / CIRCLE back")
+	_hint("D-PAD players     CROSS continue     CIRCLE back")
 
 
 # ------------------------------------------------------------------ the world map: stage select
@@ -537,7 +553,7 @@ func _show_stage() -> void:
 	_stage_info.autowrap_mode = TextServer.AUTOWRAP_WORD
 	_stage_info.size = Vector2(330, 300)
 	_focus_stage(false)
-	_hint("LEFT / RIGHT stage     ENTER / CROSS choose     ESC / CIRCLE back")
+	_hint("D-PAD stage     CROSS choose     CIRCLE back")
 
 
 ## Zoom the map onto the highlighted stage and show what it is.
@@ -582,21 +598,17 @@ func _focus_stage(animate: bool) -> void:
 func _show_cars() -> void:
 	_clear()
 	_screen = "cars"
-	_car_i = CARS.find(Engine.get_meta("last_car", "sweet_tooth")) if _picking == 0 else 0
+	_car_i = CARS.find(Engine.get_meta("last_car", "sweet_tooth")) if _picking == 0 and not _picking_foes else 0
 	_car_i = maxi(_car_i, 0)
-	_title("PLAYER %d" % (_picking + 1), "CHOOSE YOUR DRIVER")
-	# the driver's picture in a burning frame, top left
-	var frame := ColorRect.new()
-	frame.color = Color(0.25, 0.04, 0.0)
-	frame.position = Vector2(56, 150)
-	frame.size = Vector2(368, 488)
-	_root.add_child(frame)
+	if _picking_foes:
+		_title("OPPONENT %d OF %d" % [_foes.size() + 1, foe_slots(_players)], "CHOOSE WHO YOU FIGHT")
+	else:
+		_title("PLAYER %d" % (_picking + 1), "CHOOSE YOUR DRIVER")
+	# the driver's picture, top left (round 25: the owner's art, red frame and all; the box takes each picture's
+	# own shape: the after-pick pictures are wider)
 	_portrait = TextureRect.new()
 	_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	_portrait.position = Vector2(60, 154)
-	_portrait.size = Vector2(360, 480)
-	_portrait.pivot_offset = _portrait.size * 0.5
+	_portrait.stretch_mode = TextureRect.STRETCH_SCALE
 	_root.add_child(_portrait)
 	var flames := CPUParticles2D.new()
 	flames.amount = 60
@@ -697,7 +709,11 @@ func _show_cars() -> void:
 	_car_info.position = Vector2(22, y + 6)
 	_car_info.size = Vector2(310, 180)
 	_car_info.autowrap_mode = TextServer.AUTOWRAP_WORD
-	_hint("LEFT / RIGHT driver     ENTER / CROSS select     ESC / CIRCLE back")
+	if _picking_foes:
+		_hint("D-PAD driver     CROSS pick     TRIANGLE / OPTIONS fight now     CIRCLE back")
+		_foe_strip(vs)
+	else:
+		_hint("D-PAD driver     CROSS select     CIRCLE back")
 	_show_car()
 
 
@@ -705,7 +721,7 @@ func _show_car() -> void:
 	var id: String = CARS[_car_i]
 	var stats := Roster.get_car(id)
 	_car_name.text = "<   %s   >" % String(stats.get("name", id)).to_upper()
-	_portrait.texture = _portrait_tex(id, "idle")
+	_set_portrait(_portrait_tex(id, "idle"))
 	_portrait.modulate = Color.WHITE
 	for c in _stand.get_children():
 		c.queue_free()
@@ -729,9 +745,39 @@ func _show_car() -> void:
 	_car_info.text = info
 
 
+## PORTRAIT_H tall, as wide as the picture's shape, centred on PORTRAIT_X.
+const PORTRAIT_H := 490.0
+const PORTRAIT_X := 236.0
+
+
+func _set_portrait(tex: Texture2D) -> void:
+	_portrait.texture = tex
+	var aspect := float(tex.get_width()) / float(tex.get_height()) if tex else 0.75
+	_portrait.size = Vector2(PORTRAIT_H * aspect, PORTRAIT_H)
+	_portrait.position = Vector2(PORTRAIT_X - _portrait.size.x * 0.5, 146.0)
+	_portrait.pivot_offset = _portrait.size * 0.5
+
+
 static func _portrait_tex(id: String, pose: String) -> Texture2D:
 	var p := "res://assets/portraits/%s_%s.webp" % [id, pose]
 	return load(p) as Texture2D if ResourceLoader.exists(p) else null
+
+
+## How many opponents the players pick: LA's field of 4, less the other human players (they are opponents too).
+static func foe_slots(players: int) -> int:
+	return maxi(1, 4 - (players - 1))
+
+
+## The opponents picked so far, as small name tags under the stand.
+func _foe_strip(vs: Vector2) -> void:
+	var names: PackedStringArray = []
+	for id in _foes:
+		names.append(String(Roster.get_car(id).get("name", id)).to_upper())
+	for i in range(_foes.size(), foe_slots(_players)):
+		names.append("?")
+	var l := _label(_root, "VS   " + "   /   ".join(names), 24, DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	l.position = Vector2(430, 668)
+	l.size = Vector2(vs.x - 850, 36)
 
 
 ## Picked: the picture cuts to the driver's wilder pose with a flash, a punch-in and a shake, the car's own special
@@ -739,8 +785,11 @@ static func _portrait_tex(id: String, pose: String) -> Texture2D:
 func _pick_car() -> void:
 	_busy = true
 	var id: String = CARS[_car_i]
-	_cars.append(id)
-	_portrait.texture = _portrait_tex(id, "select")
+	if _picking_foes:
+		_foes.append(id)
+	else:
+		_cars.append(id)
+	_set_portrait(_portrait_tex(id, "select"))
 	_flash_screen(0.85, 0.35)
 	_shake(16.0)
 	_portrait.scale = Vector2(1.18, 1.18)
@@ -749,13 +798,16 @@ func _pick_car() -> void:
 	_sound(_special_sound(id), -2.0)
 	_car_name.add_theme_color_override("font_color", FIRE)
 	_car_name.text = String(Roster.get_car(id).get("name", id)).to_upper()
-	if _picking == 0:
+	if _picking == 0 and not _picking_foes:
 		Engine.set_meta("last_car", id)
-	await get_tree().create_timer(1.6).timeout
+	await get_tree().create_timer(1.0 if _picking_foes else 1.6).timeout
 	_car_name.add_theme_color_override("font_color", BONE)
 	_busy = false
-	if _cars.size() < _players:
+	if not _picking_foes and _cars.size() < _players:
 		_picking += 1
+		_show_cars()
+	elif not _picking_foes or _foes.size() < foe_slots(_players):
+		_picking_foes = true
 		_show_cars()
 	else:
 		_show_loading()
@@ -787,6 +839,7 @@ func _show_loading() -> void:
 	main_script.player_car = _cars[0]
 	main_script.menu_mode = _mode
 	main_script.menu_cars = _cars.duplicate()
+	main_script.menu_foes = _foes.duplicate()
 	main_script.opponent_car = ""
 	main_script.full_roster = false
 	get_tree().change_scene_to_file(MAIN_SCENE)

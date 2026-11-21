@@ -44,7 +44,10 @@ func _run() -> void:
 	await _snap(dir, "5_stage_chernobyl")
 	fe._stage = 0
 	fe._cars.clear()
+	fe._foes.clear()
+	fe._players = 1
 	fe._picking = 0
+	fe._picking_foes = false
 	fe._show_cars()
 	for i in fe.CARS.size():
 		fe._car_i = i
@@ -57,9 +60,12 @@ func _run() -> void:
 	fe._pick_car()
 	await _wait(0.4)
 	await _snap(dir, "7_picked_outlaw")
-	fe._players = 1
-	fe._cars = ["outlaw"]
+	await _wait(1.6)
+	fe._car_i = 2
+	fe._show_car()
+	await _wait(0.4)
+	await _snap(dir, "8_opponents")
 	fe._show_loading()
 	await _wait(0.6)
-	await _snap(dir, "8_loading")
+	await _snap(dir, "9_loading")
 	quit()

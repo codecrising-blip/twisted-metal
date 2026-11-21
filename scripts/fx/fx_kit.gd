@@ -51,6 +51,8 @@ static func ghost_guard(node: Node) -> void:
 	var p := node as CPUParticles3D
 	if p == null:
 		return
+	if p.one_shot and p.amount > 3:
+		Callable(FxKit, "_budget").bind(p).call_deferred()
 	var mat: Material = (p.mesh as PrimitiveMesh).material if p.mesh is PrimitiveMesh else null
 	if mat is BaseMaterial3D and (mat as BaseMaterial3D).blend_mode == BaseMaterial3D.BLEND_MODE_ADD:
 		return
@@ -64,6 +66,34 @@ static func ghost_guard(node: Node) -> void:
 	# frame (the black dot inside explosions). A restart updates it at once.
 	if p.emitting:
 		p.restart.call_deferred()
+
+
+## Round 25 (owner: lag when five cars fight at once): bursts (sparks, debris, smoke puffs) keep fewer particles
+## far from the camera and when many are alive already; a burst beyond BUDGET_GONE is not drawn at all.
+## Deferred: effects are placed after they are added, so the distance is only known on the next idle point.
+const BUDGET_FAR := 60.0
+const BUDGET_GONE := 170.0
+const BUDGET_LIVE := 40
+
+
+static func _budget(p: CPUParticles3D) -> void:
+	if not is_instance_valid(p) or not p.is_inside_tree() or not p.emitting:
+		return # not emitting by now = a car's own reusable emitter (muzzle, shells): left alone
+	var k := 1.0
+	var cam := p.get_viewport().get_camera_3d()
+	if cam:
+		var d := cam.global_position.distance_to(p.global_position)
+		if d > BUDGET_GONE:
+			p.emitting = false
+			p.visible = false
+			return
+		if d > BUDGET_FAR:
+			k *= clampf(BUDGET_FAR / d, 0.35, 1.0)
+	if p.get_tree().get_nodes_in_group("fx_bursts").size() > BUDGET_LIVE:
+		k *= 0.5
+	p.add_to_group("fx_bursts")
+	if k < 0.95:
+		p.amount = maxi(2, int(p.amount * k))
 
 
 static func _ramp(colors: Array) -> Gradient:

@@ -10,16 +10,28 @@ extends RefCounted
 ##            and come again. The player's counter is to turn into it or ram it. No circling.
 ##   RETREAT  only when badly hurt: break away (drifting) and look for health.
 ## Also: dodges walls with feeler rays, backs out when stuck, takes ramps to reach high targets.
-## Story rule (design 1.5): at most two AI cars go after the player at the same time.
+## Roles (round 25, owner: "all of them fight you 80% of the time, but not all at once: some collect weapons,
+## some fight, some long range"). Every ROLE_TIME an AI picks who it is after: the player PLAYER_FOCUS of the
+## time, otherwise another car (the one that hit it last, else the nearest). After the player it takes a role:
+##   BRAWLER    attack runs as above; at most MAX_BRAWLERS at a time (design 1.5's "two on the player").
+##   SNIPER     holds a ring SNIPE_AT m round the player, turning in now and then to fire long-range weapons.
+##   SCAVENGER  collects weapons and turbo, then snipes.
+## With a single opponent it is always a brawler on the player (the 1-on-1 the owner rated 7/10).
 
 const WORLD_MASK := 1
-const MAX_ON_PLAYER := 2
+const MAX_BRAWLERS := 2 # round 25: close fighters on the player at once (was MAX_ON_PLAYER, by distance)
+const ROLE_TIME := Vector2(9.0, 14.0) # seconds a role and target are kept
+const SNIPE_NEAR := 28.0 # a sniper closer than this backs off
+const SNIPE_AT := 42.0 # ...holds a ring this far out
+const SNIPE_FAR := 62.0 # ...and closes in from beyond this
+const SCAVENGE_RANGE := 120.0
 const RETREAT_AT := 0.3 # share of max health
 const HUNT_RANGE := 55.0 # attack runs start inside this distance
 const SPECIAL_RANGE := 8.0 # close-range specials (Outlaw's taser) only this close (owner)
 const RAMP_LOOK := 13.0 # pure pursuit along a ramp's line: aim this far ahead on it
 const DRIVABLE_NORMAL_Y := 0.75 # a feeler hit this flat (up to ~40 degrees) is ground, not a wall
 
+static var player_focus := 0.8 # round 25 (owner): share of role periods spent on the player (tests set 1)
 var aggression := 1.2 # 0.5 easy .. 1.5 hard; 1.2 = the owner's 7/10
 ## Round 14 (owner: "1.1x smarter, a battle, not a massacre, not a chess player"): decisions come 1.1x
 ## sooner, it picks up health it passes when hurt, and it fires the weapon worth most at that range.
@@ -58,10 +70,16 @@ var drifts := 0 # handbrake turns started (tests)
 var _energy_think := 1.0 # seconds to the next energy-move decision
 var _bot: SweetBot # the enemy robot this car is going after (mode "bot")
 var _bot_think := 0.0
+var role := "brawler" # brawler | sniper | scavenger (round 25)
+var focus: Vehicle # the car this role period is about
+var _role_t := 0.0
+var _snipe_t := 0.0
+var _snipe_aim := false
 
 
 func drive(v: Vehicle, delta: float) -> void:
 	_retarget -= delta
+	_role_t -= delta
 	_weapon_timer -= delta
 	_special_timer -= delta
 	if _retarget <= 0.0:
@@ -259,6 +277,13 @@ func _plan(v: Vehicle, delta: float) -> Dictionary:
 		return bot_plan
 	if not has_t:
 		return _wander_plan(v)
+	if role == "scavenger" and t == focus: # round 25: arm up first (weapons, turbo), then snipe
+		var grab := _scavenge(v)
+		if grab:
+			mode = "collect"
+			_ramp_goal = {}
+			return {"goal": grab.global_position, "throttle": 1.0}
+		role = "sniper"
 	var to := t.global_position - v.global_position
 	var d := Vector2(to.x, to.z).length()
 	var flat_to := Vector3(to.x, 0, to.z).normalized()
@@ -291,6 +316,8 @@ func _plan(v: Vehicle, delta: float) -> Dictionary:
 		if detour:
 			mode = "detour"
 			return {"goal": detour.global_position, "throttle": 1.0}
+	if role == "sniper" and t == focus:
+		return _snipe(v, t, d, flat_to, delta)
 	if running and d > 14.0:
 		mode = "chase"
 		phase = "approach"
@@ -427,28 +454,97 @@ func _detour(v: Vehicle) -> Pickup:
 
 
 func _choose_target(v: Vehicle) -> Vehicle:
-	var on_player := 0
+	if _role_t <= 0.0 or not _alive(focus):
+		new_role(v)
+	var t := focus
+	if _alive(t) and t.is_hidden() and v.global_position.distance_to(t.global_position) > 12.0:
+		t = null # invisible: lost past 12 m (design 5.2); the nearest car it can see for now
+	if t == null:
+		var best_d := INF
+		for node in v.get_tree().get_nodes_in_group("vehicles"):
+			var o := node as Vehicle
+			if o == v or not _alive(o) or o.is_hidden():
+				continue
+			var d := v.global_position.distance_to(o.global_position)
+			if d < best_d:
+				best_d = d
+				t = o
+	return t
+
+
+static func _alive(o: Vehicle) -> bool:
+	return is_instance_valid(o) and not o.is_dead
+
+
+## A new role period: who to go after and how (see the header). Public so tests can force one.
+func new_role(v: Vehicle, forced_role := "", forced_focus: Vehicle = null, seconds := 0.0) -> void:
+	_role_t = seconds if seconds > 0.0 else randf_range(ROLE_TIME.x, ROLE_TIME.y)
+	phase = "approach"
+	if forced_role != "":
+		role = forced_role
+		focus = forced_focus
+		return
+	var player: Vehicle = null
+	var rivals: Array[Vehicle] = []
 	for node in v.get_tree().get_nodes_in_group("vehicles"):
 		var o := node as Vehicle
-		if o != v and not o.is_player and not o.is_dead and is_instance_valid(o.target) and o.target.is_player:
-			on_player += 1
-	var best: Vehicle = null
-	var best_score := INF
-	for node in v.get_tree().get_nodes_in_group("vehicles"):
-		var o := node as Vehicle
-		if o == v or o.is_dead:
+		if o == v or not _alive(o):
 			continue
-		if o.is_hidden() and v.global_position.distance_to(o.global_position) > 12.0:
-			continue # invisible: lost past 12 m (design 5.2)
-		var score := v.global_position.distance_to(o.global_position)
 		if o.is_player:
-			score *= 0.6 if on_player < MAX_ON_PLAYER or v.target == o else 3.0
-		if o == v.last_attacker:
-			score *= 0.7
-		if score < best_score:
-			best_score = score
-			best = o
-	return best
+			player = o
+		else:
+			rivals.append(o)
+	if player and (rivals.is_empty() or randf() < player_focus):
+		focus = player
+		var brawlers := 0
+		for o in rivals:
+			var b := o.controller as AIDriver
+			if b and b.role == "brawler" and b.focus == player:
+				brawlers += 1
+		if brawlers < MAX_BRAWLERS:
+			role = "brawler"
+		else:
+			role = "sniper" if randf() < 0.55 else "scavenger"
+		return
+	role = "brawler" # the other 20%: settle a score with another car
+	focus = v.last_attacker if is_instance_valid(v.last_attacker) and v.last_attacker in rivals else null
+	if focus == null:
+		var best_d := INF
+		for o in rivals:
+			var d := v.global_position.distance_to(o.global_position)
+			if d < best_d:
+				best_d = d
+				focus = o
+
+
+## Long range (round 25): hold a ring round the target, turning in now and then to fire, backing off when it
+## comes close. The weapon choice in _shoot already prefers what is worth most at the range.
+func _snipe(v: Vehicle, t: Vehicle, d: float, flat_to: Vector3, delta: float) -> Dictionary:
+	mode = "snipe"
+	phase = "approach"
+	if d > SNIPE_FAR:
+		return {"goal": t.global_position, "throttle": 1.0, "turbo": d > 100.0}
+	_snipe_t -= delta
+	if _snipe_t <= 0.0:
+		_snipe_aim = not _snipe_aim
+		_snipe_t = randf_range(1.8, 2.6) if _snipe_aim else randf_range(2.2, 3.2)
+		if not _snipe_aim:
+			_side = 1.0 if randf() < 0.5 else -1.0
+	if _snipe_aim and d > SNIPE_NEAR:
+		return {"goal": t.global_position, "throttle": 0.3} # nose on it: missiles away
+	var spot := t.global_position - flat_to.rotated(Vector3.UP, 0.45 * _side) * SNIPE_AT
+	return {"goal": _keep_level(v, spot), "throttle": 1.0 if d < SNIPE_NEAR else 0.6}
+
+
+## The nearest weapon on this level, or turbo when it runs low, within SCAVENGE_RANGE.
+func _scavenge(v: Vehicle) -> Pickup:
+	for what: String in ["weapon", "turbo"]:
+		if what == "turbo" and v.turbo > 70.0:
+			continue
+		var p := _nearest_pickup(v, what)
+		if p and v.global_position.distance_to(p.global_position) < SCAVENGE_RANGE:
+			return p
+	return null
 
 
 ## Something up on a roof or deck: drive to the foot of the nearest ramp, then up it.

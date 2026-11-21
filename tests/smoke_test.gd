@@ -51,6 +51,7 @@ func _park(main: Node) -> void:
 func _run() -> void:
 	var main_script: GDScript = load("res://scripts/main.gd")
 	main_script.full_roster = true # these checks fight all five cars
+	AIDriver.player_focus = 1.0 # round 25: the AI checks below expect it after you (80% is checked on its own)
 	var main: Node = await _new_game()
 	var player: Vehicle = main.player
 	_check(main.arena is LosAngelesArena, "stage 1 is Los Angeles")
@@ -832,6 +833,25 @@ func _run() -> void:
 		if (main.enemies[i] as Vehicle).global_position.distance_to(ai_starts[i]) > 6.0:
 			ai_moved += 1
 	_check(ai_moved >= 3, "AI enemies drive around (%d of 4)" % ai_moved)
+	# Round 25 (owner): all of them after you, but not all at once: at most two close fighters, the rest snipe or
+	# collect; 80% of role periods are on the player (the other checks run with player_focus 1).
+	var roles := {}
+	for b: AIDriver in brains:
+		b._role_t = 0.0
+	for i in main.enemies.size():
+		var b: AIDriver = brains[i]
+		b.new_role(main.enemies[i])
+		roles[b.role] = int(roles.get(b.role, 0)) + 1
+	var all_on_you := brains.all(func(b: AIDriver): return b.focus == player)
+	_check(all_on_you and int(roles.get("brawler", 0)) == AIDriver.MAX_BRAWLERS and roles.size() >= 2,
+		"four AI cars all go for you: two close in, the others snipe or collect (%s)" % [roles])
+	AIDriver.player_focus = 0.8
+	var on_you := 0
+	for k in 200:
+		brains[0].new_role(main.enemies[0])
+		on_you += 1 if brains[0].focus == player else 0
+	AIDriver.player_focus = 1.0
+	_check(on_you > 140 and on_you < 185, "an AI is after you about 80%% of the time (%d of 200)" % on_you)
 
 	# AI (owner, play-tests 1 and 2): Outlaw comes at you in attack runs from the front, swings
 	# for your back and drifts round for the next run; never glued to you, never stuck.
@@ -840,6 +860,7 @@ func _run() -> void:
 	var o_brain: AIDriver = brains[main.enemies.find(outlaw)]
 	outlaw.controller = o_brain
 	o_brain._retarget = 0.0
+	o_brain.new_role(outlaw, "brawler", player, 999.0)
 	o_brain.drifts = 0
 	_place(player, -40, 40, -90)
 	_place(outlaw, 10, 40, 90)
@@ -1565,6 +1586,20 @@ func _run() -> void:
 	var field: Array = main.enemies.map(func(e: Vehicle): return e.car_id)
 	_check(main.player.car_id == "roadkill" and field.size() == 4 and field[0] == "roadkill",
 		"the menu's picks start the match: player 2's car (a mirror here) + the rest, four enemies in LA (%s)" % [field])
+	main.queue_free()
+	await _frames(2)
+	main_script.menu_foes = ["axel", "mr_grimm"] # round 25 (owner): opponents picked on the driver screen
+	main = await _new_game()
+	field = main.enemies.map(func(e: Vehicle): return e.car_id)
+	_check(field == ["roadkill", "axel", "mr_grimm"], "the opponents picked on the driver screen are the ones you fight (%s)" % [field])
+	main_script.menu_foes = []
+	var menu_pad_ok := false
+	var menu_pad_back := false
+	for ev in InputMap.action_get_events("menu_ok"):
+		menu_pad_ok = menu_pad_ok or (ev is InputEventJoypadButton and ev.button_index == JOY_BUTTON_A)
+	for ev in InputMap.action_get_events("menu_back"):
+		menu_pad_back = menu_pad_back or (ev is InputEventJoypadButton and ev.button_index == JOY_BUTTON_B)
+	_check(menu_pad_ok and menu_pad_back and InputMap.has_action("menu_up"), "the menus take the pad: Cross OK, Circle back, D-pad / stick move")
 	main_script.menu_mode = ""
 	main_script.menu_cars = []
 	main_script.player_car = "sweet_tooth"

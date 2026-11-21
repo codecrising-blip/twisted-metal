@@ -31,6 +31,7 @@ static var music_pick := ""
 ## F6 on main.tscn): the preview match as before. Players 2-4's picks join as AI cars until split screen exists.
 static var menu_mode := "" # "story" | "deathmatch"
 static var menu_cars: Array = []
+static var menu_foes: Array = [] # round 25: the opponents picked on the driver screen ([] = the usual field)
 const FRONT_END := "res://scenes/front_end.tscn"
 const LA_ENEMIES := 4 # owner, session 3: LA has 4 enemies
 
@@ -59,12 +60,13 @@ func _ready() -> void:
 		picks = FULL_DRIVERS
 	elif menu_mode != "":
 		# The other players' cars (driven by the AI for now), then the rest of the remade cars, LA_ENEMIES in all.
-		var foes: Array = menu_cars.slice(1)
-		for id: String in PREVIEW_PICKS:
-			if foes.size() >= LA_ENEMIES:
-				break
-			if id != player_car and not foes.has(id):
-				foes.append(id)
+		var foes: Array = menu_cars.slice(1) + menu_foes
+		if menu_foes.is_empty(): # nobody picked: the rest of the remade cars
+			for id: String in PREVIEW_PICKS:
+				if foes.size() >= LA_ENEMIES:
+					break
+				if id != player_car and not foes.has(id):
+					foes.append(id)
 		drivers = [player_car] + foes
 	else:
 		var foe := opponent_car if opponent_car != "" else ("sweet_tooth" if player_car == "outlaw" else "outlaw")
