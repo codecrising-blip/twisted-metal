@@ -49,11 +49,11 @@ func _run() -> void:
 	fe._picking = 0
 	fe._picking_foes = false
 	fe._show_cars()
-	for i in fe.CARS.size():
+	for i in FrontEnd.line_up().size():
 		fe._car_i = i
 		fe._show_car()
 		await _wait(0.5)
-		await _snap(dir, "6_car_%s" % fe.CARS[i])
+		await _snap(dir, "6_car_%s" % FrontEnd.line_up()[i])
 	fe._car_i = 1
 	fe._show_car()
 	await _wait(0.3)

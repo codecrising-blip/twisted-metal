@@ -1576,6 +1576,15 @@ func _run() -> void:
 		looks_ok = looks_ok and FrontEnd._portrait_tex(id, "idle") != null and FrontEnd._portrait_tex(id, "select") != null
 	await _frames(2)
 	_check(looks_ok and fe._stand.get_child_count() >= 1, "every driver has a picture before and after the pick, and the car turns on the stand")
+	# round 26 (owner): Thumper's picture is in the line-up before his car is built; picking him is refused
+	var soon_i: int = FrontEnd.line_up().find("thumper")
+	fe._car_i = soon_i
+	fe._show_car()
+	fe._pick_car()
+	await _frames(2)
+	_check(soon_i >= FrontEnd.CARS.size() and FrontEnd._portrait_tex("thumper", "idle") != null and fe._soon.visible
+		and fe._stand.get_child_count() == 0 and fe._cars.is_empty() and not fe._busy,
+		"Thumper is in the driver select with his picture, COMING SOON on an empty stand, and can't be picked yet")
 	fe.queue_free()
 	await _frames(2)
 	main_script.full_roster = false

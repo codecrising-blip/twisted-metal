@@ -742,6 +742,18 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   (head to knees, EDSR) with the AXEL lettering put back; Outlaw in a police uniform (navy recolour with a bilateral
   clean-up, black leather strap/duty belt, torn sleeve closed, gold badge + POLICE patch drawn in code). The owner's red
   frames stay; `FrontEnd._set_portrait` sizes the box to each picture (after-pick ones are wider).
+- **Round 26, full text `docs/design/31-owner-round-26.md`:** Outlaw's picture says **JAMIE ROBERTS** (was OUTLAW) and
+  Thumper's says **BRUCE** (owner; his sheet said BRUCE COCHRANE). Old lettering comes off with LaMa
+  (`tools/portraits/unletter.py`; ONNX with dynamic size from github.com/CloudyTabzy/LaMa-OxiONNX release
+  model-lama-fp32-v1, sha256 aacebdf7...d584; huggingface.co is blocked here). New names are set from the owner's own
+  brush letters (`tools/portraits/names.py`: glyphs cut from BRUCE COCHRANE, GRIMM, MARCUS, OUTLAW; J = BRUCE's U
+  without its left stem; fresh black outline, shadow and a resampled swoosh). Letters we have: A B C D E G H I J K L M
+  N O R S T U W X and "."; no F P Q V Y Z yet. `FrontEnd.SOON` = drivers with a picture but no car (Thumper): in
+  `FrontEnd.line_up()` after `CARS`, numbers from design ch1, empty stand under COMING SOON, picking refused.
+  **Pictures of the rest of the cast:** Claude can't paint new art at this quality (only edit the owner's); the owner
+  generates them with their own tool from the prompt pack in doc 31 (style card + the driver's reference), then Claude
+  fixes them. Paid generators here only with the owner's go-ahead. No driver reference yet for Darkside (Mr. Ash) and
+  Yellow Jacket (Charlie Kane Jr.).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

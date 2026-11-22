@@ -3,7 +3,7 @@ extends Control
 ## The game's front end (round 24, owner): main menu (Story Mode, Deathmatch, Options) over the burning city with the
 ## Head-On "Los Angeles Revisited" theme -> players (Story 1-2, Deathmatch 1-4) -> the stage on a world map (every
 ## stage of the tour pinned where it is; only Los Angeles is open) -> each player picks a driver, TM2 style: the
-## driver's picture (one pose before, a wilder one after you pick: assets/portraits, tools/make_portraits.py), the car
+## driver's picture (one pose before, a wilder one after you pick: assets/portraits, tools/portraits/build.sh), the car
 ## turning on a stand, its numbers -> a title card -> the match (scenes/main.tscn, set up through main.gd's statics).
 ## Everything is built in code. Keys / pad: arrows or d-pad + Enter / Cross, Escape / Circle goes back.
 
@@ -12,6 +12,13 @@ const BACKDROP := "res://assets/backdrops/los_angeles_city.jpg"
 const WORLD_MAP := "res://assets/ui/world_map.webp"
 const MAIN_SCENE := "res://scenes/main.tscn"
 const CARS := ["sweet_tooth", "outlaw", "mr_grimm", "roadkill", "axel"]
+## Round 26 (owner): drivers whose pictures are in but whose cars are not built yet. They are in the line-up with their
+## picture and numbers (design chapter 1), the stand stays empty under COMING SOON, and they can't be picked.
+const SOON := {
+	"thumper": {"name": "Thumper", "driver": "Bruce", "spd": 6, "arm": 7, "hnd": 5, "spc": 6,
+		"special": "Megafire", "secondary": "Drive-By",
+		"tagline": "He buried three friends this summer. Never again."},
+}
 ## The tour in story order (CLAUDE.md); lat / lon place the pins. Only "open" ones can be played yet.
 const STAGES := [
 	{"id": "los_angeles", "name": "LOS ANGELES", "sub": "RELIEF ZONE ONE", "lat": 34.05, "lon": -118.24, "open": true},
@@ -54,6 +61,7 @@ var _portrait: TextureRect
 var _stand: Node3D
 var _car_name: Label
 var _car_info: Label
+var _soon: Label # COMING SOON over the empty stand
 var _bars: Array = []
 # world map
 var _map: TextureRect
@@ -340,7 +348,7 @@ func _read_input() -> void:
 				_show_players()
 		"cars":
 			if left or right:
-				_car_i = posmod(_car_i + (1 if right else -1), CARS.size())
+				_car_i = posmod(_car_i + (1 if right else -1), line_up().size())
 				_sound("weapon_switch", -8.0)
 				_show_car()
 			elif ok:
@@ -683,6 +691,10 @@ func _show_cars() -> void:
 	vp.add_child(rim)
 	_stand = Node3D.new()
 	vp.add_child(_stand)
+	_soon = _label(_root, "COMING SOON", 46, DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	_soon.position = Vector2(430, 330)
+	_soon.size = Vector2(vs.x - 850, 70)
+	_soon.visible = false
 	# name with arrows, numbers on the right
 	_car_name = _label(_root, "", 54, BONE, HORIZONTAL_ALIGNMENT_CENTER)
 	_car_name.position = Vector2(430, 600)
@@ -717,24 +729,40 @@ func _show_cars() -> void:
 	_show_car()
 
 
+## Every driver in the select, the built ones first.
+static func line_up() -> Array:
+	return CARS + SOON.keys()
+
+
+static func is_soon(id: String) -> bool:
+	return SOON.has(id)
+
+
 func _show_car() -> void:
-	var id: String = CARS[_car_i]
-	var stats := Roster.get_car(id)
+	var id: String = line_up()[_car_i]
+	var soon := is_soon(id)
+	var stats: Dictionary = SOON[id] if soon else Roster.get_car(id)
 	_car_name.text = "<   %s   >" % String(stats.get("name", id)).to_upper()
 	_set_portrait(_portrait_tex(id, "idle"))
 	_portrait.modulate = Color.WHITE
 	for c in _stand.get_children():
 		c.queue_free()
-	var model := VehicleModels.build(id)
-	var s: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
-	var fit := 4.6 / maxf(s.z, s.x * 1.4)
-	model.scale = Vector3.ONE * clampf(fit, 0.6, 1.3)
-	_stand.add_child(model)
+	_soon.visible = soon
+	if not soon:
+		var model := VehicleModels.build(id)
+		var s: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
+		var fit := 4.6 / maxf(s.z, s.x * 1.4)
+		model.scale = Vector3.ONE * clampf(fit, 0.6, 1.3)
+		_stand.add_child(model)
 	_stand.rotation.y = PI + 0.75 # the front three-quarter first (cars face -Z, the camera looks from +Z)
 	var vals := [int(stats.get("spd", 5)), int(stats.get("arm", 5)), int(stats.get("hnd", 5)), int(stats.get("spc", 5))]
 	for i in _bars.size():
 		for k in 10:
 			(_bars[i][k] as ColorRect).color = FIRE if k < vals[i] else Color(0.2, 0.18, 0.16)
+	if soon:
+		_car_info.text = "SPECIAL: %s\nSECONDARY: %s\nDRIVER: %s\n\n\"%s\"" % [String(stats.special).to_upper(),
+			String(stats.secondary).to_upper(), String(stats.driver).to_upper(), String(stats.tagline)]
+		return
 	var sp := WeaponData.get_def(String(stats.get("special", "")))
 	var second_id := String(stats.get("secondary", ""))
 	var info := "SPECIAL: %s" % String(sp.get("label", "-")).to_upper()
@@ -783,8 +811,14 @@ func _foe_strip(vs: Vector2) -> void:
 ## Picked: the picture cuts to the driver's wilder pose with a flash, a punch-in and a shake, the car's own special
 ## sounds, then on to the next player or the match.
 func _pick_car() -> void:
+	var id: String = line_up()[_car_i]
+	if is_soon(id): # not built yet: a refusal, the stand's sign flashes
+		_sound("not_available")
+		_shake(6.0)
+		_soon.add_theme_color_override("font_color", FIRE)
+		create_tween().tween_callback(_soon_dim).set_delay(0.35)
+		return
 	_busy = true
-	var id: String = CARS[_car_i]
 	if _picking_foes:
 		_foes.append(id)
 	else:
@@ -811,6 +845,11 @@ func _pick_car() -> void:
 		_show_cars()
 	else:
 		_show_loading()
+
+
+func _soon_dim() -> void:
+	if is_instance_valid(_soon):
+		_soon.add_theme_color_override("font_color", DIM)
 
 
 static func _special_sound(id: String) -> String:

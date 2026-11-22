@@ -73,8 +73,8 @@ def paste(img, sprite, center, angle):
     img.alpha_composite(sp, (x, y))
 
 
-def dress(name, keep_polys, strap_polys, tear_polys, badge_at, patch_at):
-    src = Image.open(D + "/outlaw_%s_raw.png" % name).convert("RGB")
+def dress(name, keep_polys, strap_polys, tear_polys, badge_at, patch_at, src_name="raw"):
+    src = Image.open(D + "/outlaw_%s_%s.png" % (name, src_name)).convert("RGB")
     a = np.asarray(src).astype(np.float32) / 255.0
     fig = np.asarray(Image.open(D + "/outlaw_%s_mask.png" % name).convert("L"), np.float32) / 255.0
     h, s, l = hsl(a)
@@ -120,7 +120,8 @@ dress("idle",
       strap_polys=[[(60, 395), (165, 375), (240, 470), (310, 660), (300, 780), (230, 780), (200, 640), (130, 470), (60, 450)]],
       tear_polys=None,
       badge_at=(345, 470, 46, 12),
-      patch_at=(85, 505, 66, 18))
+      patch_at=(85, 505, 66, 18),
+      src_name="clean")  # the OUTLAW title taken off first (unletter.py): JAMIE ROBERTS goes on after (names.py)
 # select: both guns and hands kept; the sleeve tear closed; badge on her left breast, patch on her right arm
 dress("select",
       keep_polys=[[(295, 285), (560, 290), (600, 330), (600, 520), (380, 540), (270, 470)],
