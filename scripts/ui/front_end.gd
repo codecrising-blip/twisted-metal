@@ -18,6 +18,9 @@ const SOON := {
 	"thumper": {"name": "Thumper", "driver": "Bruce", "spd": 6, "arm": 7, "hnd": 5, "spc": 6,
 		"special": "Megafire", "secondary": "Drive-By",
 		"tagline": "He buried three friends this summer. Never again."},
+	"darkside": {"name": "Darkside", "driver": "Mr. Ash", "spd": 4, "arm": 10, "hnd": 2, "spc": 8,
+		"special": "Darkside Slam", "secondary": "Ash Cloud",
+		"tagline": "Calypso stole what he made. He wants it back."},
 }
 ## The tour in story order (CLAUDE.md); lat / lon place the pins. Only "open" ones can be played yet.
 const STAGES := [

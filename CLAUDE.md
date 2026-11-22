@@ -752,8 +752,15 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   `FrontEnd.line_up()` after `CARS`, numbers from design ch1, empty stand under COMING SOON, picking refused.
   **Pictures of the rest of the cast:** Claude can't paint new art at this quality (only edit the owner's); the owner
   generates them with their own tool from the prompt pack in doc 31 (style card + the driver's reference), then Claude
-  fixes them. Paid generators here only with the owner's go-ahead. No driver reference yet for Darkside (Mr. Ash) and
-  Yellow Jacket (Charlie Kane Jr.).
+  fixes them. Paid generators here only with the owner's go-ahead. No driver reference yet for Yellow Jacket
+  (Charlie Kane Jr.). **Mr. Ash (Darkside)** from the owner's sheet (`owner_darkside.webp`; `_alt` = the lit one whose
+  body was wrong) by `tools/portraits/mr_ash.py` (shared tools in `paint.py`: `lama`, `matte`, `clean_mask`,
+  `rim_light`): hair off, red rim light (idle) / cold headlight rim (select), select = the SAME body with only the
+  reaching arm + the coat side under it from the sheet's after panel (owner: "only move the arm, not a muscle else").
+  Gotchas: LaMa paints hair back under a hat whatever it is given (fill at half size, then detail, fade the head's
+  shadow over the band beside it; behind the head the symmetric truck glass is mirrored in instead); dark figures on
+  dark grounds need the image lifted (gamma 0.5) before rembg, and `isnet-general-use` beat `isnet-anime` there;
+  the face column is pure black (2), so any fill colour above ~5 shows as lines. `FrontEnd.SOON` has Darkside.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

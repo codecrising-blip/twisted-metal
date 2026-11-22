@@ -1585,6 +1585,10 @@ func _run() -> void:
 	_check(soon_i >= FrontEnd.CARS.size() and FrontEnd._portrait_tex("thumper", "idle") != null and fe._soon.visible
 		and fe._stand.get_child_count() == 0 and fe._cars.is_empty() and not fe._busy,
 		"Thumper is in the driver select with his picture, COMING SOON on an empty stand, and can't be picked yet")
+	var soon_pics := true
+	for sid in FrontEnd.SOON:
+		soon_pics = soon_pics and FrontEnd._portrait_tex(sid, "idle") != null and FrontEnd._portrait_tex(sid, "select") != null
+	_check(soon_pics and FrontEnd.line_up().has("darkside"), "every coming-soon driver (Thumper, Mr. Ash) has both pictures")
 	fe.queue_free()
 	await _frames(2)
 	main_script.full_roster = false

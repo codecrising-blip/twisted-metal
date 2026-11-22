@@ -9,6 +9,8 @@
 #     sleeve closed, a gold badge and a POLICE shoulder patch). Round 26: her name JAMIE ROBERTS instead of the OUTLAW
 #     title, like the others (names.py: the owner's own letters).
 #   Thumper (round 26): his sheet says BRUCE COCHRANE; the owner wants BRUCE only (COCHRANE taken off, swoosh shortened).
+#   Darkside / Mr. Ash (round 26, mr_ash.py): hair off, a red rim light, and the after picture = the same body with
+#     only the reaching arm moved (owner_darkside.webp; paint.py holds the shared LaMa / matte / rim tools).
 # Old lettering comes off with LaMa (unletter.py): LAMA=/path/lama_fp32.onnx (github.com/CloudyTabzy/LaMa-OxiONNX,
 # release model-lama-fp32-v1, sha256 aacebdf7...d584).
 # Needs a venv with: opencv-contrib-python-headless<5 rembg onnxruntime pillow numpy (PyPI), the EDSR weights
@@ -28,13 +30,14 @@ $PY -I tools/portraits/roadkill_background.py "$W"
 $PY -I tools/portraits/axel_idle.py "$W" "$EDSR"
 $PY -I tools/portraits/outlaw_police.py "$W"
 $PY -I tools/portraits/names.py "$W"
+$PY -I tools/portraits/mr_ash.py "$W" "$LAMA"
 $PY -I - "$W" <<'PYEOF'
 import sys
 from PIL import Image
 W = sys.argv[1]
 pick = {"mr_grimm": ("idle_raw", "select_raw"), "sweet_tooth": ("idle_raw", "select_raw"),
         "roadkill": ("idle_raw", "select_fixed"), "axel": ("idle_fixed", "select_raw"), "outlaw": ("idle_named", "select_fixed"),
-        "thumper": ("idle_named", "select_raw")}
+        "thumper": ("idle_named", "select_raw"), "darkside": ("idle_fixed", "select_fixed")}
 for car, (i, s) in pick.items():
     for pose, src in (("idle", i), ("select", s)):
         Image.open("%s/%s_%s.png" % (W, car, src)).convert("RGB").save("assets/portraits/%s_%s.webp" % (car, pose), quality=92)
