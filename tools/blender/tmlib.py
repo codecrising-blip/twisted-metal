@@ -1031,6 +1031,38 @@ def weather(g, decals=(), seed=1, dust_from=0.0, dust_to=1.2, soot=None, ao_stre
         rough[m] = 0.92
         height[m] = (-crack * 1.0 - pit * 0.4 - agg * 0.4 + (n_mid - 0.5) * 0.25)[m]
 
+    # ---- Paris limestone (round 27): warm cream stone, soot in the cavities, rain streaks down the
+    # walls, pale worn edges. "ashlar" adds the block joints (courses 0.52 m, blocks 1.04 m,
+    # staggered), "rustic" the deep horizontal channels of a Haussmann ground floor (every 0.46 m).
+    m = is_kind("stone", "ashlar", "rustic")
+    if m.any():
+        z = P[:, 2]
+        along = np.where(np.abs(N[:, 0]) > np.abs(N[:, 1]), P[:, 1], P[:, 0])
+        c = base * (0.93 + 0.12 * n_big + 0.1 * (n_mid - 0.5))[:, None]
+        grime = np.clip(cav * 1.5, 0, 1) * 0.5 + rain * (0.1 + 0.2 * dirt) + sstep(0.55, 0.85, n_big2) * 0.1
+        c = c * (1.0 - 0.4 * np.clip(grime, 0, 1))[:, None]
+        c = _lerp(c, c.mean(axis=1, keepdims=True) * np.array([0.95, 0.92, 0.88], dtype=np.float32), (0.2 * np.clip(grime, 0, 1))[:, None])
+        c = _lerp(c, np.clip(base * 1.1, 0, 0.9), (convex * 0.35)[:, None])
+        joint = np.zeros(len(P), dtype=np.float32)
+        a = is_kind("ashlar") & (side > 0.7)
+        if a.any():
+            row = np.floor(z / 0.52)
+            dz = 0.26 - np.abs(z - (row + 0.5) * 0.52)
+            xx = along + np.mod(row, 2) * 0.52
+            dx = 0.52 - np.abs(np.mod(xx, 1.04) - 0.52)
+            joint = np.maximum(joint, (1.0 - sstep(0.003, 0.012, np.minimum(dz, dx))) * a)
+            tone = _hash3(row.astype(np.int64) + 1000, np.floor(xx / 1.04).astype(np.int64) + 1000, np.zeros(len(P), np.int64), seed + 77)
+            c = np.where(a[:, None], c * (0.955 + 0.09 * tone)[:, None], c)
+        r = is_kind("rustic") & (side > 0.7)
+        if r.any():
+            dzr = 0.23 - np.abs(z - (np.floor(z / 0.46) + 0.5) * 0.46)
+            groove = (1.0 - sstep(0.008, 0.03, dzr)) * r
+            joint = np.maximum(joint, groove)
+        c = c * (1.0 - np.where(is_kind("rustic"), 0.45, 0.2) * joint)[:, None]
+        col[m] = c[m]
+        rough[m] = 0.88
+        height[m] = (-joint * 1.2 + (n_fine - 0.5) * 0.25 + (n_mid - 0.5) * 0.15)[m]
+
     # ---- wood: grain along the longest axis is not known here, so grain runs with z-stretched noise
     m = is_kind("wood")
     if m.any():

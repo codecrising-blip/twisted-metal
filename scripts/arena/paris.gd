@@ -88,6 +88,7 @@ func build() -> void:
 	ParisBlocks.build(self, blocks)
 	_rooftops()
 	_boundary()
+	_trees()
 	_points()
 	flush_sheets()
 	flush_batch()
@@ -95,17 +96,80 @@ func build() -> void:
 
 
 func _materials() -> void:
-	_m.sidewalk = MatKit.pavers(C_SIDEWALK, 3.0, 21)
+	_m.sidewalk = MatKit.pavers(C_SIDEWALK.darkened(0.18), 2.0, 21)
 	_m.asphalt = MatKit.pavement("asphalt", C_ASPHALT, 16.0, 22)
-	_m.cobble = MatKit.pavers(C_COBBLE, 2.4, 23)
+	_m.cobble = MatKit.pavers(C_COBBLE, 1.2, 23)
 	_m.plaza = MatKit.pavers(Color("BDB09A"), 6.0, 24)
 	_m.gravel = MatKit.pavement("concrete", C_GRAVEL, 10.0, 25)
 	_m.lawn = MatKit.grass(C_LAWN, 12.0, 26)
-	_m.quay = MatKit.masonry(C_QUAY, 4.0, 27)
-	_m.stone = MatKit.masonry(C_STONE, 4.0, 28)
+	_m.quay = ashlar(C_QUAY, 27)
+	_m.stone = ashlar(C_STONE, 28)
 	_m.curb = MatKit.flat(C_CURB, 0.85)
 	_m.water = _water_material()
 	_m.gold = MatKit.flat(C_GOLD, 0.35, 0.8)
+
+
+## Paris limestone in big dressed blocks (courses 0.6 m, blocks 1.2 m, staggered), thin joints and a
+## slightly different tone per block. UVs in metres; one picture = 4.8 m.
+static func ashlar(base: Color, seed := 1) -> StandardMaterial3D:
+	var n := 256
+	var img := Image.create(n, n, false, Image.FORMAT_RGB8)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed
+	var noise := FastNoiseLite.new()
+	noise.seed = seed
+	noise.frequency = 0.05
+	var tones := {}
+	for y in n:
+		var row := y / 32
+		for x in n:
+			var xx := (x + (16 if row % 2 == 1 else 0) * 2) % n
+			var col := xx / 64
+			var key := row * 8 + col
+			if not tones.has(key):
+				tones[key] = rng.randf_range(-0.05, 0.05)
+			var t: float = tones[key] + noise.get_noise_2d(x, y) * 0.05 + rng.randf_range(-0.015, 0.015)
+			var c := base.lightened(t) if t > 0.0 else base.darkened(-t)
+			if y % 32 < 2 or xx % 64 < 2:
+				c = c.darkened(0.22)
+			img.set_pixel(x, y, c)
+	img.generate_mipmaps()
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = ImageTexture.create_from_image(img)
+	m.roughness = 0.88
+	m.uv1_scale = Vector3.ONE / 4.8
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return m
+
+
+## Zinc roofing (the roofs you drive on and the flat tops): standing seams every 0.6 m, patina.
+static func zinc_roof() -> StandardMaterial3D:
+	var n := 256
+	var img := Image.create(n, n, false, Image.FORMAT_RGB8)
+	var noise := FastNoiseLite.new()
+	noise.seed = 61
+	noise.frequency = 0.02
+	var base := C_ZINC
+	for y in n:
+		for x in n:
+			var t := noise.get_noise_2d(x, y) * 0.08 + noise.get_noise_2d(x * 4.0, y * 0.3) * 0.03
+			var c := base.lightened(t) if t > 0.0 else base.darkened(-t)
+			var sx := x % 43
+			if sx < 2:
+				c = Color("A7B0B5")
+			elif sx == 2:
+				c = c.darkened(0.25)
+			img.set_pixel(x, y, c)
+	img.generate_mipmaps()
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = ImageTexture.create_from_image(img)
+	m.roughness = 0.55
+	m.metallic = 0.35
+	m.uv1_scale = Vector3.ONE / 3.6
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return m
 
 
 func _water_material() -> ShaderMaterial:
@@ -113,18 +177,19 @@ func _water_material() -> ShaderMaterial:
 	sh.code = """
 shader_type spatial;
 render_mode cull_disabled;
-uniform vec3 deep : source_color = vec3(0.22, 0.31, 0.30);
-uniform vec3 shallow : source_color = vec3(0.31, 0.42, 0.41);
+uniform vec3 deep : source_color = vec3(0.17, 0.23, 0.21);
+uniform vec3 shallow : source_color = vec3(0.25, 0.32, 0.29);
 varying vec3 wpos;
 void vertex() { wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz; }
 float wave(vec2 p, vec2 d, float f, float s) { return sin(dot(p, d) * f + TIME * s); }
 void fragment() {
 	vec2 p = wpos.xz;
 	float h = wave(p, vec2(0.8, 0.6), 0.9, 1.3) + wave(p, vec2(-0.3, 0.95), 1.7, 1.9) * 0.6 + wave(p, vec2(0.95, -0.2), 3.1, 2.7) * 0.3;
-	vec3 n = normalize(vec3(cos(dot(p, vec2(0.8, 0.6)) * 0.9 + TIME * 1.3) * 0.09, 1.0, cos(dot(p, vec2(-0.3, 0.95)) * 1.7 + TIME * 1.9) * 0.07));
+	vec3 n = normalize(vec3(cos(dot(p, vec2(0.8, 0.6)) * 0.9 + TIME * 1.3) * 0.035 + cos(dot(p, vec2(0.95, -0.2)) * 3.1 + TIME * 2.7) * 0.02,
+		1.0, cos(dot(p, vec2(-0.3, 0.95)) * 1.7 + TIME * 1.9) * 0.03));
 	NORMAL = normalize((VIEW_MATRIX * vec4(n, 0.0)).xyz);
 	ALBEDO = mix(deep, shallow, 0.5 + 0.12 * h);
-	ROUGHNESS = 0.08;
+	ROUGHNESS = 0.16;
 	METALLIC = 0.0;
 	SPECULAR = 0.6;
 }
@@ -153,7 +218,7 @@ func _environment() -> void:
 	env.ambient_light_color = Color(0.6, 0.64, 0.72) # blue sky fill in the shadows
 	env.ambient_light_energy = 0.75
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 1.05
+	env.tonemap_exposure = 0.98
 	env.glow_enabled = true
 	env.glow_intensity = 0.3
 	env.glow_bloom = 0.02
@@ -809,7 +874,7 @@ const CROSSINGS := [
 
 
 func _rooftops() -> void:
-	var steel := MatKit.steel(Color("2A2E2A"), 0.35)
+	var steel := MatKit.steel(Color("4A504C"), 0.35)
 	_viaduct(Vector2(-234, -72), Vector2(-199, -72), 8.0, ROOF_Y, 10.0, steel)
 	_ramp(Vector2(40, -80), Vector2(-10, -80), 0.0, ROOF_Y, 12.0, _m.quay)
 	for c: Array in CROSSINGS:
@@ -853,6 +918,178 @@ func _viaduct(a: Vector2, b: Vector2, y0: float, y1: float, w: float, steel: Mat
 		ramps.append({"foot": pa, "top": pb, "w": w})
 
 
+# ---------------------------------------------------------------- trees
+
+## Plane trees in rows: the Champs-Elysees, every quay, the parks. One shared mesh, one MultiMesh per
+## row group (so groups out of view are skipped), faded out past 170 m.
+func _trees() -> void:
+	var rows: Array = [] # Array of Array[Vector2]
+	var e := ETOILE
+	var champ_end := Vector2(42, -80)
+	var cd := (champ_end - e).normalized()
+	var cl := Vector2(-cd.y, cd.x)
+	for side: float in [-1.0, 1.0]:
+		var row: Array[Vector2] = []
+		var t := RING_R + 16.0
+		while t < e.distance_to(champ_end) - 4.0:
+			row.append(e + cd * t + cl * side * 15.5)
+			t += 9.0
+		rows.append(row)
+	for side: float in [-1.0, 1.0]:
+		var row: Array[Vector2] = []
+		var x := -HX + 6.0
+		while x < HX - 6.0:
+			row.append(Vector2(x, river_z(x) + side * (corridor_half(x) - SIDEWALK * 0.5)))
+			x += 10.0
+		rows.append(row)
+	var cdm_n := river_z(-190.0) + corridor_half(-190.0)
+	for px: float in [-268.0, -94.0, -206.0, -174.0]:
+		var row: Array[Vector2] = []
+		var z := cdm_n + 6.0
+		while z < HZ - 6.0:
+			row.append(Vector2(px, z))
+			z += 9.0
+		rows.append(row)
+	var inv_n := river_z(0.0) + corridor_half(0.0)
+	for px: float in [-55.0, 55.0]:
+		var row: Array[Vector2] = []
+		var z := inv_n + 4.0
+		while z < 166.0:
+			row.append(Vector2(px, z))
+			z += 9.0
+		rows.append(row)
+	var tu: Array[Vector2] = []
+	for x in range(130, 174, 8):
+		tu.append(Vector2(x, -117))
+		tu.append(Vector2(x, -55))
+	rows.append(tu)
+	_lamps(rows)
+	var mesh := _tree_mesh()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 75
+	for row: Array in rows:
+		var xs: Array[Transform3D] = []
+		for p: Vector2 in row:
+			if _blocked(p):
+				continue
+			var s := rng.randf_range(0.85, 1.15)
+			xs.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.92, 1.08), s)), Vector3(p.x, 0, p.y)))
+		if xs.is_empty():
+			continue
+		var mmi := scatter(mesh, xs, true)
+		mmi.visibility_range_end = 170.0
+		mmi.visibility_range_end_margin = 10.0
+
+
+## Cast-iron street lamps (dark green, a lantern on a fluted post) between the trees of the avenues
+## and on the quays' stone coping.
+func _lamps(tree_rows: Array) -> void:
+	var spots: Array[Transform3D] = []
+	for r in 2:
+		var row: Array = tree_rows[r]
+		for k in range(0, row.size() - 1, 3):
+			var p: Vector2 = (row[k] as Vector2).lerp(row[k + 1], 0.5)
+			spots.append(Transform3D(Basis(), Vector3(p.x, 0.03, p.y)))
+	for side: float in [-1.0, 1.0]:
+		var x := -HX + 15.0
+		while x < HX - 15.0:
+			if not _under_bridge(x, side, 4.0):
+				spots.append(Transform3D(Basis(Vector3.UP, PI * 0.5), Vector3(x, 0.03, river_z(x) + side * (outer_half(x) + 1.6))))
+			x += 26.0
+	var keep: Array[Transform3D] = []
+	for t in spots:
+		if not _blocked(Vector2(t.origin.x, t.origin.z)) or absf(t.origin.z - river_z(t.origin.x)) < corridor_half(t.origin.x):
+			keep.append(t)
+	var mmi := scatter(_lamp_mesh(), keep, true)
+	mmi.visibility_range_end = 140.0
+
+
+func _lamp_mesh() -> Mesh:
+	var mb := MeshBuilder.new()
+	var iron := MatKit.paint(Color("23302A"), 0.35, 0.2, 0.3, 1.0, 0.45, 53)
+	var lit := MatKit.flat(Color("F2E3B8"), 0.3)
+	mb.cylinder(iron, 0.24, 0.7, Transform3D(Basis(), Vector3(0, 0.35, 0)), 8, 0.16)
+	mb.cylinder(iron, 0.1, 3.6, Transform3D(Basis(), Vector3(0, 2.5, 0)), 8, 0.07)
+	mb.cylinder(iron, 0.14, 0.2, Transform3D(Basis(), Vector3(0, 4.3, 0)), 8, 0.12)
+	mb.box(iron, Vector3(0.9, 0.06, 0.06), Transform3D(Basis(), Vector3(0, 3.7, 0)), 0.0)
+	mb.cylinder(lit, 0.2, 0.55, Transform3D(Basis(), Vector3(0, 4.68, 0)), 6, 0.27)
+	mb.cylinder(iron, 0.31, 0.12, Transform3D(Basis(), Vector3(0, 5.0, 0)), 6, 0.08)
+	mb.cylinder(iron, 0.04, 0.3, Transform3D(Basis(), Vector3(0, 5.2, 0)), 4, 0.01)
+	return mb.build_mesh(0.0, 0.0, true)
+
+
+## Inside a road, a block or off the map: no tree there.
+func _blocked(p: Vector2) -> bool:
+	if absf(p.x) > HX - 2.0 or absf(p.y) > HZ - 2.0:
+		return true
+	for r in _road_polys:
+		if Geometry2D.is_point_in_polygon(p, r):
+			return true
+	if p.distance_to(ETOILE) < RING_R + 11.0:
+		return true
+	for b: Dictionary in blocks:
+		if Geometry2D.is_point_in_polygon(p, b.poly):
+			return true
+	for br: Dictionary in BRIDGES:
+		if absf(p.x - float(br.x)) < float(br.w) * 0.5 + 5.0 and absf(p.y - river_z(p.x)) < corridor_half(p.x) + 2.0:
+			return true
+	return false
+
+
+## A London plane: pale mottled trunk, a few heavy limbs, a broad crown. The crown is a dark inner mass
+## under a shell of leaf clusters cut out of a picture, so its edge breaks up like foliage (round blobs
+## read as toys).
+func _tree_mesh() -> Mesh:
+	var mb := MeshBuilder.new()
+	var bark := MatKit.paint(Color("8E8A72"), 0.6, 0.0, 0.5, 1.2, 0.2, 51)
+	var inner := MatKit.flat(Color("2F4220"), 0.95)
+	var leaves := _leaf_material()
+	mb.cylinder(bark, 0.24, 4.2, Transform3D(Basis(), Vector3(0, 2.1, 0)), 8, 0.17)
+	for k in 3:
+		var a := TAU * k / 3.0 + 0.4
+		var limb := Basis(Vector3(cos(a), 0, sin(a)).cross(Vector3.UP).normalized(), 0.38)
+		mb.cylinder(bark, 0.13, 1.8, Transform3D(limb, Vector3(cos(a) * 0.3, 5.0, sin(a) * 0.3)), 6, 0.08)
+	var clumps := [Vector3(0, 7.4, 0), Vector3(1.9, 6.6, 0.6), Vector3(-1.7, 6.8, 0.9), Vector3(0.4, 6.5, -2.0),
+		Vector3(-0.4, 8.6, 0.2), Vector3(1.6, 7.9, -1.3)]
+	var radii := [2.6, 2.0, 2.1, 2.0, 1.8, 1.7]
+	for k in clumps.size():
+		var r: float = radii[k]
+		var xf := Transform3D(Basis().scaled(Vector3(1.0, 0.8, 1.0)), clumps[k])
+		mb.sphere(inner, r * 0.72, xf, 6, 4)
+		mb.sphere(leaves, r * 1.05, xf.rotated_local(Vector3.UP, k * 0.9), 8, 5)
+	return mb.build_mesh(0.0, 0.0, true)
+
+
+## Clusters of leaves in a few greens on a transparent ground, tiled over the crown shells.
+static func _leaf_material() -> StandardMaterial3D:
+	var n := 128
+	var img := Image.create(n, n, true, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 909
+	var greens := [Color("4C6A2A"), Color("5E7D33"), Color("6E8B3D"), Color("3D5622"), Color("7A9446")]
+	for k in 420:
+		var cx := rng.randi_range(0, n - 1)
+		var cy := rng.randi_range(0, n - 1)
+		var r := rng.randi_range(2, 4)
+		var c: Color = greens[rng.randi() % greens.size()]
+		c = c.lightened(0.12) if cy < n / 2 and rng.randf() < 0.3 else c
+		for y in range(-r, r + 1):
+			for x in range(-r, r + 1):
+				if x * x + y * y * 2 <= r * r:
+					img.set_pixel((cx + x + n) % n, (cy + y + n) % n, c)
+	img.generate_mipmaps()
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = ImageTexture.create_from_image(img)
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	m.alpha_scissor_threshold = 0.5
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED
+	m.roughness = 0.9
+	m.uv1_scale = Vector3(0.45, 0.45, 0.45)
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	return m
+
+
 # ---------------------------------------------------------------- boundary
 
 func _boundary() -> void:
@@ -860,6 +1097,7 @@ func _boundary() -> void:
 	for s: Array in [[Vector3(0, 10, -HZ - 1), Vector3(2 * HX + 4, 40, 2)], [Vector3(0, 10, HZ + 1), Vector3(2 * HX + 4, 40, 2)],
 			[Vector3(-HX - 1, 10, 0), Vector3(2, 40, 2 * HZ + 4)], [Vector3(HX + 1, 10, 0), Vector3(2, 40, 2 * HZ + 4)]]:
 		solid(s[1], Transform3D(Basis(), s[0]))
+	_edge_walls()
 	var mb := MeshBuilder.new()
 	var concrete := MatKit.paint(Color(0.58, 0.56, 0.52), 0.35, 0.05, 0.5, 2.0, 0.2, 31)
 	var steel := MatKit.steel(Color(0.28, 0.24, 0.2), 0.6)
@@ -880,6 +1118,48 @@ func _boundary() -> void:
 	batch_builder(mb, true, 0.4)
 
 
+## Round the map: a stone wall with a cast-iron railing (like the parks' fences), and the river closed
+## by a wall at both ends. Faces only inward: nothing outside is ever seen from the stage.
+func _edge_walls() -> void:
+	var h := 3.2
+	var rail: StandardMaterial3D = null
+	if ResourceLoader.exists("res://assets/models/haussmann_rail.png"):
+		rail = ModelLib.cutout("haussmann_rail").duplicate() as StandardMaterial3D
+		rail.uv1_scale = Vector3(1.0 / 3.0, 1.0 / 1.2, 1.0)
+		rail.uv1_offset = Vector3(0, (h + 1.2) / 1.2, 0)
+	var sides := [[Vector2(-HX, -HZ), Vector2(HX, -HZ), Vector3(0, 0, 1)], [Vector2(HX, HZ), Vector2(-HX, HZ), Vector3(0, 0, -1)],
+		[Vector2(-HX, HZ), Vector2(-HX, -HZ), Vector3(1, 0, 0)], [Vector2(HX, -HZ), Vector2(HX, HZ), Vector3(-1, 0, 0)]]
+	for sd: Array in sides:
+		var a: Vector2 = sd[0]
+		var b: Vector2 = sd[1]
+		var inward: Vector3 = sd[2]
+		var n := int(a.distance_to(b) / 25.0)
+		for k in n:
+			var p0 := a.lerp(b, float(k) / n)
+			var p1 := a.lerp(b, float(k + 1) / n)
+			var q0 := Vector3(p0.x, 0, p0.y)
+			var q1 := Vector3(p1.x, 0, p1.y)
+			# where the river crosses the edge the wall goes down to the water
+			var y0 := 0.0
+			if absf(p0.x) >= HX - 0.1 and absf(p0.y - river_z(p0.x)) < outer_half(p0.x) + 1.0:
+				y0 = WATER_Y - 0.5
+			face(_m.quay, [q0 + Vector3(0, y0, 0), q1 + Vector3(0, y0, 0), q1 + Vector3(0, h, 0), q0 + Vector3(0, h, 0)], inward, true)
+			face(_m.stone, [q0 + Vector3(0, h, 0), q1 + Vector3(0, h, 0), q1 + Vector3(0, h, 0) + inward * 0.5,
+				q0 + Vector3(0, h, 0) + inward * 0.5], Vector3.UP, true)
+			face(_m.stone, [q0 + Vector3(0, h - 0.3, 0) + inward * 0.5, q1 + Vector3(0, h - 0.3, 0) + inward * 0.5,
+				q1 + Vector3(0, h, 0) + inward * 0.5, q0 + Vector3(0, h, 0) + inward * 0.5], inward, true)
+			if rail:
+				face(rail, [q0 + Vector3(0, h, 0) + inward * 0.25, q1 + Vector3(0, h, 0) + inward * 0.25,
+					q1 + Vector3(0, h + 1.2, 0) + inward * 0.25, q0 + Vector3(0, h + 1.2, 0) + inward * 0.25], inward, true)
+	# the river's two ends: walls across the trench from the water up to the street
+	for ex: float in [-HX, HX]:
+		var zc := river_z(ex)
+		var o := outer_half(ex)
+		var inward := Vector3(-signf(ex), 0, 0)
+		face(_m.quay, [Vector3(ex, WATER_Y - 0.5, zc - o), Vector3(ex, WATER_Y - 0.5, zc + o), Vector3(ex, 0, zc + o), Vector3(ex, 0, zc - o)],
+			inward, true, COL_WALL)
+
+
 # ---------------------------------------------------------------- gameplay points
 
 func _at(x: float, z: float, yaw_deg: float, y := 0.3) -> Transform3D:
@@ -887,7 +1167,7 @@ func _at(x: float, z: float, yaw_deg: float, y := 0.3) -> Transform3D:
 
 
 func _points() -> void:
-	for t: Transform3D in [_at(82, -80, 90), _at(-150, -125, 0), _at(-190, 204, 90), _at(0, 120, 180), _at(180, 160, 90),
+	for t: Transform3D in [_at(82, -80, 90), _at(-150, -125, 0), _at(-190, 204, 90), _at(0, 120, 180), _at(160, 175, 0),
 			_at(196, -40, 0), _at(-80, 150, 0)]:
 		spawn_points.append(t)
 		respawn_points.append(t)

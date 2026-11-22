@@ -10,6 +10,7 @@ class_name ModelLib
 const DIR := "res://assets/models/"
 
 static var _scenes := {} # file -> Node3D (kept as a template, never in the tree)
+static var _cutouts := {}
 static var _atlas := {} # atlas name -> StandardMaterial3D
 static var _meshes := {} # "file|node|atlas" -> ArrayMesh
 static var _glass: StandardMaterial3D
@@ -78,6 +79,23 @@ static func glass() -> StandardMaterial3D:
 	return _glass
 
 
+## A see-through picture (Paris's iron railings, round 27): <name>.png beside the .glb, alpha-tested,
+## both sides drawn.
+static func cutout(name: String) -> StandardMaterial3D:
+	if not _cutouts.has(name):
+		var m := StandardMaterial3D.new()
+		m.resource_name = "cutout:" + name
+		m.albedo_texture = load(DIR + name + ".png")
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		m.alpha_scissor_threshold = 0.5
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		m.roughness = 0.6
+		m.metallic = 0.4
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		_cutouts[name] = m
+	return _cutouts[name]
+
+
 ## Lights: unshaded, colour from the vertices (written in Blender).
 static func glow() -> StandardMaterial3D:
 	if _glow == null:
@@ -119,6 +137,8 @@ static func mesh(file: String, node: String, atlas_name := "") -> ArrayMesh:
 			out.surface_set_material(i, glass())
 		elif slot_name.begins_with("glow"):
 			out.surface_set_material(i, glow())
+		elif slot_name.begins_with("rail"):
+			out.surface_set_material(i, cutout(file + "_rail"))
 		else:
 			out.surface_set_material(i, atlas(atlas_name if atlas_name != "" else file))
 	_meshes[key] = out

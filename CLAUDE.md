@@ -761,6 +761,37 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   shadow over the band beside it; behind the head the symmetric truck glass is mirrored in instead); dark figures on
   dark grounds need the image lifted (gamma 0.5) before rembg, and `isnet-general-use` beat `isnet-anime` there;
   the face column is pure black (2), so any fill colour above ~5 shows as lines. `FrontEnd.SOON` has Darkside.
+- **Round 27: Paris (stage 2), phase 1** (design `docs/design/32-paris-design.md`, layout v2 "two banks of the Seine",
+  owner: "excellent, I loved it"; plan `docs/superpowers/plans/2026-11-22-paris-phase1.md`). Front end opens Paris
+  (`main.stage`, or `-- paris`). **Build:** `ArenaKit` (scripts/arena/arena_kit.gd) = shared stage base: static batching,
+  `face()` hand-laid faces (any corner order; winding, normal and metre UVs worked out) that also feed collision
+  (`COL_GROUND` = group ground, `COL_WALL`), `flush_sheets/flush_batch/flush_collision`. `ParisArena`: the city is FLAT
+  at y 0; everything lower/higher is explicit, so every edge is exact (no 1 m height-grid slopes): the Seine trench is
+  swept along x every 2.5 m with z = `river_z(x)` +- offsets (water 15 + `island_half`, lower quays 10 m at -5 with
+  ramps `quay_y`, walls, parapets, cars-only water barrier), 5 humped bridges, roads as polylines (`roads`, offset
+  to polygons, curbs from their union), parks, Trocadero terraces, Montmartre (two square plateaus + ramps), rooftop
+  circuit (`_rooftops`: Trocadero viaduct +8 -> 13, steel crossings, ramp down to the Champs gardens). **Blocks** =
+  the map minus corridor, roads (+ sidewalk), parks and landmark plots (`_city_blocks`; a cutter wholly inside a zone
+  splits it first: `_cut`, pieces re-joined by `_union`), corners chamfered (offset -2.5 miter, +2.5 square).
+  **Haussmann kit** (`tools/blender/build_haussmann.py`, owner's max priority): 3 m bays, heights in whole 0.52 m
+  stone courses (ground 4.68, floors 3.12, cornice 0.52, mansard 1.56 low / 2.72 tall; drivable roofs 13.0, tall
+  20.4); shops (red BOULANGERIE, green PHARMACIE, navy LIBRAIRIE, black CAFE TABAC in gold serif), carriage door with
+  a blue house-number plate, steel shutter, burnt shop, balcony floors (continuous cast-iron railing = alpha picture
+  `haussmann_rail.png`, ModelLib slot "rail" -> `ModelLib.cutout`), window floors, cornice with dentils, zinc
+  mansards with dormers, chimneys, striped awnings. tmlib got kinds "stone" / "ashlar" (block joints) / "rustic"
+  (ground-floor channels). Hidden faces culled before export (~-35% tris). `ParisBlocks`: one mesh per material per
+  block (node at the block's centre), kit within `NEAR` 115 m, past it a shell painted with the kit's own facade
+  (`tools/blender/render_haussmann_far.py` -> `haussmann_far_low/tall.png`, 3 bays). Low quarter roofs = zinc decks
+  you drive on (`ParisArena.zinc_roof()`), stone = `ParisArena.ashlar()`. Plane trees (dark inner crown + cut-out
+  leaf shells), dark-green cast-iron lamps, stone edge wall with railing. **Gotchas:** never give faces UVs covering
+  the whole 0..1 square BEFORE a bake (the rail quads were baked over every island: black walls); untyped Array
+  elements need typed locals before `.cross()`; `&&`-chained shell assignments before `&` run in the background
+  subshell. **Perf** (`tests/_perf_paris.gd -- paris`): 44-95 draw calls (LA worst ~370), 85-326k primitives (LA
+  ~230k). Tests: `tests/paris_check.gd` (points on ground, outside blocks, ramps/bridges/quays/roofs solid),
+  `tests/_paris_map.gd -- out.json` (plan dump; scratch drawer turns it into a top-down picture).
+  **Not built yet:** landmarks (tower, Arc, Grand Palais, Louvre + pyramid, Notre-Dame, Opera, Invalides dome,
+  Sacre-Coeur, Moulin Rouge, Chaillot), backdrop panorama (plain sky now), the tower's fall, Mona Lisa passage,
+  portals, geysers, metro, gargoyles, war damage and texts, AI test drives, item layout review with the owner.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -808,6 +839,10 @@ scripts/arena/la_props.gd   LA street furniture: toppling street lights, burnt w
                             traffic lights, barriers, dumpsters, containers, rubble, manholes, stains,
                             hydrants, trash cans, cones, bus stops
 scripts/arena/junkyard.gd   the old prototype stage, now free play (`-- junkyard`)
+scripts/arena/arena_kit.gd  shared base for new stages (round 27): batching, face() + collision, quadtree ground
+scripts/arena/paris.gd      stage 2 (round 27): Seine trench, quays, bridges, roads, parks, terraces, blocks, points
+scripts/arena/paris_blocks.gd  Haussmann blocks from the kit (near) / rendered-facade shells (far)
+tools/blender/build_haussmann.py + render_haussmann_far.py  the Paris facade kit and its far-away facades
 scripts/arena/breakable.gd  props that shatter/topple (stands, glass, palms, letters, tower legs)
 scripts/arena/teleporter.gd teleport pad
 scripts/fx/                 FxKit (fire/smoke/explosions + debris, shatter, shard litter, dust ring, puff, smoke
