@@ -67,10 +67,12 @@ func _physics_process(delta: float) -> void:
 		var man := _men[i]
 		man.position = _rest[i] + Vector3(side * 0.35 * out, 0.0, 0.0)
 		if out < 0.9:
+			man.rotation = Vector3(0.0, -side * PI * 0.5 * out, 0.0) # turning to face out of his window
 			continue
 		_cd[i] -= delta
 		var t := _pick(side)
 		if t == null:
+			man.rotation = Vector3(0.0, -side * PI * 0.5, 0.0)
 			continue
 		firing = true
 		man.look_at(t.aim_point(), Vector3.UP)

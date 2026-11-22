@@ -106,8 +106,8 @@ const CARS := {
 		"spd": 6, "arm": 7, "hnd": 5, "spc": 6, "class": "medium",
 		"special": "megafire", "secondary": "drive_by",
 		"fireproof": true, "backfire": true, "rear_attack_cost": 25.0,
-		"size": Vector3(2.3, 1.45, 5.9), "camera": [4.6, 10.5],
-		"hood": Vector2(1.0, -1.6), "glass": Vector2(1.3, -0.5), "glass_n": Vector3(0, 0.6, -0.8),
+		"size": Vector3(2.3, 1.5, 6.0), "camera": [4.6, 10.5],
+		"hood": Vector2(0.95, -2.2), "glass": Vector2(1.2, -1.25), "glass_n": Vector3(0, 0.65, -0.76),
 		"tagline": "He buried three friends this summer. Never again.",
 	},
 	# Brimstone: Black's rusted pickup turned into a travelling church, a sinner chained in the bed.
@@ -118,8 +118,8 @@ const CARS := {
 		"spd": 7, "arm": 5, "hnd": 6, "spc": 6, "class": "medium",
 		"special": "sinner_bomber", "secondary": "hellfire_sermon",
 		"fanatic": true, "hellfire_mines": true,
-		"size": Vector3(2.2, 1.75, 5.5), "camera": [4.6, 10.5],
-		"hood": Vector2(1.15, -1.6), "glass": Vector2(1.5, -0.55), "glass_n": Vector3(0, 0.6, -0.8),
+		"size": Vector3(2.2, 1.5, 5.5), "camera": [4.4, 10.2],
+		"hood": Vector2(1.15, -1.95), "glass": Vector2(1.3, -0.53), "glass_n": Vector3(0, 0.86, -0.5),
 		"tagline": "He hears the devil every time the engine turns.",
 	},
 	# Darkside: Black's armoured black semi tractor, the only super heavy. Iron Curtain: his shield lasts 4 s.
@@ -127,8 +127,8 @@ const CARS := {
 		"name": "Darkside", "ram": 10.0, "engine": "tow", "driver": "Mr. Ash",
 		"spd": 4, "arm": 10, "hnd": 2, "spc": 8, "class": "super",
 		"special": "darkside_slam", "secondary": "ash_cloud", "shield_time": 4.0,
-		"size": Vector3(2.9, 3.6, 7.6), "camera": [7.2, 15.0],
-		"hood": Vector2(2.0, -3.0), "glass": Vector2(2.6, -1.9), "glass_n": Vector3(0, 0.25, -0.97),
+		"size": Vector3(2.9, 2.35, 7.6), "camera": [6.4, 14.5],
+		"hood": Vector2(1.62, -2.4), "glass": Vector2(1.98, -1.42), "glass_n": Vector3(0, 0.54, -0.84),
 		"tagline": "Calypso stole what he made. He wants it back.",
 	},
 	"junkyard_dog": {

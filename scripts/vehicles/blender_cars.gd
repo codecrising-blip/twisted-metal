@@ -6,7 +6,7 @@ class_name BlenderCars
 ## markers m_wheel_fr/fl/rr/rl, m_gun_*, m_spin_*, m_launcher, m_exh_*, m_top, m_head, m_cone.
 ## Built by tools/blender/build_<id>.py.
 
-const EXHAUST_DIR := {"sweet_tooth": Vector3.UP}
+const EXHAUST_DIR := {"sweet_tooth": Vector3.UP, "darkside": Vector3.UP}
 const SHADOW := {"sweet_tooth": Vector2(3.2, 7.4), "outlaw": Vector2(2.7, 5.6), "mr_grimm": Vector2(2.4, 3.6),
 	"thumper": Vector2(2.8, 6.6), "brimstone": Vector2(2.7, 6.0), "darkside": Vector2(3.6, 8.6)}
 ## How far the body rolls in turns (radians). Grimm's bike has a sidecar bolted on: it barely leans.
@@ -124,9 +124,16 @@ static func build(id: String) -> Node3D:
 			pivot.add_child(mi)
 			pivot.visible = false
 			m.add_child(pivot)
-	for part: String in ["bed_sinner", "slit"]:
-		if marks.has(part):
-			m.add_child(ModelLib.instance(id, part))
+	if marks.has("bed_sinner"):
+		m.add_child(ModelLib.instance(id, "bed_sinner"))
+	if marks.has("slit"): # scaled by DarksideSlamFx about its own centre: a pivot at m_slit
+		var sp := Node3D.new()
+		sp.name = "slit_pivot"
+		sp.position = (marks["m_slit"] as Transform3D).origin if marks.has("m_slit") else Vector3.ZERO
+		var sm := ModelLib.instance(id, "slit")
+		sm.position = -sp.position
+		sp.add_child(sm)
+		m.add_child(sp)
 	HeroModels._ground_shadow(m, SHADOW.get(id, Vector2(2.8, 5.8)))
 	return m
 

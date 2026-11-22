@@ -6,7 +6,7 @@ extends Node3D
 var car: Vehicle
 var _marks: Array[Node3D] = []
 var _spark := 0.0
-var _slit: MeshInstance3D
+var _slit: Node3D
 var _ending := false
 var _t := 0.0
 
@@ -26,9 +26,7 @@ func _ready() -> void:
 		add_child(m)
 		_marks.append(m)
 		Streak.attach(m, Color(0.85, 0.08, 0.05, 0.5), 0.35, 0.5)
-	var slit := car.model.find_child("slit", true, false) as MeshInstance3D
-	if slit:
-		_slit = slit
+	_slit = car.model.find_child("slit_pivot", true, false) as Node3D # the Blender model's slit, scaled about its centre
 
 
 func _process(delta: float) -> void:

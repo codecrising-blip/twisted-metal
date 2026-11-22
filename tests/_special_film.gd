@@ -29,7 +29,9 @@ func _run() -> void:
 	me.global_transform = Transform3D(Basis.IDENTITY, LosAngelesArena.ground(20, 30, 0.1))
 	var foe_at := OS.get_environment("FOE_AT")
 	var fz := -8.0 if foe_at == "" else float(foe_at)
-	foe.global_transform = Transform3D(Basis(Vector3.UP, PI), LosAngelesArena.ground(21, fz, 0.1))
+	var foe_x := OS.get_environment("FOE_X") # round 28: a foe beside the car (Drive-By)
+	var fx := 21.0 if foe_x == "" else float(foe_x)
+	foe.global_transform = Transform3D(Basis(Vector3.UP, PI), LosAngelesArena.ground(fx, fz, 0.1))
 	for v: Vehicle in [me, foe]:
 		v.velocity = Vector3.ZERO
 		v.invulnerable_time = 0.0

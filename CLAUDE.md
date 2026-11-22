@@ -792,6 +792,22 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   **Not built yet:** landmarks (tower, Arc, Grand Palais, Louvre + pyramid, Notre-Dame, Opera, Invalides dome,
   Sacre-Coeur, Moulin Rouge, Chaillot), backdrop panorama (plain sky now), the tower's fall, Mona Lisa passage,
   portals, geysers, metro, gargoyles, war damage and texts, AI test drives, item layout review with the owner.
+- **Round 28, full text `docs/design/33-owner-round-28.md`:** **Thumper, Brimstone, Darkside** built (cars + specials +
+  secondaries + AI; owner approves at the end). Select screen: only `menu_select` on a pick (no special sounds); all eight
+  cars selectable, Brimstone shows "PICTURE COMING" (`FrontEnd._no_pic`, owner draws it). **Thumper** (TM3 look on the HD
+  TM2 Impala shape, `build_thumper.py`): Megafire = held flamethrower (`FlameJet`, fuel tank `Vehicle.fuel` shown as
+  `ammo` = ceil(fuel), out of the grille: meta `nozzle`), Drive-By secondary paid in fuel (`DriveBy`, two sculpted crewmen
+  = model nodes `gunman_l/r` on pivots `m_gunman_*`, hidden until used, turn to face out), Backfire rear attack, fireproof.
+  **Brimstone** (TMB El Camino, `build_brimstone.py`): Sinner Bomber (`Sinner`, a CharacterBody3D on layer 64 that runs,
+  clings, blows; shaken off by jump / 150 deg slide / wall slam), Hellfire Sermon secondary (`SermonFx`, reflects 30% +
+  burns, `Vehicle._reflecting` guard), fanatic (no flashbang, half taser), energy mines leave fire; `bed_sinner` node
+  shown while a Sinner is loaded; stained glass = Voronoi decal on "glassy". **Darkside** (TMB tractor + police-car ram
+  plate, `build_darkside.py`): Darkside Slam (`Vehicle.start_slam`: horn, locked charge, pins the first car with a
+  collision exception and carries it, +15 into a wall, immune to freeze/clamp/push), Ash Cloud secondary (`AshCloud`:
+  blocks energy moves, drains 15/s), Iron Curtain 4 s shield (`stats.shield_time`); `slit` (red glow) scaled on pivot
+  `slit_pivot` by `DarksideSlamFx`; second rear axle markers `m_wheel_rr2/rl2`. **Shared:** `tools/blender/carkit.py`
+  (rod, quad, section, ring_solid, tyre, wire_wheel, crewman sculpt, chain); BlenderCars reads `m_meta_<name>` markers
+  as model metadata. Tests: `tests/_new_cars_check.gd` (all three cars' rules), `_special_film.gd` takes env `FOE_X`.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
@@ -818,6 +834,9 @@ scripts/vehicles/blender_cars.gd  assembles a Blender car (body, wheels, spinner
 scripts/vehicles/burning_driver.gd + driver_corpse.gd  burning drivers out of wrecks (round 17); fx/blood_fx.gd
 scripts/fx/foam_fire.gd(shader)  THE fire of the game (round 18, owner's pick "hair strands"): world-space puffs
 scripts/weapons/sweet_bot.gd + wheel_clamp.gd  secondary weapons (rounds 18-19): Sweet Tooth's robot, Outlaw's wheel clamp
+scripts/weapons/flame_jet.gd, drive_by.gd, sinner.gd, ash_cloud.gd  round 28: Thumper, Brimstone, Darkside weapons
+scripts/fx/sermon_fx.gd, darkside_slam_fx.gd  round 28: Brimstone's sermon crown, Darkside's slam look
+tools/blender/carkit.py     round 28: shared car parts (wire wheel, tyre, chain, crewman sculpt) for the new cars
 scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (simple primitives),
                             MeshBuilder (detailed models merged per material: chamfered boxes, lofts, lathes),
                             MatKit (generated paint/rust/chrome/rubber textures; world-mapped ground: pavement,
