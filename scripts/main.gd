@@ -32,6 +32,7 @@ static var music_pick := ""
 static var menu_mode := "" # "story" | "deathmatch"
 static var menu_cars: Array = []
 static var menu_foes: Array = [] # round 25: the opponents picked on the driver screen ([] = the usual field)
+static var stage := "los_angeles" # Paris (stage 2): the stage the front end picked; `-- paris` on the command line
 const FRONT_END := "res://scenes/front_end.tscn"
 const LA_ENEMIES := 4 # owner, session 3: LA has 4 enemies
 
@@ -71,7 +72,13 @@ func _ready() -> void:
 	else:
 		var foe := opponent_car if opponent_car != "" else ("sweet_tooth" if player_car == "outlaw" else "outlaw")
 		drivers = [player_car, foe] # a mirror match is allowed
-	arena = JunkyardArena.new() if "junkyard" in OS.get_cmdline_user_args() else LosAngelesArena.new()
+	var args := OS.get_cmdline_user_args()
+	if "junkyard" in args:
+		arena = JunkyardArena.new()
+	elif "paris" in args or stage == "paris":
+		arena = ParisArena.new()
+	else:
+		arena = LosAngelesArena.new()
 	arena.name = "Arena"
 	add_child(arena)
 	arena.build()

@@ -25,7 +25,7 @@ const SOON := {
 ## The tour in story order (CLAUDE.md); lat / lon place the pins. Only "open" ones can be played yet.
 const STAGES := [
 	{"id": "los_angeles", "name": "LOS ANGELES", "sub": "RELIEF ZONE ONE", "lat": 34.05, "lon": -118.24, "open": true},
-	{"id": "paris", "name": "PARIS", "sub": "", "lat": 48.86, "lon": 2.35, "label": Vector2(4, 6)},
+	{"id": "paris", "name": "PARIS", "sub": "CITY OF LIGHTS OUT", "lat": 48.86, "lon": 2.35, "label": Vector2(4, 6), "open": true},
 	{"id": "chernobyl", "name": "CHERNOBYL", "sub": "VS MANSLAUGHTER", "lat": 51.27, "lon": 30.22},
 	{"id": "egypt", "name": "EGYPT", "sub": "", "lat": 29.98, "lon": 31.13},
 	{"id": "tokyo", "name": "TOKYO", "sub": "", "lat": 35.68, "lon": 139.69},
@@ -882,6 +882,7 @@ func _show_loading() -> void:
 	main_script.menu_mode = _mode
 	main_script.menu_cars = _cars.duplicate()
 	main_script.menu_foes = _foes.duplicate()
+	main_script.stage = String(STAGES[_stage].id)
 	main_script.opponent_car = ""
 	main_script.full_roster = false
 	get_tree().change_scene_to_file(MAIN_SCENE)
