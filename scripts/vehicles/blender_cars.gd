@@ -7,9 +7,10 @@ class_name BlenderCars
 ## Built by tools/blender/build_<id>.py.
 
 const EXHAUST_DIR := {"sweet_tooth": Vector3.UP}
-const SHADOW := {"sweet_tooth": Vector2(3.2, 7.4), "outlaw": Vector2(2.7, 5.6), "mr_grimm": Vector2(2.4, 3.6)}
+const SHADOW := {"sweet_tooth": Vector2(3.2, 7.4), "outlaw": Vector2(2.7, 5.6), "mr_grimm": Vector2(2.4, 3.6),
+	"thumper": Vector2(2.8, 6.6), "brimstone": Vector2(2.7, 6.0), "darkside": Vector2(3.6, 8.6)}
 ## How far the body rolls in turns (radians). Grimm's bike has a sidecar bolted on: it barely leans.
-const LEAN := {"mr_grimm": 0.08}
+const LEAN := {"mr_grimm": 0.08, "darkside": 0.03}
 ## Turbo flames for models with no exhaust markers (round 21, owner: Axel had no turbo flames): out of
 ## Axel's back feet, low, under the tail lights.
 const EXTRA_EXHAUST := {"axel": [Vector3(0.55, 0.3, 1.08), Vector3(-0.55, 0.3, 1.08)]}
@@ -34,7 +35,7 @@ static func build(id: String) -> Node3D:
 	var wheels: Array = []
 	var steer: Array = []
 	var radius := 0.5
-	for key: String in ["fr", "fl", "rr", "rl"]:
+	for key: String in ["fr", "fl", "rr", "rl", "rr2", "rl2"]: # rr2 / rl2: a second rear axle (Darkside)
 		var mk := "m_wheel_" + key
 		if not marks.has(mk):
 			continue
@@ -106,6 +107,26 @@ static func build(id: String) -> Node3D:
 		_cone_fire(m, (marks["m_cone"] as Transform3D).origin + cone_at, cone_parent)
 	if LEAN.has(id):
 		m.set_meta("lean", LEAN[id])
+	# Round 28: markers named m_meta_<name> become model metadata (Thumper's nozzle, Brimstone's sinner and bell),
+	# and the parts the specials move get their own nodes: Thumper's gunmen (hidden until the Drive-By, turning at
+	# the shoulder marker m_gunman_*), the sinner chained in Brimstone's bed, Darkside's red slit.
+	for mk: String in names:
+		if mk.begins_with("m_meta_"):
+			m.set_meta(mk.substr(7), (marks[mk] as Transform3D).origin)
+	for part: String in ["gunman_l", "gunman_r"]:
+		if marks.has(part) and marks.has("m_" + part):
+			var pivot := Node3D.new()
+			pivot.name = part
+			pivot.position = (marks["m_" + part] as Transform3D).origin
+			var mi := ModelLib.instance(id, part)
+			mi.name = "mesh"
+			mi.position = -pivot.position
+			pivot.add_child(mi)
+			pivot.visible = false
+			m.add_child(pivot)
+	for part: String in ["bed_sinner", "slit"]:
+		if marks.has(part):
+			m.add_child(ModelLib.instance(id, part))
 	HeroModels._ground_shadow(m, SHADOW.get(id, Vector2(2.8, 5.8)))
 	return m
 

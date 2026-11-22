@@ -105,6 +105,7 @@ static func drop_energy(v: Vehicle) -> Mine:
 	var m := Mine.new()
 	m.owner_car = v
 	m.def = WeaponData.get_def("energy_mine")
+	m.set_meta("energy", true)
 	v.get_parent().add_child(m)
 	var size: Vector3 = v.stats.get("size", Vector3(2.2, 1.8, 5.0))
 	var back := v.global_position - v.flat_forward() * (size.z * 0.5 + 1.6) + Vector3.UP
@@ -227,6 +228,9 @@ func detonate() -> void:
 			var side := away * float(def.get("push", 24.0)) * (0.35 + 0.65 * k) * (h / 8.4)
 			o.blast_knock(side + Vector3.UP * up, 0.15 + 0.35 * k, false)
 	Specials.blast_props(world, global_position, radius, full, owner_car)
+	if has_meta("energy") and is_instance_valid(owner_car) and owner_car.stats.get("hellfire_mines", false):
+		# Round 28, Brimstone's Hellfire Mines: a 4 m patch of fire for 4 s.
+		FirePool.spawn(world, Specials.ground_below(world, global_position), 4.0, 4.0, 3.0, owner_car)
 	FxKit.explosion(world, global_position + Vector3.UP * 0.5, float(def.get("blast_size", 2.8)), Color(1.0, 0.45, 0.12))
 	if def.get("electronic", false): # the electronics go up: a blue-white spark burst and a ring of fire
 		GameFeel.flash(world, global_position + Vector3.UP * 0.6, 2.5, Color(0.6, 0.8, 1.0), 0.08)

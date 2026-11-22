@@ -229,6 +229,27 @@ var _air_vy := 0.0 # fastest fall this flight (negative)
 var _invis_shown := -1.0 # last transparency written to the meshes
 var _charge_beeps := 0
 var _charge_hold := 0.0 # seconds the fire button has been held on this charge
+# Round 28: Thumper's fuel tank (Megafire), Brimstone's sermon, Darkside's slam, the ash cloud.
+var fuel := 0.0 # Megafire: seconds of flame left in the tank (a gauge instead of charges)
+var fuel_tank := 0.0
+var flaming := false
+var _flame: FlameJet
+var _drive_by: DriveBy
+var sermon_time := 0.0 # Hellfire Sermon: whoever hurts this car takes a share back and burns
+var _sermon_def: Dictionary = {}
+var _sermon_fx: Node3D
+static var _reflecting := false
+var slam_time := 0.0 # Darkside Slam: the locked charge is on (after the horn)
+var _slam_horn := 0.0
+var _slam: Dictionary = {}
+var _slam_pin: Vehicle
+var _slam_pin_t := 0.0
+var _slam_pinned_once := false
+var _slam_brushed := {}
+var _slam_fx: Node3D
+var pinned_by: Vehicle # a slamming Darkside has this car on its nose (it is carried, not driven)
+var ash_time := 0.0 # inside an ash cloud: no energy moves
+var _bed_sinner: Node3D
 var _locked := {} # weapon id -> seconds left of a meltdown lock
 var _charge_hum: AudioStreamPlayer3D
 var _charge_hum_t := 0.0
@@ -273,6 +294,11 @@ func setup(id: String, player: bool) -> void:
 	# Round 12 (owner): every life starts with 2 specials; held unused they build up to the car's max.
 	special_charges = Roster.special_max(id)
 	ammo[special_id] = mini(Roster.SPECIAL_START, special_charges)
+	var sdef := WeaponData.get_def(special_id)
+	if sdef.get("handler", "") == "flame": # round 28: Thumper's Megafire runs on a fuel tank
+		fuel_tank = float(sdef.get("tank", 10.0))
+		fuel = float(sdef.get("start_fuel", fuel_tank))
+		ammo[special_id] = ceili(fuel)
 	weapon_order = [special_id]
 
 	collision_layer = 2
@@ -366,6 +392,9 @@ func setup(id: String, player: bool) -> void:
 	_gun_snd = GameFeel.loop("guns_loop", self, -9.0, 14.0)
 	_skid_snd = GameFeel.loop("skid_loop", self, -14.0, 10.0)
 	_fx.setup(model)
+	if fuel_tank > 0.0:
+		_flame = FlameJet.attach(self)
+	_bed_sinner = model.find_child("bed_sinner", true, false) as Node3D
 	# The fake headlight beams are built now, hidden (round 18, owner: switching the lights on lagged:
 	# building them and their shaders on the first switch-on cost a whole extra frame).
 	VehicleFx.headlight_beams(model, stats.get("size", Vector3(2.2, 1.8, 5.0)))
@@ -505,7 +534,18 @@ func _tick(delta: float) -> void:
 	if laughing != _last_laugh:
 		_last_laugh = laughing
 		BlenderCars.cone_fire_blue(model, laughing)
-	if ammo.get(special_id, 0) < special_charges:
+	if sermon_time > 0.0:
+		sermon_time -= delta
+		if sermon_time <= 0.0:
+			_end_sermon()
+	if ash_time > 0.0:
+		ash_time -= delta
+	_slam_tick(delta)
+	if _bed_sinner:
+		_bed_sinner.visible = int(ammo.get(special_id, 0)) > 0 # round 28: Brimstone's chained sinner goes with the throw
+	if fuel_tank > 0.0:
+		_fuel_tick(delta)
+	elif ammo.get(special_id, 0) < special_charges:
 		_special_timer += delta * (LAST_LAUGH_RATE if laughing else 1.0)
 		if _special_timer >= Roster.special_recharge(car_id):
 			_special_timer = 0.0
@@ -548,6 +588,18 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	if is_dead:
 		_prev_velocity = v
 		return
+	if is_instance_valid(pinned_by): # round 28: on a slamming Darkside's nose, carried along
+		if pinned_by.is_dead or pinned_by._slam_pin != self:
+			pinned_by = null
+		else:
+			var host := pinned_by
+			var fwd := host.flat_forward()
+			var reach := float(host.stats.get("size", Vector3(2, 2, 5)).z) * 0.5 + float(stats.get("size", Vector3(2, 2, 5)).z) * 0.35 + 0.4
+			state.transform = Transform3D(xf.basis, host.global_position + fwd * reach + Vector3.UP * 0.35)
+			state.linear_velocity = host.linear_velocity
+			state.angular_velocity = Vector3.ZERO
+			_prev_velocity = state.linear_velocity
+			return
 	# Springs: each corner's ray finds the ground below it (along the body's own down).
 	var space := state.get_space_state()
 	var touching := 0
@@ -638,12 +690,17 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 	if dashing: # round 23: the tyre dash drives itself at full tilt
 		throttle = 1.0
 		top *= float(_dash.get("speed_mult", 1.6))
+	var slamming := slam_time > 0.0
+	if slamming: # round 28: Darkside's charge, locked at full tilt
+		throttle = 1.0
+		handbrake = false
+		top *= float(_slam.get("speed_mult", 1.5))
 	var boosting := _turbo_step(signf(throttle) if absf(throttle) > 0.1 else 0.0, dt)
 	if boosting:
 		top *= TURBO_MULT
 	var sliding := clampf(absf(v_l) / 10.0, 0.0, 1.0) # tyres busy holding a slide brake less
 	var launch := 1.0 + (TURBO_LAUNCH - 1.0) * clampf(1.0 - _turbo_run / TURBO_LAUNCH_TIME, 0.0, 1.0)
-	var accel: float = stats.accel * (TURBO_ACCEL * launch if boosting else 1.0) * (2.5 if dashing else 1.0)
+	var accel: float = stats.accel * (TURBO_ACCEL * launch if boosting else 1.0) * (2.5 if dashing else 1.0) * (5.0 if slamming else 1.0)
 	if _turbo_kick: # the first step of a boost: the shove
 		var rev_top := minf(float(stats.reverse) * 2.0, float(stats.max_speed) * TURBO_MULT)
 		v_f = clampf(v_f + TURBO_KICK * signf(throttle), -rev_top, top)
@@ -692,6 +749,8 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 	turn *= lerpf(1.0, 0.78, clampf(absf(v_f) / float(stats.max_speed), 0.0, 1.0)) # wider turns when fast
 	if dashing:
 		turn *= float(_dash.get("handling", 0.5)) # owner: half the handling while he is a ball of tyres
+	if slamming:
+		turn *= float(_slam.get("steer", 0.25)) # design: he barely steers
 	var yaw := -steer * turn * authority * (1.0 if (v_f >= 0.0 or slide_turn) else -1.0)
 	var w_now := state.angular_velocity.dot(n)
 	if slide_turn:
@@ -902,7 +961,9 @@ func _contacts(state: PhysicsDirectBodyState3D) -> void:
 		var other := state.get_contact_collider_object(k)
 		var n := state.get_contact_local_normal(k)
 		if other is Vehicle:
-			if dash_time > 0.0:
+			if slam_time > 0.0:
+				_slam_hit(other as Vehicle, n, state.get_contact_collider_position(k))
+			elif dash_time > 0.0:
 				_dash_ram(state, other as Vehicle, n, state.get_contact_collider_position(k))
 			else:
 				_ram(other as Vehicle, _prev_velocity, n, state.get_contact_collider_position(k))
@@ -946,6 +1007,8 @@ func _wall_hit(state: PhysicsDirectBodyState3D, n: Vector3) -> void:
 	if into < 0.05:
 		return
 	_wall_cooldown = 0.25
+	if slam_time > 0.0 and into >= 0.5: # round 28: the charge ends against a wall
+		_end_slam()
 	if dash_time > 0.0 and into >= 0.15: # round 23: the tyre dash bounces off walls, no damage
 		_dash_bounce(state, hn, moving, state.transform.origin - hn * 1.4)
 		return
@@ -1134,6 +1197,8 @@ func hit_part(at: Vector3) -> String:
 
 ## Knock the car (weapons, rams, recoil): a change of velocity.
 func push(dv: Vector3) -> void:
+	if slam_time > 0.0:
+		return # round 28: a slamming Darkside can't be thrown
 	linear_velocity += dv
 	if dv.length() > 4.0:
 		_knock = maxf(_knock, KNOCK_TIME * 0.5)
@@ -1166,6 +1231,8 @@ func hit_react(dir: Vector3, amount: float) -> void:
 ## A blast throws the car (heavy cars less). flip 1 = about one full roll through the air away from
 ## the blast, smaller values tip it. Where it lands (wheels, side or roof) is up to the physics.
 func blast_knock(push_v: Vector3, flip := 0.0, by_weight := true) -> void:
+	if slam_time > 0.0:
+		return # round 28: a slamming Darkside can't be thrown
 	var dv := push_v * knockback if by_weight else push_v
 	linear_velocity += dv
 	_knock = KNOCK_TIME
@@ -1275,6 +1342,8 @@ func _combat(delta: float) -> void:
 	if frozen_time > 0.0 or flipped:
 		want_fire_weapon = false
 		_cancel_charge()
+		if flaming:
+			_set_flaming(false)
 		return
 	if shield_time > 0.0 and want_fire_weapon: # shield up: guns only (design 5.2)
 		want_fire_weapon = false
@@ -1283,6 +1352,8 @@ func _combat(delta: float) -> void:
 	if in_fire_guns and _gun_cooldown <= 0.0:
 		_gun_cooldown = WeaponData.get_def("guns").cooldown
 		_fire_guns()
+	if fuel_tank > 0.0:
+		_flame_step(delta)
 	if want_fire_weapon:
 		want_fire_weapon = false
 		if has_live_special() and (_live_weapon == "" or _live_weapon == selected_weapon()):
@@ -1317,10 +1388,15 @@ func _combat(delta: float) -> void:
 func energy_move(move: String) -> void:
 	if is_dead or frozen_time > 0.0 or flipped:
 		return
+	if ash_time > 0.0 and move != "secondary": # round 28: Darkside's ash cloud chokes energy moves
+		if is_player:
+			notice.emit(self, "ASH CLOUD - NO ENERGY MOVES")
+			GameFeel.ui("not_available", get_tree())
+		return
 	var costs := {
 		"jump": JUMP_COST, "freeze": float(stats.get("freeze_cost", FREEZE_COST)), "rear_freeze": REAR_FREEZE_COST,
 		"shield": float(stats.get("shield_cost", SHIELD_COST)), "invisible": INVIS_COST, "mines": MINE_COST,
-		"rear_attack": REAR_ATTACK_COST,
+		"rear_attack": float(stats.get("rear_attack_cost", REAR_ATTACK_COST)),
 	}
 	if move == "jump":
 		want_jump = true # done by the physics step (needs the wheels on the ground)
@@ -1344,9 +1420,12 @@ func energy_move(move: String) -> void:
 		"rear_freeze":
 			_launch_rear("rear_freeze", 1)
 		"rear_attack":
-			_launch_rear("rear_missile", 2)
+			if stats.get("backfire", false): # round 28: Thumper's Backfire, a burst of flame out of the back
+				FlameJet.backfire(self)
+			else:
+				_launch_rear("rear_missile", 2)
 		"shield":
-			shield_time = SHIELD_TIME
+			shield_time = float(stats.get("shield_time", SHIELD_TIME)) # Darkside's Iron Curtain: 4 s
 			_show_shield(true)
 			GameFeel.play("shield_activate", global_position + Vector3.UP, self, -2.0)
 		"invisible":
@@ -2126,6 +2205,181 @@ func find_target() -> Vehicle:
 
 # ---------------------------------------------------------------- health and states
 
+# ---------------------------------------------------------------- round 28: Thumper, Brimstone, Darkside
+
+## Megafire: while fire is held with the special selected, the jet burns and the tank drains.
+func _flame_step(delta: float) -> void:
+	var on_special := selected_weapon() == special_id
+	var want := on_special and (in_fire_weapon or want_fire_weapon)
+	if on_special:
+		want_fire_weapon = false # the flame is held, never "fired"
+	var on := want and fuel > 0.0 and shield_time <= 0.0
+	if on != flaming:
+		_set_flaming(on)
+	if flaming:
+		fuel = maxf(0.0, fuel - delta)
+		if fuel <= 0.0:
+			_set_flaming(false)
+
+
+func _set_flaming(on: bool) -> void:
+	flaming = on
+	if on:
+		_break_invisibility()
+	if is_instance_valid(_flame):
+		_flame.set_on(on)
+
+
+## The tank refills while the flame is off (empty to full in "refill_full" s); the weapon slot shows
+## whole seconds left and leaves the list only when the tank is dry.
+func _fuel_tick(delta: float) -> void:
+	if not flaming:
+		fuel = minf(fuel_tank, fuel + fuel_tank / float(WeaponData.get_def(special_id).get("refill_full", 36.0)) * delta)
+	var shown := ceili(fuel - 0.05) if fuel > 0.05 else 0
+	var was := int(ammo.get(special_id, 0))
+	if shown != was:
+		ammo[special_id] = shown
+		if was == 0 and shown > 0 and is_player:
+			notice.emit(self, "%s READY" % String(WeaponData.get_def(special_id).get("label", special_id)).to_upper())
+		if (was == 0) != (shown == 0):
+			_refresh_slots()
+
+
+## Hellfire Sermon (Brimstone's secondary): the bell, the burning crown, and the reflection in take_damage.
+func start_sermon(d: Dictionary) -> void:
+	_sermon_def = d
+	sermon_time = float(d.get("time", 6.0))
+	if is_instance_valid(_sermon_fx):
+		_sermon_fx.queue_free()
+	_sermon_fx = SermonFx.start(self)
+	if is_player:
+		notice.emit(self, "HELLFIRE SERMON")
+
+
+func _end_sermon() -> void:
+	sermon_time = 0.0
+	if is_instance_valid(_sermon_fx):
+		_sermon_fx.call("finish")
+	_sermon_fx = null
+
+
+## Darkside Slam: the horn, then the locked charge (_tyres drives it; nothing can freeze, clamp or throw him).
+func start_slam(d: Dictionary) -> void:
+	_slam = d
+	_slam_horn = float(d.get("horn", 0.3))
+	slam_time = 0.0
+	_slam_pinned_once = false
+	_slam_brushed.clear()
+	_break_invisibility()
+	GameFeel.play("power_ram_horn", global_position + Vector3.UP * 2.0, self, float(d.get("sound_db", 0.0)) + 2.0)
+	if is_instance_valid(_slam_fx):
+		_slam_fx.queue_free()
+	_slam_fx = DarksideSlamFx.start(self)
+
+
+func _slam_tick(delta: float) -> void:
+	if _slam_horn > 0.0:
+		_slam_horn -= delta
+		if _slam_horn <= 0.0:
+			slam_time = float(_slam.get("time", 3.0))
+			speed = maxf(speed, float(stats.max_speed) * 0.9) # it tears off
+			GameFeel.play("ram_impact", global_position + Vector3.UP, self, -6.0, 0.6)
+		return
+	if slam_time <= 0.0:
+		return
+	slam_time -= delta
+	if is_instance_valid(_slam_pin):
+		_slam_pin_t -= delta
+		if _slam_pin_t <= 0.0 or _slam_pin.is_dead:
+			_release_pin(false)
+		else:
+			_pin_wall_check()
+	if slam_time <= 0.0:
+		_end_slam()
+
+
+## The charge hits a car: the first one is pinned to his nose (damage), the rest are brushed aside
+## (their ram damage x brush_mult, up to brush_cap).
+func _slam_hit(other: Vehicle, n: Vector3, at: Vector3) -> void:
+	if other.is_dead or other == _slam_pin or other.pinned_by != null:
+		return
+	if not _slam_pinned_once:
+		_slam_pinned_once = true
+		_slam_pin = other
+		_slam_pin_t = float(_slam.get("pin", 1.5))
+		other.pinned_by = self
+		add_collision_exception_with(other)
+		var dmg := float(_slam.get("damage", 30.0)) * WeaponData.DAMAGE_SCALE
+		other.take_damage(dmg, self)
+		other.hit_react(-n, dmg)
+		other.squish(other.global_position - at, 0.08)
+		last_ram = {"me": "front", "it": other.hit_part(at), "to_it": dmg, "to_me": 0.0}
+		_ram_feel(other, at, n, 40.0, dmg, 0.0)
+		if other.is_player:
+			other.notice.emit(other, "PINNED")
+		return
+	if _slam_brushed.has(other):
+		return
+	_slam_brushed[other] = true
+	_ram(other, _prev_velocity, n, at)
+	var extra := minf(float(_slam.get("brush_cap", 25.0)), float(last_ram.get("to_it", 0.0)) * (float(_slam.get("brush_mult", 1.5)) - 1.0))
+	if extra > 0.0:
+		other.take_damage(extra * WeaponData.DAMAGE_SCALE, self)
+	var side := flat_forward().cross(Vector3.UP)
+	side *= signf(side.dot(other.global_position - global_position))
+	other.push(side * 12.0 * other.knockback + Vector3.UP * 3.0)
+	other._knock = maxf(other._knock, KNOCK_TIME)
+
+
+## Pinned and driven into a wall: wall_bonus on top, the car is let go there.
+func _pin_wall_check() -> void:
+	var o := _slam_pin
+	var fwd := flat_forward()
+	var reach := float(o.stats.get("size", Vector3(2, 2, 5)).z) * 0.5 + 1.2
+	var from := o.global_position + Vector3.UP * 1.0
+	var q := PhysicsRayQueryParameters3D.create(from, from + fwd * reach, 1)
+	q.exclude = [get_rid(), o.get_rid()]
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	if hit.is_empty() or (hit.normal as Vector3).y > 0.6:
+		return
+	var bonus := float(_slam.get("wall_bonus", 15.0)) * WeaponData.DAMAGE_SCALE
+	o.take_damage(bonus, self)
+	o.hit_react(-fwd, bonus)
+	var at: Vector3 = hit.position
+	FxKit.crash_burst(get_parent(), at, -fwd, 1.0)
+	GameFeel.play("explosion_big", at, get_parent(), -2.0, 0.7, true)
+	GameFeel.shake(at, 1.0, 50.0)
+	if is_player or o.is_player:
+		GameFeel.hitstop(get_tree(), 0.12, 0.05)
+	if o.is_player:
+		o.notice.emit(o, "CRUSHED INTO THE WALL")
+	_release_pin(true)
+	_end_slam()
+	linear_velocity = Vector3(0.0, linear_velocity.y, 0.0) # stopped dead by the wall
+
+
+func _release_pin(at_wall: bool) -> void:
+	var o := _slam_pin
+	_slam_pin = null
+	if not is_instance_valid(o):
+		return
+	o.pinned_by = null
+	remove_collision_exception_with(o)
+	if not at_wall:
+		o.linear_velocity = linear_velocity * 0.8 + Vector3.UP * 4.0 # thrown off the nose
+		o._knock = KNOCK_TIME
+
+
+func _end_slam() -> void:
+	_slam_horn = 0.0
+	slam_time = 0.0
+	if is_instance_valid(_slam_pin):
+		_release_pin(false)
+	if is_instance_valid(_slam_fx):
+		_slam_fx.call("finish")
+	_slam_fx = null
+
+
 func take_damage(amount: float, attacker: Vehicle = null) -> void:
 	if is_dead or amount <= 0.0 or invulnerable_time > 0.0:
 		return
@@ -2137,6 +2391,14 @@ func take_damage(amount: float, attacker: Vehicle = null) -> void:
 		revealed_time = maxf(revealed_time, 0.5) # a hit shows where you are for a moment
 	if dash_time > 0.0:
 		amount *= float(_dash.get("armor", 0.5)) # round 23: half damage while a ball of tyres
+	if sermon_time > 0.0 and attacker and attacker != self and not attacker.is_dead and not _reflecting:
+		# Round 28, Hellfire Sermon: a share of the hit goes back to whoever dealt it, and they burn.
+		_reflecting = true
+		attacker.take_damage(amount * float(_sermon_def.get("reflect", 0.3)), self)
+		attacker.ignite(float(_sermon_def.get("burn", 3.0)), self)
+		_reflecting = false
+		if is_instance_valid(_sermon_fx):
+			_sermon_fx.call("reflect", attacker)
 	health -= amount
 	if attacker and attacker != self:
 		last_attacker = attacker
@@ -2167,6 +2429,22 @@ func _secondary() -> void:
 	var cost := int(WeaponData.SECONDARY_COST.get(id, 1))
 	if shield_time > 0.0:
 		return # shield up: no attacks but the guns
+	if id == "drive_by": # round 28: Thumper's Drive-By is paid in fuel, not charges
+		var dd := WeaponData.get_def(id)
+		var fc := float(dd.get("fuel_cost", 3.0))
+		if is_instance_valid(_drive_by):
+			return
+		if fuel < fc:
+			if is_player:
+				notice.emit(self, "DRIVE-BY NEEDS %d S OF FUEL" % int(fc))
+				GameFeel.ui("not_available", get_tree())
+			return
+		fuel -= fc
+		_break_invisibility()
+		_drive_by = DriveBy.start(self, dd)
+		if is_player:
+			notice.emit(self, "DRIVE-BY")
+		return
 	if id == "sweet_bot" and is_instance_valid(bot): # round 19: the robot is out: R L U orders the barrage
 		if not bot.fire_again() and is_player:
 			notice.emit(self, "SWEET BOT RELOADING")
@@ -2199,6 +2477,12 @@ func _secondary() -> void:
 		"reaper_sweep": # round 23: Mr. Grimm's Soul Harvest
 			_break_invisibility()
 			ReaperSweep.start(self, WeaponData.get_def("reaper_sweep"))
+		"hellfire_sermon": # round 28: Brimstone
+			start_sermon(WeaponData.get_def("hellfire_sermon"))
+		"ash_cloud": # round 28: Darkside
+			AshCloud.start(self, WeaponData.get_def("ash_cloud"))
+			if is_player:
+				notice.emit(self, "ASH CLOUD")
 	_refresh_slots()
 
 
@@ -2216,7 +2500,7 @@ func refund_special(n: int) -> void:
 ## wears off after `seconds` of MOVING (standing still doesn't count) and scrapes WheelClamp.SCRAPE_DPS
 ## damage while it moves (25 over the 5 s), then it breaks off.
 func clamp_for(seconds: float, hit_at: Vector3, by: Vehicle = null) -> bool:
-	if is_dead or invulnerable_time > 0.0 or shield_time > 0.0:
+	if is_dead or invulnerable_time > 0.0 or shield_time > 0.0 or slam_time > 0.0:
 		return false
 	var side := signf(global_basis.x.dot(hit_at - global_position))
 	if side == 0.0:
@@ -2286,7 +2570,7 @@ func _release_clamp() -> void:
 
 
 func freeze_for(seconds: float) -> bool:
-	if is_dead or grit_time > 0.0 or invulnerable_time > 0.0 or shield_time > 0.0:
+	if is_dead or grit_time > 0.0 or invulnerable_time > 0.0 or shield_time > 0.0 or slam_time > 0.0:
 		return false
 	var was := frozen_time > 0.0
 	frozen_time = maxf(frozen_time, seconds)
@@ -2320,6 +2604,8 @@ func _unfreeze() -> void:
 func ignite(seconds: float, by: Vehicle) -> void:
 	if is_dead or invulnerable_time > 0.0 or shield_time > 0.0:
 		return
+	if stats.get("fireproof", false): # round 28: Thumper's Hot Engine never catches fire
+		return
 	if burn_time <= 0.0:
 		GameFeel.play("ignite", global_position + Vector3.UP, get_parent(), -3.0)
 	burn_time = maxf(burn_time, seconds)
@@ -2339,6 +2625,13 @@ func _die() -> void:
 	frozen_time = 0.0
 	burn_time = 0.0
 	dash_time = 0.0
+	if flaming:
+		_set_flaming(false)
+	if sermon_time > 0.0:
+		_end_sermon()
+	if slam_time > 0.0 or _slam_horn > 0.0:
+		_end_slam()
+	pinned_by = null
 	_burn_fx.on = false
 	_fx.stop()
 	_ice.visible = false

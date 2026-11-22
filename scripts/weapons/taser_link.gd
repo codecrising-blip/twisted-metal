@@ -146,6 +146,8 @@ func _physics_process(delta: float) -> void:
 	var from := owner_car.launch_point()
 	_time += delta
 	var duration := float(def.get("duration", 3.0))
+	if is_instance_valid(target) and target.stats.get("fanatic", false):
+		duration *= 0.5 # round 28: Brimstone's Fanatic, shocked half as long
 	var strength := dps / float(def.get("max_dps", 20.0))
 	_refresh -= delta
 	var reroll := _refresh <= 0.0

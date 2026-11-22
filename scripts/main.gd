@@ -9,7 +9,7 @@ extends Node3D
 ## Round 20: the pause menu picks any of the cars remade in Blender for you (keys 1-5); round 22: and for the
 ## AI opponent too (keys 6 7 8 9 0). By default the opponent is Outlaw (Sweet Tooth when you play Outlaw).
 const PREVIEW_DRIVERS := ["sweet_tooth", "outlaw"]
-const PREVIEW_PICKS := ["sweet_tooth", "outlaw", "mr_grimm", "roadkill", "axel"]
+const PREVIEW_PICKS := ["sweet_tooth", "outlaw", "mr_grimm", "roadkill", "axel", "thumper", "darkside", "brimstone"]
 ## The whole test roster (the other three still have their simple prototype models).
 ## Run with `-- full` after the project path; the smoke test uses it too.
 const FULL_DRIVERS := ["sweet_tooth", "outlaw", "junkyard_dog", "mr_grimm", "spectre"]

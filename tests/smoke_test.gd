@@ -1573,22 +1573,21 @@ func _run() -> void:
 		fe._car_i = i
 		fe._show_car()
 		var id: String = FrontEnd.CARS[i]
+		if id == "brimstone": # round 28: his picture comes later from the owner
+			looks_ok = looks_ok and fe._no_pic.visible
+			continue
 		looks_ok = looks_ok and FrontEnd._portrait_tex(id, "idle") != null and FrontEnd._portrait_tex(id, "select") != null
 	await _frames(2)
-	_check(looks_ok and fe._stand.get_child_count() >= 1, "every driver has a picture before and after the pick, and the car turns on the stand")
-	# round 26 (owner): Thumper's picture is in the line-up before his car is built; picking him is refused
-	var soon_i: int = FrontEnd.line_up().find("thumper")
-	fe._car_i = soon_i
+	_check(looks_ok and fe._stand.get_child_count() >= 1, "every driver has a picture before and after the pick (Brimstone: PICTURE COMING), and the car turns on the stand")
+	# round 28: Thumper, Darkside and Brimstone are built: in the line-up, on the stand, and they can be picked
+	_check(FrontEnd.SOON.is_empty() and FrontEnd.CARS.has("thumper") and FrontEnd.CARS.has("darkside") and FrontEnd.CARS.has("brimstone"),
+		"Thumper, Darkside and Brimstone are in the driver select (nothing COMING SOON)")
+	fe._car_i = FrontEnd.CARS.find("darkside")
 	fe._show_car()
 	fe._pick_car()
 	await _frames(2)
-	_check(soon_i >= FrontEnd.CARS.size() and FrontEnd._portrait_tex("thumper", "idle") != null and fe._soon.visible
-		and fe._stand.get_child_count() == 0 and fe._cars.is_empty() and not fe._busy,
-		"Thumper is in the driver select with his picture, COMING SOON on an empty stand, and can't be picked yet")
-	var soon_pics := true
-	for sid in FrontEnd.SOON:
-		soon_pics = soon_pics and FrontEnd._portrait_tex(sid, "idle") != null and FrontEnd._portrait_tex(sid, "select") != null
-	_check(soon_pics and FrontEnd.line_up().has("darkside"), "every coming-soon driver (Thumper, Mr. Ash) has both pictures")
+	_check(fe._cars.has("darkside"), "Darkside can be picked")
+	await _frames(110) # the pick's flash and pause run out before the screen goes
 	fe.queue_free()
 	await _frames(2)
 	main_script.full_roster = false

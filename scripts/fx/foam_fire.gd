@@ -24,6 +24,8 @@ var inherit := 0.5 # share of the emitter's velocity a puff keeps when born
 var drag := 2.2 # how fast a puff forgets that velocity
 var rise_in := 3.0 # strength per second while flaring up
 var die_out := 1.0 # ...and while dying down
+var jet := 0.0 # round 28: m/s each puff is shot out along this node's -Z (Thumper's flamethrower), 0 = none
+var jet_spread := 0.2 # sideways scatter of the jet (share of its speed)
 var glow := -1.0 # >= 0: this fire's own blend (1 = plain see-through, no light added); small fires seen
 # against the bright sky (Sweet Bot's cone) need more body or they wash out
 
@@ -101,6 +103,9 @@ func _process(delta: float) -> void:
 		var local := Vector3(randf_range(-box.x, box.x), randf_range(-box.y, box.y), randf_range(-box.z, box.z))
 		_pos.append(p + basis * local)
 		var jitter := Vector3(randf_range(-0.4, 0.4), 0.0, randf_range(-0.4, 0.4))
+		if jet > 0.0:
+			var aim := Vector3(randf_range(-jet_spread, jet_spread), randf_range(-jet_spread, jet_spread) * 0.5, -1.0).normalized()
+			jitter += basis * aim * jet * randf_range(0.85, 1.1)
 		_vel.append(_ev * inherit + Vector3(0.0, rise * randf_range(0.75, 1.25), 0.0) + jitter)
 		_age.append(0.0)
 		_life.append(life * randf_range(0.7, 1.3) * lerpf(0.75, 1.0, _s))

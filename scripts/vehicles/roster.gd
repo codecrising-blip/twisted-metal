@@ -98,6 +98,39 @@ const CARS := {
 		"hood": Vector2(0.5, -0.9), "glass": Vector2(1.7, -0.2), "glass_n": Vector3(0, 0.2, -0.98),
 		"tagline": "Twenty years between two wheels.",
 	},
+	# Round 28 (owner): Thumper, Brimstone and Darkside, with their secondaries (design 01 ch 9-11).
+	# Thumper: TM2's purple lowrider (the textured TM2 rip; the design named TM3's, no TM3 reference is in
+	# the repo). Hot Engine: never set burning (direct hits still hurt). Backfire: his rear attack is a flame.
+	"thumper": {
+		"name": "Thumper", "ram": 6.0, "engine": "taxi", "driver": "Bruce",
+		"spd": 6, "arm": 7, "hnd": 5, "spc": 6, "class": "medium",
+		"special": "megafire", "secondary": "drive_by",
+		"fireproof": true, "backfire": true, "rear_attack_cost": 25.0,
+		"size": Vector3(2.3, 1.45, 5.9), "camera": [4.6, 10.5],
+		"hood": Vector2(1.0, -1.6), "glass": Vector2(1.3, -0.5), "glass_n": Vector3(0, 0.6, -0.8),
+		"tagline": "He buried three friends this summer. Never again.",
+	},
+	# Brimstone: Black's rusted pickup turned into a travelling church, a sinner chained in the bed.
+	# Fanatic: no white-outs (flashbangs), the taser holds him half as long. Hellfire Mines: his energy
+	# mines leave fire behind.
+	"brimstone": {
+		"name": "Brimstone", "ram": 6.0, "engine": "suv", "driver": "Jedediah",
+		"spd": 7, "arm": 5, "hnd": 6, "spc": 6, "class": "medium",
+		"special": "sinner_bomber", "secondary": "hellfire_sermon",
+		"fanatic": true, "hellfire_mines": true,
+		"size": Vector3(2.2, 1.75, 5.5), "camera": [4.6, 10.5],
+		"hood": Vector2(1.15, -1.6), "glass": Vector2(1.5, -0.55), "glass_n": Vector3(0, 0.6, -0.8),
+		"tagline": "He hears the devil every time the engine turns.",
+	},
+	# Darkside: Black's armoured black semi tractor, the only super heavy. Iron Curtain: his shield lasts 4 s.
+	"darkside": {
+		"name": "Darkside", "ram": 10.0, "engine": "tow", "driver": "Mr. Ash",
+		"spd": 4, "arm": 10, "hnd": 2, "spc": 8, "class": "super",
+		"special": "darkside_slam", "secondary": "ash_cloud", "shield_time": 4.0,
+		"size": Vector3(2.9, 3.6, 7.6), "camera": [7.2, 15.0],
+		"hood": Vector2(2.0, -3.0), "glass": Vector2(2.6, -1.9), "glass_n": Vector3(0, 0.25, -0.97),
+		"tagline": "Calypso stole what he made. He wants it back.",
+	},
 	"junkyard_dog": {
 		"name": "Junkyard Dog", "ram": 7.0, "engine": "tow", "driver": "Billy Ray Stillwell",
 		"spd": 5, "arm": 8, "hnd": 4, "spc": 7, "class": "heavy",

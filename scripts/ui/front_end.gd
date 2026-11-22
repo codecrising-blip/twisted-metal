@@ -11,17 +11,11 @@ const MENU_MUSIC := "res://audio/music/main_menu.ogg"
 const BACKDROP := "res://assets/backdrops/los_angeles_city.jpg"
 const WORLD_MAP := "res://assets/ui/world_map.webp"
 const MAIN_SCENE := "res://scenes/main.tscn"
-const CARS := ["sweet_tooth", "outlaw", "mr_grimm", "roadkill", "axel"]
+const CARS := ["sweet_tooth", "outlaw", "mr_grimm", "roadkill", "axel", "thumper", "darkside", "brimstone"]
 ## Round 26 (owner): drivers whose pictures are in but whose cars are not built yet. They are in the line-up with their
 ## picture and numbers (design chapter 1), the stand stays empty under COMING SOON, and they can't be picked.
-const SOON := {
-	"thumper": {"name": "Thumper", "driver": "Bruce", "spd": 6, "arm": 7, "hnd": 5, "spc": 6,
-		"special": "Megafire", "secondary": "Drive-By",
-		"tagline": "He buried three friends this summer. Never again."},
-	"darkside": {"name": "Darkside", "driver": "Mr. Ash", "spd": 4, "arm": 10, "hnd": 2, "spc": 8,
-		"special": "Darkside Slam", "secondary": "Ash Cloud",
-		"tagline": "Calypso stole what he made. He wants it back."},
-}
+## Round 28: Thumper and Darkside are built (Brimstone too: his picture comes later from the owner).
+const SOON := {}
 ## The tour in story order (CLAUDE.md); lat / lon place the pins. Only "open" ones can be played yet.
 const STAGES := [
 	{"id": "los_angeles", "name": "LOS ANGELES", "sub": "RELIEF ZONE ONE", "lat": 34.05, "lon": -118.24, "open": true},
@@ -65,6 +59,7 @@ var _stand: Node3D
 var _car_name: Label
 var _car_info: Label
 var _soon: Label # COMING SOON over the empty stand
+var _no_pic: Label # round 28: a driver whose picture isn't in yet (Brimstone)
 var _bars: Array = []
 # world map
 var _map: TextureRect
@@ -698,6 +693,10 @@ func _show_cars() -> void:
 	_soon.position = Vector2(430, 330)
 	_soon.size = Vector2(vs.x - 850, 70)
 	_soon.visible = false
+	_no_pic = _label(_root, "PICTURE\nCOMING", 40, DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	_no_pic.position = Vector2(PORTRAIT_X - 180.0, 330.0)
+	_no_pic.size = Vector2(360, 120)
+	_no_pic.visible = false
 	# name with arrows, numbers on the right
 	_car_name = _label(_root, "", 54, BONE, HORIZONTAL_ALIGNMENT_CENTER)
 	_car_name.position = Vector2(430, 600)
@@ -783,6 +782,8 @@ const PORTRAIT_X := 236.0
 
 func _set_portrait(tex: Texture2D) -> void:
 	_portrait.texture = tex
+	if _no_pic:
+		_no_pic.visible = tex == null
 	var aspect := float(tex.get_width()) / float(tex.get_height()) if tex else 0.75
 	_portrait.size = Vector2(PORTRAIT_H * aspect, PORTRAIT_H)
 	_portrait.position = Vector2(PORTRAIT_X - _portrait.size.x * 0.5, 146.0)
@@ -811,8 +812,9 @@ func _foe_strip(vs: Vector2) -> void:
 	l.size = Vector2(vs.x - 850, 36)
 
 
-## Picked: the picture cuts to the driver's wilder pose with a flash, a punch-in and a shake, the car's own special
-## sounds, then on to the next player or the match.
+## Picked: the picture cuts to the driver's wilder pose with a flash, a punch-in and a shake, and the one heavy
+## "choice" boom (round 28, owner: no special-weapon sounds here: no siren, no laugh), then on to the next player
+## or the match.
 func _pick_car() -> void:
 	var id: String = line_up()[_car_i]
 	if is_soon(id): # not built yet: a refusal, the stand's sign flashes
@@ -831,8 +833,7 @@ func _pick_car() -> void:
 	_shake(16.0)
 	_portrait.scale = Vector2(1.18, 1.18)
 	create_tween().tween_property(_portrait, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	_sound("menu_select", -2.0)
-	_sound(_special_sound(id), -2.0)
+	_sound("menu_select", -1.0)
 	_car_name.add_theme_color_override("font_color", FIRE)
 	_car_name.text = String(Roster.get_car(id).get("name", id)).to_upper()
 	if _picking == 0 and not _picking_foes:
@@ -853,12 +854,6 @@ func _pick_car() -> void:
 func _soon_dim() -> void:
 	if is_instance_valid(_soon):
 		_soon.add_theme_color_override("font_color", DIM)
-
-
-static func _special_sound(id: String) -> String:
-	var sounds := {"sweet_tooth": "launch_napalm_cone", "outlaw": "special_outlaw", "mr_grimm": "launch_reaper_skull",
-		"roadkill": "barrage_lock", "axel": "special_axel"}
-	return String(sounds.get(id, "menu_select"))
 
 
 # ------------------------------------------------------------------ to the match

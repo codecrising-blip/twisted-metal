@@ -245,6 +245,22 @@ func _energy_moves(v: Vehicle, delta: float) -> void:
 	if second == "rim_shot" and charges >= 2 and to.length() < 40.0 and ahead < deg_to_rad(15.0) and randf() < 0.25 * aggression:
 		v.want_move = "secondary"
 		return
+	# Round 28: Thumper's crew at a car off his side; Brimstone's sermon when someone is hurting him;
+	# Darkside's ash on a car close behind or beside him that still has energy to lose.
+	if second == "drive_by" and v.fuel >= 5.0 and _side_target(v, 25.0) and randf() < 0.5 * aggression:
+		v.want_move = "secondary"
+		return
+	var hurt := _last_health - v.health
+	_last_health = v.health
+	if second == "hellfire_sermon" and charges >= 2 and v.sermon_time <= 0.0 and hurt > 6.0 \
+			and is_instance_valid(v.last_attacker) and v.last_attacker.global_position.distance_to(v.global_position) < 60.0 \
+			and randf() < 0.6 * aggression:
+		v.want_move = "secondary"
+		return
+	if second == "ash_cloud" and charges >= 2 and to.length() < 22.0 and t.energy > 35.0 and (behind or ahead > deg_to_rad(60.0)) \
+			and randf() < 0.35 * aggression:
+		v.want_move = "secondary"
+		return
 	# Only while driving on forward: never into its own mine while backing out of a corner.
 	if behind and to.length() < 30.0 and v.speed > 10.0 and _reverse <= 0.0 and randf() < 0.35 * aggression:
 		if v.energy >= Vehicle.REAR_ATTACK_COST + 25.0 and randf() < 0.5:
@@ -775,6 +791,9 @@ func _ray(space: PhysicsDirectSpaceState3D, origin: Vector3, vec: Vector3) -> fl
 	return origin.distance_to(hit.position) / vec.length()
 
 
+var _last_health := 0.0
+
+
 func _shoot(v: Vehicle, delta: float) -> void:
 	v.in_fire_guns = false
 	# Charging the Napalm Cone: keep the button down, let go when it is full.
@@ -812,6 +831,9 @@ func _shoot(v: Vehicle, delta: float) -> void:
 		v.want_fire_weapon = true
 		if v.special_id == "napalm_cone" and angle < 0.12 and dist > 18.0 and dist < 50.0 and randf() < 0.35:
 			_hold = Vehicle.charge_full("napalm_cone") + 0.1 # charged shot: straight, double damage
+			v.in_fire_weapon = true
+		elif v.special_id == "megafire": # round 28: Thumper burns in short bursts
+			_hold = randf_range(0.6, 1.6)
 			v.in_fire_weapon = true
 		elif v.special_id == "charged_missiles": # round 21: Roadkill loads some missiles before letting go
 			var full := Vehicle.charge_full("charged_missiles")
@@ -894,7 +916,29 @@ func _special_makes_sense(v: Vehicle, dist: float, angle: float) -> bool:
 			return dist < 65.0 and angle < 0.6
 		"crowd_controller": # design: when a car is right on him or something holds him
 			return dist < 11.0 or v.clamped_time > 0.0 or _held_by_taser(v)
+		"megafire": # round 28: only inside the flame's reach
+			return dist < 15.0 and angle < 0.3 and _clear_shot(v, v.target)
+		"sinner_bomber": # the sinner runs the rest of the way: anything in reach and roughly ahead
+			return dist > 12.0 and dist < 70.0 and angle < 0.9
+		"darkside_slam": # a long, straight charge at a car dead ahead
+			return dist > 14.0 and dist < 60.0 and angle < 0.14 and _clear_shot(v, v.target)
 	return dist < 60.0 and angle < 0.3
+
+
+## A live car off one of the car's sides (60-120 degrees) within reach: Thumper's Drive-By has a target.
+func _side_target(v: Vehicle, reach: float) -> bool:
+	for node in v.get_tree().get_nodes_in_group("vehicles"):
+		var o := node as Vehicle
+		if o == v or o.is_dead or o.is_hidden():
+			continue
+		var to := o.global_position - v.global_position
+		to.y = 0.0
+		if to.length() > reach or to.length() < 2.0:
+			continue
+		var off := rad_to_deg(v.flat_forward().angle_to(to.normalized()))
+		if off > 60.0 and off < 120.0:
+			return true
+	return false
 
 
 func _held_by_taser(v: Vehicle) -> bool:

@@ -31,6 +31,12 @@ static func fire(v: Vehicle, id: String, charged := false) -> void:
 			_charged_salvo(v, id, def)
 		"crowd_ring":
 			CrowdRing.start(v, def)
+		"flame": # round 28: Thumper's Megafire is held, not fired (Vehicle._flame_step)
+			pass
+		"sinner":
+			Sinner.start(v, def)
+		"slam":
+			v.start_slam(def)
 		_:
 			v.launch(id, v.target)
 

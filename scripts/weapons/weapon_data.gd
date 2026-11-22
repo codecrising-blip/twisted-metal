@@ -225,6 +225,64 @@ const DEFS := {
 		"label": "Soul Harvest", "kind": "scythe", "color": Color(0.45, 1.0, 0.62), "handler": "reaper_sweep",
 		"radius": 5.4, "spins": 2, "time": 0.8, "steal": 0.25, "heal": 0.25, "cooldown": 1.0, "sound_db": 3.5, # round 24: one Roadkill length
 	},
+	# ---- Round 28 (owner: "build Thumper, Darkside and Brimstone with their secondaries"), design 01 ch 9-11.
+	# Thumper (Bruce): Megafire. Hold fire: a jet of flame out from under the hood, a 14 m cone (+-12 deg),
+	# 12 a second + burning. A fuel tank instead of charges (owner, round 12: 10 s): it refills from empty to
+	# full in refill_full s (design: 36 s) whenever the flame is off. The only special with a fuel gauge.
+	"megafire": {
+		"label": "Megafire", "kind": "flame", "handler": "flame", "color": Color(1.0, 0.45, 0.1), "special": true,
+		"range": 14.0, "cone": 12.0, "dps": 12.0, "burn": 3.0, "tank": 10.0, "refill_full": 36.0, "start_fuel": 6.0,
+		"cooldown": 0.0, "sound_db": 2.0,
+	},
+	# Thumper's secondary: Drive-By (design 9, R L U, costs fuel_cost s of the tank): two of his crew lean out of
+	# the side windows for "time" s with small machine guns and fire on any car 60-120 degrees off either side
+	# within range, dps a side. The only side attack in the game.
+	"drive_by": {
+		"label": "Drive-By", "kind": "bullet", "handler": "drive_by", "color": Color(1.0, 0.85, 0.4),
+		"time": 6.0, "range": 30.0, "arc_from": 60.0, "arc_to": 120.0, "dps": 5.0, "fuel_cost": 3.0, "sound_db": 2.0,
+	},
+	"drive_by_round": {
+		"label": "Drive-By", "kind": "bullet", "color": Color(1.0, 0.8, 0.35),
+		"speed": 140.0, "damage": 0.55, "homing": 0.0, "life": 0.4,
+	},
+	# Thumper's energy move (Backfire, design 9): his rear attack is a burst of flame out of the back, 8 m, 12 + burning.
+	"backfire": {
+		"label": "Backfire", "kind": "flame", "color": Color(1.0, 0.45, 0.1),
+		"range": 8.0, "cone": 25.0, "damage": 12.0, "burn": 4.0, "time": 0.7,
+	},
+	# Brimstone (Jedediah): Sinner Bomber (design 10, stronger than Black's). A sinner with dynamite on his back
+	# is thrown "throw" m ahead, lands and RUNS at the lock (run_speed m/s, x the speed scale) for up to run_time
+	# s, sliding along walls and cutting corners. On contact he clings to the hood or roof; after "fuse" s: damage
+	# and a small throw. Shake him off (jump, a wall hit over shake_wall m/s, a 150-degree handbrake slide): he
+	# drops and blows behind for shake_damage. He can be shot (hp) or run out of time: pop_damage in pop_radius.
+	"sinner_bomber": {
+		"label": "Sinner Bomber", "kind": "sinner", "handler": "sinner", "color": Color(1.0, 0.6, 0.25), "special": true,
+		"throw": 10.0, "run_speed": 26.0, "run_time": 6.0, "fuse": 2.0, "damage": 40.0, "shake_damage": 10.0,
+		"shake_wall": 15.0, "hp": 5.0, "pop_damage": 12.0, "pop_radius": 3.0, "push": 6.0, "shake": 0.5,
+		"cooldown": 1.0, "recharge": 17.0, "sound_db": 2.0,
+	},
+	# Brimstone's secondary: Hellfire Sermon (design 10, one charge). The church bell tolls; for "time" s whoever
+	# hurts Brimstone takes "reflect" of it back and is set burning (rammers too). A burning crown shows it.
+	"hellfire_sermon": {
+		"label": "Hellfire Sermon", "kind": "sermon", "handler": "sermon", "color": Color(1.0, 0.55, 0.15),
+		"time": 6.0, "reflect": 0.3, "burn": 3.0, "sound_db": 2.0,
+	},
+	# Darkside (Mr. Ash): Darkside Slam (design 11). The horn, then a locked charge: "time" s at speed_mult x
+	# his top speed, steer x the steering; nothing freezes, clamps, holds or throws him while it lasts (he still
+	# takes damage). The first car he hits is PINNED to his nose for up to "pin" s: "damage", and wall_bonus more
+	# if he drives it into a wall. Cars he brushes aside take their ram damage x brush_mult (up to brush_cap).
+	"darkside_slam": {
+		"label": "Darkside Slam", "kind": "slam", "handler": "slam", "color": Color(0.85, 0.08, 0.06), "special": true,
+		"horn": 0.3, "time": 3.0, "speed_mult": 1.5, "steer": 0.25, "damage": 30.0, "wall_bonus": 15.0, "pin": 1.5,
+		"brush_mult": 1.5, "brush_cap": 25.0, "shake": 0.8, "cooldown": 1.0, "recharge": 15.0, "sound_db": 2.0,
+	},
+	# Darkside's secondary: Ash Cloud (design 11, one charge). His stacks pour out ash for "time" s; the cloud
+	# hangs "linger" s, "width" m wide. Cars inside lose drain energy a second and can't start energy moves;
+	# Darkside gets half of what they lose. The only weapon that steals energy.
+	"ash_cloud": {
+		"label": "Ash Cloud", "kind": "ash", "handler": "ash", "color": Color(0.25, 0.24, 0.23),
+		"time": 6.0, "linger": 4.0, "width": 8.0, "drain": 15.0, "sound_db": 2.0,
+	},
 	# Spectre: ghost missile that flies through walls.
 	"ghost_missile": {
 		"label": "Ghost Missile", "kind": "ghost", "color": Color(0.5, 0.9, 1.0), "special": true,
@@ -240,7 +298,8 @@ const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "
 	"napalm", "napalm", "remote", "remote", "zoomy", "zoomy", "sat"]
 
 ## Secondary weapons (design 1.6): paid in charges of the car's special, Sweet Bot two, the rest one.
-const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1, "boomerang": 1, "rim_shot": 1, "reaper_sweep": 2, "tyre_dash": 1}
+const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1, "boomerang": 1, "rim_shot": 1, "reaper_sweep": 2, "tyre_dash": 1,
+	"hellfire_sermon": 1, "ash_cloud": 1} # Thumper's Drive-By is paid in fuel ("fuel_cost" s of the tank)
 const BOT_HEALTH := 59.0 # owner, round 16: a power missile and a fire missile (45 + 14) take it down
 const BOT_MISSILES := 20
 const BOT_GAP := 0.1 # seconds between missiles: the barrage lasts two seconds

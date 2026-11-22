@@ -481,7 +481,7 @@ static func hit_feel(v: Vehicle, d: Dictionary, dir: Vector3) -> void:
 	if v.is_player:
 		if d.has("shake") and GameFeel.camera:
 			GameFeel.camera.add_shake(float(d["shake"]))
-		if d.has("flashbang"):
+		if d.has("flashbang") and not v.stats.get("fanatic", false): # round 28: Brimstone's Fanatic
 			GameFeel.flash_bang(float(d["flashbang"]))
 
 

@@ -27,6 +27,8 @@ static func build(id: String) -> Node3D:
 			return mr_grimm()
 		"spectre":
 			return spectre()
+		"thumper", "brimstone", "darkside":
+			return stand_in(id)
 	push_error("Unknown vehicle model: %s" % id)
 	return HeroModels.sweet_tooth()
 
@@ -294,4 +296,31 @@ static func spectre() -> Node3D:
 
 	m.set_meta("launcher", Vector3(0, 1.75, -0.6))
 	m.set_meta("top", Vector3(0, 1.5, 0.6))
+	return m
+
+
+## Round 28: a plain stand-in body for a car whose Blender model is not exported yet (same metadata
+## the real model carries, so its weapons work).
+static func stand_in(id: String) -> Node3D:
+	var stats := Roster.get_car(id)
+	var size: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
+	var r := 0.42 if id != "darkside" else 0.62
+	var m := _new_model(r)
+	var paint := {"thumper": Color(0.36, 0.12, 0.42), "brimstone": Color(0.36, 0.2, 0.12), "darkside": Color(0.06, 0.06, 0.07)}
+	var body := MeshKit.mat(paint.get(id, Color(0.4, 0.4, 0.4)), 0.5, 0.2)
+	for side in [-1.0, 1.0]:
+		_wheel(m, Vector3(size.x * 0.43 * side, r, -size.z * 0.32), r, 0.34, true)
+		_wheel(m, Vector3(size.x * 0.43 * side, r, size.z * 0.32), r, 0.36, false)
+	MeshKit.box(m, Vector3(size.x, size.y * 0.5, size.z), Vector3(0, r + size.y * 0.2, 0), body)
+	MeshKit.box(m, Vector3(size.x * 0.85, size.y * 0.4, size.z * 0.4), Vector3(0, size.y * 0.8, size.z * 0.05), body)
+	m.set_meta("guns", [Vector3(-0.5, size.y * 0.6, -size.z * 0.5), Vector3(0.5, size.y * 0.6, -size.z * 0.5)])
+	m.set_meta("launcher", Vector3(0, size.y + 0.3, -size.z * 0.2))
+	m.set_meta("top", Vector3(0, size.y, 0))
+	if id == "thumper":
+		m.set_meta("nozzle", Vector3(0, 0.6, -size.z * 0.5 - 0.15))
+	if id == "brimstone":
+		m.set_meta("sinner", Vector3(0, size.y * 0.7, size.z * 0.3))
+		m.set_meta("bell", Vector3(0, size.y + 0.15, -0.3))
+	if id == "darkside":
+		m.set_meta("exhaust", [Vector3(-1.1, size.y + 0.4, -size.z * 0.15), Vector3(1.1, size.y + 0.4, -size.z * 0.15)])
 	return m

@@ -277,7 +277,8 @@ func _strike() -> void:
 		if o.is_player:
 			hit_player = true
 			caught = true
-			GameFeel.flash_bang(float(def.get("flashbang", 1.0)))
+			if not o.stats.get("fanatic", false): # round 28: Brimstone's Fanatic
+				GameFeel.flash_bang(float(def.get("flashbang", 1.0)))
 			if GameFeel.camera:
 				GameFeel.camera.add_shake(float(def.get("shake", 1.0)))
 	# The impact frame: anyone watching from near enough gets one white blink of the screen.
