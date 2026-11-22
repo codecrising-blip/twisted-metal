@@ -68,11 +68,17 @@ Serious and grim, never cartoonish. Use the attached reference picture for the f
 | Orbital | ALAN VAME | `TM4OrbitalDriver.webp` | a man in a black suit whose left half of the face is bare skull and metal, a skeletal hand | holding a crackling electric orb toward the camera |
 | Warthog | COLONEL HALL | `HeadOnWarthog.webp`، `Th.webp` | a military colonel in a khaki shirt and tie with a green army cap, hard jaw | shouting an order and pointing at the camera |
 | Junkyard Dog | BILLY RAY | `TMBBillyRayInfobox.webp` | a big gaunt man with long dark hair parted in the middle, heavy brow, deep-set eyes | swinging a spiked bomb on a chain toward the camera |
-| Darkside | MR. ASH | **لا توجد صورة سائق عندنا** | — | — |
+| Darkside | MR. ASH | `TMBMrAshDriver.png` (56×90 only) | Mr. Ash, a tall faceless figure made of shadow in a long black coat with a high collar and a hood, no face at all, only two glowing white-hot eyes with a red halo, thin red rim light along his edges, fine grey ash drifting up from his shoulders like smoke, hands hidden in the coat, a faint red glow behind his head | stepping out of the blinding headlights of a huge black semi truck behind him, his eyes flaring, one hand reaching toward the camera with the fingers crumbling into ash and embers, his coat tearing apart into swirling ash behind him; still no face and no mouth |
 | Yellow Jacket | CHARLIE KANE JR. | **لا توجد صورة سائق عندنا** | — | — |
 
 ## غير متأكد منه / أسئلة
-- **Darkside (Mr. Ash) وYellow Jacket (Charlie Kane Jr.):** عندي صور سياراتهما فقط، لا صور السائقين. أرسلها، أو صف لي شكلهما.
+- **Yellow Jacket (Charlie Kane Jr.):** عندي صورة سيارته فقط، لا صورة السائق. أرسلها، أو صف لي شكله.
+- **Mr. Ash (أرسل المالك صورته بعد الجولة):** ظل أسود بعينين متوهجتين على أحمر. اقتراحاتي للوضعية بعد الاختيار:
+  - **أ (أنصح به، 8/10):** يخرج من ضوء مصابيح شاحنة Darkside الضخمة خلفه، عيناه تشتعلان، يده تمتد نحو الكاميرا وأصابعها تتفتت رماداً وجمراً، ومعطفه يتمزق رماداً خلفه. يربط السائق بسيارته (أثقل سيارة في اللعبة) ويبقى وجهه مخفياً.
+  - **ب (7/10):** جسده كله ينفجر عاصفة رماد وجمر نحو الكاميرا، ولا يبقى صلباً إلا العينان واليد. قوي، لكنه قد يُقرأ كانفجار لا كشخص.
+  - **ج (4/10):** يكشف القلنسوة عن وجه من فحم متشقق يتوهج من الداخل. يقتل الغموض، وقوة الشخصية أنك لا ترى وجهه أبداً.
+  - في الوصف الموحد احذف «snarling or shouting» له: لا فم ولا وجه.
+  - الخلفية قبل الاختيار بنفسجية مثل البقية، مع وهج أحمر خفيف خلف رأسه من صورته الأصلية.
 - **Twister:** قرارك أن السائقة من TM2 (Amanda Watts)، لكن الصورة الوحيدة عندي من Head-On (Miranda Watts). أي واحدة تريد؟
 - **Hammerhead:** صورة TM2 عندي صغيرة جداً (64×128)، فوصف Mike وStu في الجدول عام. صورة أكبر تساعد أداتك.
 - الأوصاف في الجدول من الصور المرجعية التي أراها. إن كان شكل أحدهم في ذهنك مختلفاً فغيّره قبل التوليد.
