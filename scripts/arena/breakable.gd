@@ -6,6 +6,9 @@ extends StaticBody3D
 ## Builders put the meshes under `visual` (origin at the base) and add the collision shape.
 
 signal broken(prop: Breakable, by: Vehicle)
+## Emitted as it starts to break, before it falls or shatters: props drawn elsewhere (Paris's trees are
+## drawn by their row's MultiMesh) give it a visual of its own here.
+signal breaking(prop: Breakable)
 
 enum Style { SHATTER, TOPPLE }
 
@@ -123,6 +126,7 @@ func break_apart(by: Vehicle) -> void:
 	if is_broken:
 		return
 	is_broken = true
+	breaking.emit(self)
 	collision_layer = 0
 	if _cover:
 		_cover.collision_layer = 0

@@ -10,7 +10,11 @@ extends ArenaKit
 const HX := 275.0
 const HZ := 225.0
 const STEP := 2.5 # river sampling along x
-const WATER_Y := -6.5
+const WATER_Y := -5.45 # round 29 (owner): the Seine is shallow, you drive through it to the other bank
+const BED_Y := -6.0 # the riverbed under it (0.55 m of water: wheels and sills under, the body above)
+const BANK := 2.6 # the cobbled bank from a lower quay down into the water
+const WATER_DRAG := 1.6 # how fast speed above WATER_TOP fades in the water (per second)
+const WATER_TOP := 13.0 # m/s a car keeps wading through the river
 const QUAY_Y := -5.0
 const QUAY_W := 10.0 # lower quay (design 8 m; 10 so Axel's 2.8 m body has room at speed)
 const WATER_HALF := 15.0
@@ -20,7 +24,6 @@ const SIDEWALK := 5.0
 const ROOF_Y := 13.0 # drivable roofs of the Haussmann quarter (TM2's legacy)
 const TALL_Y := 20.4 # the other blocks (not drivable)
 const PARAPET_H := 0.9
-const VEHICLE_BARRIER_LAYER := 16
 const ETOILE := Vector2(-150, -168)
 const RING_R := 35.0
 const TOWER := Vector2(-190, 140)
@@ -72,6 +75,33 @@ var _m := {}
 var _buildings: StaticBody3D
 var _road_polys: Array[PackedVector2Array] = []
 static var _rz := PackedFloat32Array()
+var _splash_t := {} # car -> seconds to its next splash
+
+
+## Round 29 (owner: "make the river accessible to drive on to the other side"): a car in the Seine wades.
+## Speed above WATER_TOP is taken off fast (stronger than any engine or turbo), and water splashes round it.
+func _physics_process(delta: float) -> void:
+	for node in get_tree().get_nodes_in_group("vehicles"):
+		var v := node as Vehicle
+		if v == null or v.is_dead:
+			continue
+		var p := v.global_position
+		if p.y > WATER_Y + 0.35 or absf(p.z - river_z(p.x)) > water_half(p.x) - 0.3:
+			_splash_t.erase(v)
+			continue
+		var lv := v.linear_velocity
+		var flat := Vector2(lv.x, lv.z)
+		var sp := flat.length()
+		if sp > WATER_TOP:
+			var ns := move_toward(sp, WATER_TOP, (28.0 + (sp - WATER_TOP) * WATER_DRAG) * delta)
+			flat *= ns / sp
+			v.linear_velocity = Vector3(flat.x, lv.y, flat.y)
+		var t: float = float(_splash_t.get(v, 0.0)) - delta
+		if t <= 0.0:
+			if sp > 2.5:
+				FxKit.splash(self, Vector3(p.x, WATER_Y + 0.1, p.z) - Vector3(lv.x, 0, lv.z).normalized() * 1.2, clampf(sp / 12.0, 0.6, 1.4))
+			t = 0.14
+		_splash_t[v] = t
 
 
 func build() -> void:
@@ -352,6 +382,9 @@ func _river() -> void:
 		var xm := (x0 + x1) * 0.5
 		face(_m.water, [Vector3(x0, WATER_Y, zc0 - w0), Vector3(x1, WATER_Y, zc1 - w1), Vector3(x1, WATER_Y, zc1 + w1),
 			Vector3(x0, WATER_Y, zc0 + w0)], Vector3.UP, false)
+		# The riverbed (round 29: drivable, under 0.55 m of water), from bank foot to bank foot.
+		face(_m.quay, [Vector3(x0, BED_Y, zc0 - w0 + BANK), Vector3(x1, BED_Y, zc1 - w1 + BANK), Vector3(x1, BED_Y, zc1 + w1 - BANK),
+			Vector3(x0, BED_Y, zc0 + w0 - BANK)], Vector3.UP, false, COL_GROUND)
 		for side: float in [-1.0, 1.0]:
 			var out := Vector3(0, 0, -side) # walls on this side face the river
 			var wz0 := zc0 + side * w0
@@ -363,11 +396,24 @@ func _river() -> void:
 					Vector3.UP, false, COL_GROUND)
 			if q0 < -0.01 or q1 < -0.01:
 				face(_m.quay, [Vector3(x0, q0, oz0), Vector3(x1, q1, oz1), Vector3(x1, 0, oz1), Vector3(x0, 0, oz0)], out, true, COL_WALL)
-			# The quay's edge down into the water.
 			var top0 := q0 if o0 - w0 > 0.05 else 0.0
 			var top1 := q1 if o1 - w1 > 0.05 else 0.0
-			face(_m.quay, [Vector3(x0, WATER_Y - 0.3, wz0), Vector3(x1, WATER_Y - 0.3, wz1), Vector3(x1, top1, wz1),
-				Vector3(x0, top0, wz0)], out, false)
+			var fz0 := wz0 - side * BANK # foot of the bank on the riverbed
+			var fz1 := wz1 - side * BANK
+			if maxf(top0, top1) < -4.0:
+				# A lower quay: a cobbled bank slopes down into the water, nothing in the way (owner: cross the river).
+				face(_m.cobble, [Vector3(x0, top0, wz0), Vector3(x1, top1, wz1), Vector3(x1, BED_Y, fz1), Vector3(x0, BED_Y, fz0)],
+					Vector3(0, 1, -side * 0.6).normalized(), false, COL_GROUND)
+			else:
+				# Street level straight above the water (along the island): a stone wall and a parapet.
+				face(_m.quay, [Vector3(x0, BED_Y - 0.3, fz0), Vector3(x1, BED_Y - 0.3, fz1), Vector3(x1, BED_Y, fz1),
+					Vector3(x0, BED_Y, fz0)], out, false)
+				face(_m.quay, [Vector3(x0, BED_Y - 0.3, wz0), Vector3(x1, BED_Y - 0.3, wz1), Vector3(x1, top1, wz1),
+					Vector3(x0, top0, wz0)], out, false, COL_WALL)
+				face(_m.quay, [Vector3(x0, BED_Y, fz0), Vector3(x1, BED_Y, fz1), Vector3(x1, BED_Y, wz1), Vector3(x0, BED_Y, wz0)],
+					Vector3.UP, false, COL_GROUND)
+				if not _under_bridge(xm, side):
+					_parapet_piece(x0, x1, wz0, wz1, top0, top1, -side)
 			# Stone coping between the trench and the quay road.
 			var pz0 := oz0 + side * PROMENADE
 			var pz1 := oz1 + side * PROMENADE
@@ -376,21 +422,19 @@ func _river() -> void:
 			var rz0 := pz0 + side * QUAY_ROAD_W
 			var rz1 := pz1 + side * QUAY_ROAD_W
 			face(_m.asphalt, [Vector3(x0, 0.04, pz0), Vector3(x1, 0.04, pz1), Vector3(x1, 0.04, rz1), Vector3(x0, 0.04, rz0)], Vector3.UP, false)
-			# Parapets: on the bank where the drop to the lower quay is real, on every water edge.
+			# Parapet on the bank where the drop to the lower quay is real.
 			if 0.0 - (q0 + q1) * 0.5 > 1.0 and not _under_bridge(xm, side):
 				_parapet_piece(x0, x1, oz0, oz1, 0.0, 0.0, side)
-			_parapet_piece(x0, x1, wz0, wz1, top0, top1, -side)
-			# Island: top, its walls, its parapet.
+			# Island: top, its walls (solid now that cars wade round it), its parapet.
 			if ih0 > 0.05 or ih1 > 0.05:
 				var iz0 := zc0 + side * ih0
 				var iz1 := zc1 + side * ih1
 				face(_m.plaza, [Vector3(x0, 0, zc0), Vector3(x1, 0, zc1), Vector3(x1, 0, iz1), Vector3(x0, 0, iz0)], Vector3.UP, false, COL_GROUND)
-				face(_m.quay, [Vector3(x0, WATER_Y - 0.3, iz0), Vector3(x1, WATER_Y - 0.3, iz1), Vector3(x1, 0, iz1), Vector3(x0, 0, iz0)],
-					Vector3(0, 0, side), false)
+				face(_m.quay, [Vector3(x0, BED_Y - 0.3, iz0), Vector3(x1, BED_Y - 0.3, iz1), Vector3(x1, 0, iz1), Vector3(x0, 0, iz0)],
+					Vector3(0, 0, side), false, COL_WALL)
 				if not _bridge_lands(xm, side):
 					_parapet_piece(x0, x1, iz0 - side * 0.5, iz1 - side * 0.5, 0.0, 0.0, side)
-	# Cars-only walls over every water edge: nobody falls in (design 32), missiles fly over.
-	_water_barriers(xs)
+
 
 
 ## Does a bridge land on the island's edge here?
@@ -414,35 +458,6 @@ func _parapet_piece(x0: float, x1: float, z0: float, z1: float, y0: float, y1: f
 	face(_m.stone, [a0, a1, a1 + up, a0 + up], Vector3(0, 0, -toward), true, COL_WALL)
 	face(_m.stone, [b0, b1, b1 + up, b0 + up], Vector3(0, 0, toward), true, COL_WALL)
 	face(_m.stone, [a0 + up, a1 + up, b1 + up, b0 + up], Vector3.UP, true, COL_WALL)
-
-
-func _water_barriers(xs: PackedFloat32Array) -> void:
-	var body := StaticBody3D.new()
-	body.name = "WaterBarrier"
-	body.collision_layer = VEHICLE_BARRIER_LAYER
-	body.collision_mask = 0
-	add_child(body)
-	for i in range(0, xs.size() - 4, 4):
-		var x0 := xs[i]
-		var x1 := xs[i + 4]
-		for side: float in [-1.0, 1.0]:
-			var edges := [water_half(x0) - 0.6, water_half(x1) - 0.6]
-			var ys := [quay_y(x0) if quay_w(x0) > 0.05 else 0.0, quay_y(x1) if quay_w(x1) > 0.05 else 0.0]
-			_barrier_box(body, Vector3(x0, ys[0], river_z(x0) + side * edges[0]), Vector3(x1, ys[1], river_z(x1) + side * edges[1]))
-			if island_half(x0) > 1.0 and island_half(x1) > 1.0:
-				_barrier_box(body, Vector3(x0, 0, river_z(x0) + side * (island_half(x0) + 0.6)),
-					Vector3(x1, 0, river_z(x1) + side * (island_half(x1) + 0.6)))
-
-
-func _barrier_box(body: StaticBody3D, a: Vector3, b: Vector3) -> void:
-	var cs := CollisionShape3D.new()
-	var box := BoxShape3D.new()
-	var flat := Vector3(b.x - a.x, 0, b.z - a.z)
-	box.size = Vector3(flat.length() + 0.5, 14.0, 1.0)
-	cs.shape = box
-	var mid := (a + b) * 0.5
-	cs.transform = Transform3D(Basis(Vector3.UP, atan2(-flat.z, flat.x)), Vector3(mid.x, minf(a.y, b.y) + 7.0, mid.z))
-	body.add_child(cs)
 
 
 # ---------------------------------------------------------------- bridges
@@ -531,8 +546,11 @@ func _bridge_span(bx: float, w: float, z0: float, z1: float, hump: float) -> voi
 	for pz: float in piers:
 		var mb := MeshBuilder.new()
 		var top := hump * 0.6 - 1.3
-		mb.box(_m.quay, Vector3(w + 1.0, top - WATER_Y + 0.5, 3.4), Transform3D(Basis(), Vector3(bx, (top + WATER_Y - 0.5) * 0.5, pz)), 0.15)
+		var size := Vector3(w + 1.0, top - BED_Y + 0.3, 3.4)
+		var xf := Transform3D(Basis(), Vector3(bx, (top + BED_Y - 0.3) * 0.5, pz))
+		mb.box(_m.quay, size, xf, 0.15)
 		batch_builder(mb)
+		solid(size, xf) # cars wade under the bridges now: the piers are real
 
 
 # ---------------------------------------------------------------- roads
@@ -564,6 +582,7 @@ func _layout_roads() -> void:
 	_road("tuileries_w", [Vector2(122, -114), Vector2(122, -46)], 12.0)
 	_road("louvre_w", [Vector2(178, -128), Vector2(178, 12)], 14.0)
 	_road("clichy", [Vector2(150, -150), Vector2(150, -128)], 14.0)
+	_road("lepic", [Vector2(82, MONT.y + MONT_TOP + 6.0), Vector2(150, MONT.y + MONT_TOP + 6.0)], 12.0) # straight at Montmartre's climb
 	# South bank
 	_road("iena_s", [Vector2(-190, 90), Vector2(-190, 240)], 18.0)
 	_road("champ_x", [Vector2(-290, 180), Vector2(-60, 180)], 16.0)
@@ -707,18 +726,37 @@ func _plateau(poly: PackedVector2Array, h: float, top_mat: Material) -> void:
 	band(_m.stone, poly, 0.6, h + 0.02, true)
 
 
-## A straight ramp from foot (y0) to top (y1), width w; registered for the AI.
-func _ramp(foot: Vector2, top: Vector2, y0: float, y1: float, w: float, mat: Material) -> void:
+## Round 29 (owner: "too many sharp edges ... especially on the ways up the roof tops"): every ramp and
+## sloped viaduct is straight in the middle with a quadratic fillet of RAMP_FILLET metres at both ends,
+## so it leaves the ground and arrives on the level above with no kink (LA's ramp feet, round 9).
+const RAMP_FILLET := 6.0
+
+
+## Height `s` metres along a ramp of length `len` from y0 to y1 (flat at both ends).
+static func ramp_height(s: float, len: float, y0: float, y1: float) -> float:
+	var f := minf(RAMP_FILLET, len * 0.3)
+	var m := (y1 - y0) / (len - f)
+	s = clampf(s, 0.0, len)
+	if s < f:
+		return y0 + m * s * s / (2.0 * f)
+	if s > len - f:
+		var r := len - s
+		return y1 - m * r * r / (2.0 * f)
+	return y0 + m * (s - f * 0.5)
+
+
+## A straight ramp from foot (y0) to top (y1), width w; registered for the AI. `run_on` m of flat deck
+## at y1 carry on past the top (over a roof's mansard edge onto the deck).
+func _ramp(foot: Vector2, top: Vector2, y0: float, y1: float, w: float, mat: Material, run_on := 0.0) -> void:
 	var d := (top - foot).normalized()
 	var l := Vector2(-d.y, d.x) * w * 0.5
-	var steps := 8
+	var len := foot.distance_to(top)
+	var steps := maxi(12, int(len / 1.5))
 	for k in steps:
-		var u0 := float(k) / steps
-		var u1 := float(k + 1) / steps
-		var p0 := foot.lerp(top, u0)
-		var p1 := foot.lerp(top, u1)
-		var h0 := lerpf(y0, y1, smoothstep(0.0, 1.0, u0) * 0.3 + u0 * 0.7)
-		var h1 := lerpf(y0, y1, smoothstep(0.0, 1.0, u1) * 0.3 + u1 * 0.7)
+		var p0 := foot.lerp(top, float(k) / steps)
+		var p1 := foot.lerp(top, float(k + 1) / steps)
+		var h0 := ramp_height(len * k / steps, len, y0, y1)
+		var h1 := ramp_height(len * (k + 1) / steps, len, y0, y1)
 		face(mat, [Vector3(p0.x + l.x, h0, p0.y + l.y), Vector3(p1.x + l.x, h1, p1.y + l.y), Vector3(p1.x - l.x, h1, p1.y - l.y),
 			Vector3(p0.x - l.x, h0, p0.y - l.y)], Vector3.UP, false, COL_GROUND)
 		for s: float in [-1.0, 1.0]:
@@ -726,14 +764,19 @@ func _ramp(foot: Vector2, top: Vector2, y0: float, y1: float, w: float, mat: Mat
 			var e1 := p1 + l * s
 			face(_m.quay, [Vector3(e0.x, minf(y0, y1), e0.y), Vector3(e1.x, minf(y0, y1), e1.y), Vector3(e1.x, h1, e1.y), Vector3(e0.x, h0, e0.y)],
 				Vector3(l.x * s, 0, l.y * s), true, COL_WALL)
+	if run_on > 0.0:
+		var q := top + d * run_on
+		face(mat, [Vector3(top.x + l.x, y1, top.y + l.y), Vector3(q.x + l.x, y1, q.y + l.y), Vector3(q.x - l.x, y1, q.y - l.y),
+			Vector3(top.x - l.x, y1, top.y - l.y)], Vector3.UP, false, COL_GROUND)
 	ramps.append({"foot": Vector3(foot.x, y0, foot.y), "top": Vector3(top.x, y1, top.y), "w": w})
 
 
 func _terraces() -> void:
 	# Trocadero: three terraces up to +8 m below the Palais de Chaillot, ramps either side of the fountains.
-	_plateau(_rect(-272, -88, -208, -62), 8.0, _m.plaza)
-	_plateau(_rect(-272, -62, -208, -40), 5.0, _m.plaza)
-	_plateau(_rect(-272, -40, -208, -18), 2.5, _m.plaza)
+	# (round 29: they reach the west edge wall; a 3 m strip between them and the wall trapped cars)
+	_plateau(_rect(-HX, -88, -208, -62), 8.0, _m.plaza)
+	_plateau(_rect(-HX, -62, -208, -40), 5.0, _m.plaza)
+	_plateau(_rect(-HX, -40, -208, -18), 2.5, _m.plaza)
 	for rx: float in [-258.0, -222.0]:
 		_ramp(Vector2(rx, 4), Vector2(rx, -18), 0.0, 2.5, 10.0, _m.plaza)
 		_ramp(Vector2(rx, -18), Vector2(rx, -40), 2.5, 5.0, 10.0, _m.plaza)
@@ -742,19 +785,23 @@ func _terraces() -> void:
 
 func _montmartre() -> void:
 	var c := MONT
-	_plateau(_rect(c.x - MONT_LOW, c.y - MONT_LOW, c.x + MONT_LOW, c.y + MONT_LOW), 7.0, _m.lawn)
+	_plateau(_rect(c.x - MONT_LOW, -HZ, c.x + MONT_LOW, c.y + MONT_LOW), 7.0, _m.lawn) # to the north wall (round 29)
 	_plateau(_rect(c.x - MONT_TOP, c.y - MONT_TOP, c.x + MONT_TOP, c.y + MONT_TOP), 14.0, _m.plaza)
-	# Up from the Moulin Rouge side, then along the south face to the top.
-	_ramp(Vector2(c.x - MONT_LOW - 40.0, c.y + 20.0), Vector2(c.x - MONT_LOW, c.y + 20.0), 0.0, 7.0, 12.0, _m.cobble)
-	_ramp(Vector2(c.x + 34.0, c.y + MONT_TOP + 8.0), Vector2(c.x - 4.0, c.y + MONT_TOP + 8.0), 7.0, 14.0, 12.0, _m.cobble)
-	poly_face(_m.cobble, _rect(c.x - MONT_TOP, c.y + MONT_TOP + 2.0, c.x - 4.0, c.y + MONT_TOP + 14.0), 14.0, false, COL_GROUND)
+	# Round 29: the old ramps started 5 m in front of a building and 4 m from the terrace's edge (nobody
+	# could line up for them). Now one straight climb east from Rue Lepic: up to the first terrace, a few
+	# metres flat, then up along the top terrace's south wall; near the top you veer left onto it.
+	var z := c.y + MONT_TOP + 6.0
+	_ramp(Vector2(c.x - MONT_LOW - 40.0, z), Vector2(c.x - MONT_LOW, z), 0.0, 7.0, 12.0, _m.cobble)
+	_ramp(Vector2(c.x - MONT_LOW + 4.0, z), Vector2(c.x + MONT_TOP, z), 7.0, 14.0, 12.0, _m.cobble)
 
 
 # ---------------------------------------------------------------- city blocks
 
 ## Urban zones minus roads, plazas, parks and landmarks = the blocks (pan coupe corners).
 func _city_blocks() -> void:
-	var zones: Array[PackedVector2Array] = [_rect(-HX, -HZ, HX, HZ)]
+	# Round 29 (owner: tight spaces): the zones reach 10 m past the map so a block's corner is never
+	# chamfered against the edge wall (that left wedges a car slid into); blocks are clipped to the map last.
+	var zones: Array[PackedVector2Array] = [_rect(-HX - 10.0, -HZ - 10.0, HX + 10.0, HZ + 10.0)]
 	var cut: Array[PackedVector2Array] = []
 	cut.append(_corridor())
 	var ring := PackedVector2Array()
@@ -789,12 +836,71 @@ func _city_blocks() -> void:
 		if core.is_empty():
 			continue
 		for inner: PackedVector2Array in Geometry2D.offset_polygon(z, -2.5, Geometry2D.JOIN_MITER):
-			for b: PackedVector2Array in Geometry2D.offset_polygon(inner, 2.5, Geometry2D.JOIN_SQUARE):
-				if Geometry2D.is_polygon_clockwise(b) or _area(b) < 400.0:
+			for grown: PackedVector2Array in Geometry2D.offset_polygon(inner, 2.5, Geometry2D.JOIN_SQUARE):
+				if Geometry2D.is_polygon_clockwise(grown):
 					continue
-				var cen := _centroid(b)
-				var roof := cen.x > -212.0 and cen.x < -14.0 and cen.y > -140.0 and cen.y < 20.0
-				blocks.append({"poly": _simplify(b), "roof": roof, "h": ROOF_Y if roof else TALL_Y})
+				for b: PackedVector2Array in Geometry2D.intersect_polygons(grown, _rect(-HX, -HZ, HX, HZ)):
+					if Geometry2D.is_polygon_clockwise(b) or _area(b) < 400.0:
+						continue
+					_add_block(b)
+
+
+func _add_block(b: PackedVector2Array) -> void:
+	for i in b.size(): # a block within 4 m of the edge wall reaches it: no strip a car slides into
+		if absf(b[i].x) > HX - 4.0:
+			b[i].x = signf(b[i].x) * HX
+		if absf(b[i].y) > HZ - 4.0:
+			b[i].y = signf(b[i].y) * HZ
+	b = _square_to_wall(b)
+	var cen := _centroid(b)
+	var roof := cen.x > -212.0 and cen.x < -14.0 and cen.y > -140.0 and cen.y < 20.0
+	blocks.append({"poly": _simplify(b), "roof": roof, "h": ROOF_Y if roof else TALL_Y})
+
+
+## Inward normal of the edge wall a point stands on (ZERO if it is not on one).
+func _wall_normal(v: Vector2) -> Vector2:
+	if absf(v.x) >= HX - 0.01:
+		return Vector2(-signf(v.x), 0)
+	if absf(v.y) >= HZ - 0.01:
+		return Vector2(0, -signf(v.y))
+	return Vector2.ZERO
+
+
+## Round 29 (owner: tight spaces): a facade that leaves the edge wall at a sharp angle (a road running
+## out of the map at a slant) makes a wedge of street a car slides into and sticks in. The block is
+## squared off there: filled out along the wall until the facade stands 6 m off it, then straight back.
+func _square_to_wall(b: PackedVector2Array) -> PackedVector2Array:
+	var n := b.size()
+	var out := PackedVector2Array()
+	for i in n:
+		var v := b[i]
+		var on := _wall_normal(v)
+		var prev := b[(i - 1 + n) % n]
+		var next := b[(i + 1) % n]
+		var facade := Vector2.INF
+		var along := Vector2.INF
+		if on != Vector2.ZERO and _wall_normal(prev) == on and _wall_normal(next) != on:
+			facade = next
+			along = prev
+		elif on != Vector2.ZERO and _wall_normal(next) == on and _wall_normal(prev) != on:
+			facade = prev
+			along = next
+		if facade == Vector2.INF:
+			out.append(v)
+			continue
+		var f := (facade - v).normalized()
+		var rise := f.dot(on) # how steeply the facade leaves the wall (1 = square)
+		if rise > 0.94 or rise < 0.05 or f.dot(along - v) > 0.0:
+			out.append(v) # square enough, or the sharp side is inside the block
+			continue
+		var t := minf(6.0 / rise, v.distance_to(facade) * 0.9)
+		var p := v + f * t
+		var foot := p - on * (rise * t)
+		if facade == next:
+			out.append_array([v, foot, p])
+		else:
+			out.append_array([p, foot, v])
+	return out
 
 
 ## zone minus cutter. A cutter wholly inside the zone would leave a hole (which a block can't have):
@@ -864,19 +970,33 @@ static func _simplify(p: PackedVector2Array) -> PackedVector2Array:
 # ---------------------------------------------------------------- rooftops (TM2's legacy)
 
 ## The quarter's roofs are one circuit: up from the Trocadero, across the streets on steel bridges,
-## down a ramp into the Champs-Elysees gardens.
+## down a ramp into the Champs-Elysees gardens. Round 29 (owner: "complete the bridges on the rooftops"):
+## two crossings hung in the air short of both roofs and the Trocadero viaduct stopped 10 m before its
+## block; every end now lands 5 m inside a roof (past the mansard, on the deck). tests/paris_check.gd
+## checks that both ends of every crossing stand on a roof deck.
 const CROSSINGS := [
-	[Vector2(-185, -57), Vector2(-185, -29)], # over Rue Francois 1er
-	[Vector2(-139, -15), Vector2(-108, -15)], # over Avenue Marceau
-	[Vector2(-81, -26), Vector2(-62, -26)], # over Avenue George V
-	[Vector2(-55, -67), Vector2(-55, -45)], # over Rue Francois 1er, east
+	[Vector2(-185, -59), Vector2(-185, -24.5)], # over Rue Francois 1er
+	[Vector2(-142.5, -15), Vector2(-103.5, -15)], # over Avenue Marceau
+	[Vector2(-93.5, -26), Vector2(-51.5, -26)], # over Avenue George V
+	[Vector2(-55, -77.5), Vector2(-55, -43.5)], # over Rue Francois 1er, east
 ]
+const TROCA_LINK := [Vector2(-238, -72), Vector2(-190.5, -72)] # Trocadero top (+8) up to the roofs (+13)
+const CHAMPS_RAMP := [Vector2(52, -80), Vector2(-3.5, -80)] # the gardens (0) up to the roofs (+13)
 
 
 func _rooftops() -> void:
 	var steel := MatKit.steel(Color("4A504C"), 0.35)
-	_viaduct(Vector2(-234, -72), Vector2(-199, -72), 8.0, ROOF_Y, 10.0, steel)
-	_ramp(Vector2(40, -80), Vector2(-10, -80), 0.0, ROOF_Y, 12.0, _m.quay)
+	_viaduct(TROCA_LINK[0], TROCA_LINK[1], 8.0, ROOF_Y, 10.0, steel, 7.0)
+	for lx: float in [-201.0]: # steel legs where the link crosses the street
+		for s: float in [-1.0, 1.0]:
+			var leg := Vector3(lx, 0, -72.0 + s * 4.2)
+			var top := ramp_height(lx - TROCA_LINK[0].x, TROCA_LINK[0].distance_to(TROCA_LINK[1]), 8.0, ROOF_Y) - 0.5
+			var mb := MeshBuilder.new()
+			mb.box(steel, Vector3(0.7, top, 0.7), Transform3D(Basis(), leg + Vector3(0, top * 0.5, 0)), 0.04)
+			mb.box(steel, Vector3(1.2, 0.4, 1.2), Transform3D(Basis(), leg + Vector3(0, 0.2, 0)), 0.05)
+			batch_builder(mb, true)
+			solid(Vector3(0.8, top, 0.8), Transform3D(Basis(), leg + Vector3(0, top * 0.5, 0)))
+	_ramp(CHAMPS_RAMP[0], CHAMPS_RAMP[1], 0.0, ROOF_Y, 12.0, _m.quay, 8.0)
 	for c: Array in CROSSINGS:
 		_viaduct(c[0], c[1], ROOF_Y, ROOF_Y, 8.0, steel)
 		var a: Vector2 = c[0]
@@ -886,36 +1006,38 @@ func _rooftops() -> void:
 	poly_face(_m.lawn, _rect(-2, -64, 38, -56), 0.06)
 
 
-## A steel deck on lattice side girders from a to b (heights y0 -> y1), on two legs; drivable.
-func _viaduct(a: Vector2, b: Vector2, y0: float, y1: float, w: float, steel: Material) -> void:
+## A steel deck on lattice side girders from a to b (heights y0 -> y1 on the filleted ramp profile),
+## `run_on` m more of flat deck past b; drivable. Built in short straight pieces that follow the profile.
+func _viaduct(a: Vector2, b: Vector2, y0: float, y1: float, w: float, steel: Material, run_on := 0.0) -> void:
 	var d := (b - a).normalized()
 	var l := Vector2(-d.y, d.x) * w * 0.5
-	var mb := MeshBuilder.new()
-	var len := a.distance_to(b)
-	var yaw := atan2(-d.y, d.x)
-	var pitch := atan2(y1 - y0, len)
-	var mid := (a + b) * 0.5
-	var basis := Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, pitch)
-	var center := Vector3(mid.x, (y0 + y1) * 0.5, mid.y)
-	mb.box(steel, Vector3(len, 0.5, w), Transform3D(basis, center + Vector3(0, -0.25, 0)), 0.04)
-	for s: float in [-1.0, 1.0]:
-		var side := Vector3(l.x, 0, l.y) * s
-		mb.box(steel, Vector3(len, 0.18, 0.3), Transform3D(basis, center + side + Vector3(0, 1.3, 0)), 0.02)
-		mb.box(steel, Vector3(len, 0.6, 0.3), Transform3D(basis, center + side + Vector3(0, -0.1, 0)), 0.02)
-		var n := int(len / 1.6)
-		for k in n + 1:
-			var t := float(k) / n - 0.5
-			var p := center + Vector3(d.x, 0, d.y) * t * len + Vector3(0, (y1 - y0) * t, 0) + side
-			mb.box(steel, Vector3(0.14, 1.4, 0.14), Transform3D(basis * Basis(Vector3.BACK, 0.55 if k % 2 == 0 else -0.55), p + Vector3(0, 0.6, 0)), 0.0)
-	batch_builder(mb, true)
-	var pa := Vector3(a.x, y0, a.y)
-	var pb := Vector3(b.x, y1, b.y)
 	var lv := Vector3(l.x, 0, l.y)
-	face(steel, [pa + lv, pb + lv, pb - lv, pa - lv], Vector3.UP, false, COL_GROUND)
-	for s: float in [-1.0, 1.0]:
-		face(steel, [pa + lv * s, pb + lv * s, pb + lv * s + Vector3(0, 1.4, 0), pa + lv * s + Vector3(0, 1.4, 0)], lv * s, false, COL_WALL)
+	var len := a.distance_to(b)
+	var total := len + run_on
+	var steps := maxi(2, int(total / 2.0))
+	var yaw := atan2(-d.y, d.x)
+	var mb := MeshBuilder.new()
+	var at := func(t: float) -> Vector3:
+		var p := a + d * t
+		return Vector3(p.x, ramp_height(t, len, y0, y1) if t < len else y1, p.y)
+	for k in steps:
+		var pa: Vector3 = at.call(total * k / steps)
+		var pb: Vector3 = at.call(total * (k + 1) / steps)
+		var seg := pa.distance_to(pb)
+		var basis := Basis(Vector3.UP, yaw) * Basis(Vector3.BACK, atan2(pb.y - pa.y, Vector2(pb.x - pa.x, pb.z - pa.z).length()))
+		var mid := (pa + pb) * 0.5
+		mb.box(steel, Vector3(seg + 0.06, 0.5, w), Transform3D(basis, mid + Vector3(0, -0.25, 0)), 0.0)
+		for s: float in [-1.0, 1.0]:
+			mb.box(steel, Vector3(seg + 0.06, 0.18, 0.3), Transform3D(basis, mid + lv * s + Vector3(0, 1.3, 0)), 0.0)
+			mb.box(steel, Vector3(seg + 0.06, 0.6, 0.3), Transform3D(basis, mid + lv * s + Vector3(0, -0.1, 0)), 0.0)
+			mb.box(steel, Vector3(0.14, 1.4, 0.14), Transform3D(basis * Basis(Vector3.BACK, 0.55 if k % 2 == 0 else -0.55),
+				mid + lv * s + Vector3(0, 0.6, 0)), 0.0)
+		face(steel, [pa + lv, pb + lv, pb - lv, pa - lv], Vector3.UP, false, COL_GROUND)
+		for s: float in [-1.0, 1.0]:
+			face(steel, [pa + lv * s, pb + lv * s, pb + lv * s + Vector3(0, 1.4, 0), pa + lv * s + Vector3(0, 1.4, 0)], lv * s, false, COL_WALL)
+	batch_builder(mb, true)
 	if y0 > 1.0 or y1 > 1.0:
-		ramps.append({"foot": pa, "top": pb, "w": w})
+		ramps.append({"foot": Vector3(a.x, y0, a.y), "top": Vector3(b.x, y1, b.y), "w": w})
 
 
 # ---------------------------------------------------------------- trees
@@ -979,6 +1101,35 @@ func _trees() -> void:
 		var mmi := scatter(mesh, xs, true)
 		mmi.visibility_range_end = 170.0
 		mmi.visibility_range_end_margin = 10.0
+		for i in xs.size():
+			_tree_body(mesh, mmi, i, xs[i])
+
+
+## Round 29 (owner: "make the trees hittable"): every plane tree is a TOPPLE breakable like LA's palms
+## (a car swats it down, a blast throws it, fire or explosives set it alight; its crown hides you from
+## missiles). It is drawn by its row's MultiMesh while it stands; as it breaks its instance is hidden
+## and the falling trunk gets a mesh of its own, so standing trees cost no extra draw calls.
+func _tree_body(mesh: Mesh, mmi: MultiMeshInstance3D, index: int, xf: Transform3D) -> void:
+	var b := Breakable.new()
+	b.style = Breakable.Style.TOPPLE
+	b.kind = "palm" # wood: it cracks, and burns when a fire or explosive weapon fells it
+	b.size_hint = Vector3(1.2, 8.0, 1.2)
+	b.topple_height = 9.0
+	b.fall_mass = 420.0
+	b.stump_radius = 0.26
+	b.debris_color = Color(0.5, 0.47, 0.38)
+	var rot := xf.basis.orthonormalized()
+	b.transform = Transform3D(rot, xf.origin)
+	add_child(b)
+	b.add_box_shape(Vector3(0.7, 4.5, 0.7), Vector3(0, 2.25, 0))
+	b.add_cover(1.6, 9.0)
+	var scale_only := rot.inverse() * xf.basis
+	b.breaking.connect(func(_p: Breakable) -> void:
+		var mi := MeshInstance3D.new()
+		mi.mesh = mesh
+		mi.transform = Transform3D(scale_only, Vector3.ZERO)
+		b.visual.add_child(mi)
+		mmi.multimesh.set_instance_transform(index, Transform3D(Basis().scaled(Vector3.ZERO), xf.origin)))
 
 
 ## Cast-iron street lamps (dark green, a lantern on a fluted post) between the trees of the avenues
@@ -1142,7 +1293,7 @@ func _edge_walls() -> void:
 			# where the river crosses the edge the wall goes down to the water
 			var y0 := 0.0
 			if absf(p0.x) >= HX - 0.1 and absf(p0.y - river_z(p0.x)) < outer_half(p0.x) + 1.0:
-				y0 = WATER_Y - 0.5
+				y0 = BED_Y - 0.3
 			face(_m.quay, [q0 + Vector3(0, y0, 0), q1 + Vector3(0, y0, 0), q1 + Vector3(0, h, 0), q0 + Vector3(0, h, 0)], inward, true)
 			face(_m.stone, [q0 + Vector3(0, h, 0), q1 + Vector3(0, h, 0), q1 + Vector3(0, h, 0) + inward * 0.5,
 				q0 + Vector3(0, h, 0) + inward * 0.5], Vector3.UP, true)
@@ -1156,7 +1307,7 @@ func _edge_walls() -> void:
 		var zc := river_z(ex)
 		var o := outer_half(ex)
 		var inward := Vector3(-signf(ex), 0, 0)
-		face(_m.quay, [Vector3(ex, WATER_Y - 0.5, zc - o), Vector3(ex, WATER_Y - 0.5, zc + o), Vector3(ex, 0, zc + o), Vector3(ex, 0, zc - o)],
+		face(_m.quay, [Vector3(ex, BED_Y - 0.3, zc - o), Vector3(ex, BED_Y - 0.3, zc + o), Vector3(ex, 0, zc + o), Vector3(ex, 0, zc - o)],
 			inward, true, COL_WALL)
 
 
@@ -1178,8 +1329,10 @@ func _points() -> void:
 		Vector3(228, 0.6, 196), Vector3(-240, 8.6, -75), Vector3(MONT.x, 14.6, MONT.y), Vector3(196, 0.6, -100)])
 	for i in weapon_points.size():
 		weapon_kinds.append("")
-	health_points.assign([Vector3(-240, 8.6, -80), Vector3(MONT.x + 8, 14.6, MONT.y), Vector3(-30, 0.6, 150), Vector3(230, 0.6, 130)])
-	mega_points.assign([Vector3(0, QUAY_Y + 0.6, river_z(0) - 20.0)])
+	# Round 29 (owner): three health on the street, the rest up top, the mega on the rooftop circuit.
+	health_points.assign([Vector3(TOWER.x, 0.6, TOWER.y), Vector3(230, 0.6, 130), Vector3(160, 0.6, -150),
+		Vector3(-240, 8.6, -80), Vector3(MONT.x + 8, 14.6, MONT.y)])
+	mega_points.assign([Vector3(-172, ROOF_Y + 0.6, -78)])
 	turbo_points.assign([Vector3(-150, 0.6, -210), Vector3(-10, 0.6, -95), Vector3(100, 0.6, -128), Vector3(-160, 0.6, 140),
 		Vector3(30, 0.6, 196), Vector3(205, 0.6, 120), Vector3(-200, QUAY_Y + 0.6, river_z(-200) + 20.0),
 		Vector3(80, QUAY_Y + 0.6, river_z(80) - 20.0)])

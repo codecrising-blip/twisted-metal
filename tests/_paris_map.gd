@@ -6,7 +6,11 @@ func _initialize() -> void:
 	var a := ParisArena.new()
 	root.add_child(a)
 	a.build()
-	var out := {"roads": [], "blocks": [], "ramps": []}
+	var out := {"roads": [], "blocks": [], "ramps": [], "health": [], "mega": [], "weapons": [], "turbo": []}
+	for k: String in ["health", "mega", "weapons", "turbo"]:
+		var src: Array = {"health": a.health_points, "mega": a.mega_points, "weapons": a.weapon_points, "turbo": a.turbo_points}[k]
+		for p: Vector3 in src:
+			out[k].append([p.x, p.y, p.z])
 	for r: Dictionary in a.roads:
 		out.roads.append({"pts": Array(r.pts).map(func(v): return [v.x, v.y]), "w": r.w})
 	for b: Dictionary in a.blocks:

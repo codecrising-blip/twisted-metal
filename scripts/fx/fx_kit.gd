@@ -595,3 +595,30 @@ static func dust_ring(parent: Node, pos: Vector3, size := 1.0) -> void:
 	var tw := p.create_tween()
 	tw.tween_interval(1.4)
 	tw.tween_callback(p.queue_free)
+
+
+## Round 29 (Paris, the shallow Seine): water thrown up round a wading car's wheels.
+static func splash(parent: Node, pos: Vector3, size := 1.0) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	var p := CPUParticles3D.new()
+	p.mesh = particle_mesh(true)
+	p.amount = 10
+	p.one_shot = true
+	p.explosiveness = 1.0
+	p.lifetime = 0.75
+	p.lifetime_randomness = 0.4
+	p.direction = Vector3.UP
+	p.spread = 38.0
+	p.gravity = Vector3(0, -15.0, 0)
+	p.initial_velocity_min = 2.5 * size
+	p.initial_velocity_max = 6.0 * size
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 0.6 * size
+	p.color_ramp = _ramp([Color(0.62, 0.68, 0.7, 0.75), Color(0.5, 0.56, 0.58, 0.45), Color(0.4, 0.45, 0.46, 0.0)])
+	parent.add_child(p)
+	p.global_position = pos
+	p.emitting = true
+	var tw := p.create_tween()
+	tw.tween_interval(1.0)
+	tw.tween_callback(p.queue_free)
