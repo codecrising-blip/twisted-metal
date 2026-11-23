@@ -49,6 +49,12 @@ static func start(v: Vehicle, d: Dictionary) -> Sinner:
 	s.look_at(s.global_position + fwd, Vector3.UP)
 	GameFeel.play("pedestrian_scream", s.global_position, v.get_parent(), float(d.get("sound_db", 0.0)) - 2.0, randf_range(1.05, 1.2))
 	GameFeel.play("launch_napalm", s.global_position, v.get_parent(), -10.0, 1.2, true)
+	var plate := v.model.find_child("bed_plate", true, false) as Node3D
+	if plate: # round 29 (owner's sheet): the well's floor slams up and flings him out
+		var tw := plate.create_tween()
+		tw.tween_property(plate, "position:y", 0.42, 0.08).set_ease(Tween.EASE_OUT)
+		tw.tween_property(plate, "position:y", 0.0, 0.35).set_delay(0.12).set_ease(Tween.EASE_IN_OUT)
+		GameFeel.play("crash", plate.global_position, v, -10.0, 1.6)
 	return s
 
 

@@ -96,6 +96,23 @@ static func cutout(name: String) -> StandardMaterial3D:
 	return _cutouts[name]
 
 
+## Round 29: stained glass lit from inside (Brimstone): its own picture, glowing through.
+static func stained(name: String) -> StandardMaterial3D:
+	if not _cutouts.has(name):
+		var m := StandardMaterial3D.new()
+		m.resource_name = "stained:" + name
+		var tex: Texture2D = load(DIR + name + ".png")
+		m.albedo_texture = tex
+		m.emission_enabled = true
+		m.emission_texture = tex
+		m.emission_energy_multiplier = 0.85
+		m.roughness = 0.15
+		m.metallic = 0.2
+		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		_cutouts[name] = m
+	return _cutouts[name]
+
+
 ## Lights: unshaded, colour from the vertices (written in Blender).
 static func glow() -> StandardMaterial3D:
 	if _glow == null:
@@ -139,6 +156,8 @@ static func mesh(file: String, node: String, atlas_name := "") -> ArrayMesh:
 			out.surface_set_material(i, glow())
 		elif slot_name.begins_with("rail"):
 			out.surface_set_material(i, cutout(file + "_rail"))
+		elif slot_name.begins_with("stained"):
+			out.surface_set_material(i, stained(file + "_stained"))
 		else:
 			out.surface_set_material(i, atlas(atlas_name if atlas_name != "" else file))
 	_meshes[key] = out
