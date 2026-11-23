@@ -7,6 +7,7 @@ each a low-poly body skinned to a small skeleton, with the clips the game blends
     crawl     loop: on hands and knees, dragging forward
     prone     loop: face down, dead (a faint last twitch)
     limp      loop: a loose straight body for the thrown / run-over corpse (physics turns it)
+    sprint    loop: a hard, clean sprint, leaning in, arms pumping (round 29: Brimstone's sinner, not burning)
 
 The game (BurningDriver) crossfades: run -> kneel -> crawl -> prone, or straight to prone when shot.
 The charred look and the embers are a Godot shader on the "body" material, not baked here.
@@ -301,9 +302,30 @@ def run_poses():
     return [k1, k2, k3, k4, k5, k6, k7, k8]
 
 
+def sprint_poses():
+    """Round 29 (owner: the sinner's run was chaos, "arms 12 times a second"): a plain, driven sprint. Leaning
+    in, knees high, the arms bent and pumping against the legs; one stride each way."""
+    lean = {"spine": (-14, 0, 0), "chest": (-6, 0, 0), "neck": (4, 0, 0), "head": (10, 0, 0)}
+    k1 = dict(lean, **{ # right foot reaching down, left arm forward
+        "loc": (0, -0.04, 0), "hips": (0, 6, 0), "chest": (-6, -6, 0),
+        "thigh.R": (34, 0, 0), "shin.R": (-10, 0, 0), "foot.R": (4, 0, 0),
+        "thigh.L": (-26, 0, 0), "shin.L": (-72, 0, 0), "foot.L": (-22, 0, 0),
+        "upper_arm.L": (48, 0, -8), "forearm.L": (95, 0, 0),
+        "upper_arm.R": (-38, 0, 8), "forearm.R": (80, 0, 0)})
+    k2 = dict(lean, **{ # passing: the left knee drives up, the arms come through
+        "loc": (0, 0.03, 0), "hips": (0, 0, 0),
+        "thigh.R": (2, 0, 0), "shin.R": (-16, 0, 0),
+        "thigh.L": (42, 0, 0), "shin.L": (-104, 0, 0), "foot.L": (-14, 0, 0),
+        "upper_arm.L": (12, 0, -8), "forearm.L": (92, 0, 0),
+        "upper_arm.R": (6, 0, 8), "forearm.R": (92, 0, 0)})
+    return [k1, k2, mirror(k1), mirror(k2)]
+
+
 def build_clips(rig):
     ks = run_poses()
     clip(rig, "run_burn", [(1 + i * 5, k) for i, k in enumerate(ks)] + [(41, ks[0])])
+    sp = sprint_poses()
+    clip(rig, "sprint", [(1 + i * 6, k) for i, k in enumerate(sp)] + [(25, sp[0])])
     # On the knees, rocking in agony, clawing at the head.
     kneel = {
         "loc": (0, -0.47, 0.04), "spine": (-30, 0, 0), "chest": (-18, 0, 0), "neck": (-8, 0, 0), "head": (24, 0, 6),

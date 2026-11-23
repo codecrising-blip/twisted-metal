@@ -2,6 +2,13 @@ extends SceneTree
 ## Scratch (round 23): films a special from the player's chase camera as a frame sheet.
 ## args: car_id weapon_id out.png [frames comma list] [extra: "secondary" = fire the R L U move instead]
 ## Run with --fixed-fps 60 so every frame is one physics step.
+## Holds whatever inputs the film sets (round 29: the Megafire is held, not fired).
+class Hold:
+	extends RefCounted
+	func drive(_v: Vehicle, _d: float) -> void:
+		pass
+
+
 func _initialize() -> void:
 	_run.call_deferred()
 
@@ -42,8 +49,18 @@ func _run() -> void:
 	if secondary:
 		me.ammo[me.special_id] = 5
 		me.energy_move("secondary")
+	elif weapon == "megafire":
+		me.controller = Hold.new()
+		me.selected = me.weapon_order.find("megafire")
+		me.in_fire_weapon = true
 	else:
 		Specials.fire(me, weapon)
+	if OS.get_environment("SIDE_CAM") != "": # round 29: a fixed camera off the car's side
+		var cam := Camera3D.new()
+		me.get_parent().add_child(cam)
+		cam.global_position = me.global_position + Vector3(14, 6, -6)
+		cam.look_at(me.global_position + Vector3(0, 0.5, -8))
+		cam.make_current()
 	var shots: Array[Image] = []
 	var k := 0
 	for f: int in frames:

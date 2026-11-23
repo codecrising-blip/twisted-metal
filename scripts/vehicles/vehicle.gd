@@ -230,11 +230,12 @@ var _invis_shown := -1.0 # last transparency written to the meshes
 var _charge_beeps := 0
 var _charge_hold := 0.0 # seconds the fire button has been held on this charge
 # Round 28: Thumper's fuel tank (Megafire), Brimstone's sermon, Darkside's slam, the ash cloud.
-var fuel := 0.0 # Megafire: seconds of flame left in the tank (a gauge instead of charges)
-var fuel_tank := 0.0
+var fuel := 0.0 # Megafire (round 29): tabs left in the bar (a gauge instead of charges; whole tabs light it)
+var fuel_tank := 0.0 # tabs in a full bar
 var flaming := false
 var _flame: FlameJet
-var _drive_by: DriveBy
+var _flame_min := 0.0 # round 29: a lit Megafire burns at least one tab, held or not
+var _flame_denied := false # the "needs a full tab" notice once per press
 var sermon_time := 0.0 # Hellfire Sermon: whoever hurts this car takes a share back and burns
 var _sermon_def: Dictionary = {}
 var _sermon_fx: Node3D
@@ -249,6 +250,7 @@ var _slam_brushed := {}
 var _slam_fx: Node3D
 var pinned_by: Vehicle # a slamming Darkside has this car on its nose (it is carried, not driven)
 var ash_time := 0.0 # inside an ash cloud: no energy moves
+var ash_cover := 0.0 # round 29: Darkside pouring his ash: nobody can see or lock him
 var _bed_sinner: Node3D
 var _locked := {} # weapon id -> seconds left of a meltdown lock
 var _charge_hum: AudioStreamPlayer3D
@@ -295,10 +297,10 @@ func setup(id: String, player: bool) -> void:
 	special_charges = Roster.special_max(id)
 	ammo[special_id] = mini(Roster.SPECIAL_START, special_charges)
 	var sdef := WeaponData.get_def(special_id)
-	if sdef.get("handler", "") == "flame": # round 28: Thumper's Megafire runs on a fuel tank
-		fuel_tank = float(sdef.get("tank", 10.0))
-		fuel = float(sdef.get("start_fuel", fuel_tank))
-		ammo[special_id] = ceili(fuel)
+	if sdef.get("handler", "") == "flame": # round 29: Thumper's Megafire runs on a bar of tabs, full at the start
+		fuel_tank = float(sdef.get("tabs", 8))
+		fuel = fuel_tank
+		ammo[special_id] = int(fuel_tank) # the slot never leaves the list: the HUD shows the bar, not a count
 	weapon_order = [special_id]
 
 	collision_layer = 2
@@ -538,6 +540,8 @@ func _tick(delta: float) -> void:
 		sermon_time -= delta
 		if sermon_time <= 0.0:
 			_end_sermon()
+	if ash_cover > 0.0:
+		ash_cover -= delta
 	if ash_time > 0.0:
 		ash_time -= delta
 	_slam_tick(delta)
@@ -700,7 +704,7 @@ func _tyres(state: PhysicsDirectBodyState3D, v: Vector3, dt: float) -> Vector3:
 		top *= TURBO_MULT
 	var sliding := clampf(absf(v_l) / 10.0, 0.0, 1.0) # tyres busy holding a slide brake less
 	var launch := 1.0 + (TURBO_LAUNCH - 1.0) * clampf(1.0 - _turbo_run / TURBO_LAUNCH_TIME, 0.0, 1.0)
-	var accel: float = stats.accel * (TURBO_ACCEL * launch if boosting else 1.0) * (2.5 if dashing else 1.0) * (5.0 if slamming else 1.0)
+	var accel: float = stats.accel * (TURBO_ACCEL * launch if boosting else 1.0) * (2.5 if dashing else 1.0) * (float(_slam.get("accel_mult", 8.0)) if slamming else 1.0)
 	if _turbo_kick: # the first step of a boost: the shove
 		var rev_top := minf(float(stats.reverse) * 2.0, float(stats.max_speed) * TURBO_MULT)
 		v_f = clampf(v_f + TURBO_KICK * signf(throttle), -rev_top, top)
@@ -1505,6 +1509,8 @@ func _energy_tick(delta: float) -> void:
 
 ## Invisible and not revealed: no locks, no homing, the AI loses you past 12 m.
 func is_hidden() -> bool:
+	if ash_cover > 0.0: # round 29: inside his own smoke screen
+		return true
 	return invisible_time > 0.0 and invisible_time <= INVIS_TIME and revealed_time <= 0.0
 
 
@@ -2207,19 +2213,36 @@ func find_target() -> Vehicle:
 
 # ---------------------------------------------------------------- round 28: Thumper, Brimstone, Darkside
 
-## Megafire: while fire is held with the special selected, the jet burns and the tank drains.
+## Megafire (round 29, owner): fire held with the special selected lights it, but only on a FULL tab; once lit it
+## burns at least one tab (tab_time s) even if let go at once, then on while held, draining the bar; letting go
+## keeps what is left. Frozen, flipped or shielded: out.
 func _flame_step(delta: float) -> void:
 	var on_special := selected_weapon() == special_id
 	var want := on_special and (in_fire_weapon or want_fire_weapon)
 	if on_special:
 		want_fire_weapon = false # the flame is held, never "fired"
-	var on := want and fuel > 0.0 and shield_time <= 0.0
-	if on != flaming:
-		_set_flaming(on)
+	var d := WeaponData.get_def(special_id)
+	var tab_time := float(d.get("tab_time", 0.7))
 	if flaming:
-		fuel = maxf(0.0, fuel - delta)
-		if fuel <= 0.0:
+		_flame_min -= delta
+		fuel = maxf(0.0, fuel - delta / tab_time)
+		if fuel <= 0.0 or shield_time > 0.0 or not ((want or _flame_min > 0.0) and on_special):
 			_set_flaming(false)
+		return
+	if not want:
+		_flame_denied = false
+		return
+	if shield_time > 0.0:
+		return
+	if fuel >= 1.0 - 0.001:
+		_flame_min = tab_time
+		_flame_denied = false
+		_set_flaming(true)
+	elif not _flame_denied:
+		_flame_denied = true
+		if is_player:
+			notice.emit(self, "MEGAFIRE NEEDS A FULL TAB")
+			GameFeel.ui("not_available", get_tree())
 
 
 func _set_flaming(on: bool) -> void:
@@ -2230,19 +2253,28 @@ func _set_flaming(on: bool) -> void:
 		_flame.set_on(on)
 
 
-## The tank refills while the flame is off (empty to full in "refill_full" s); the weapon slot shows
-## whole seconds left and leaves the list only when the tank is dry.
+## The bar refills one tab every tab_refill s while the fire is off. The slot stays in the list (its count is
+## the whole tabs, at least 1); "MEGAFIRE READY" when the first full tab is back.
 func _fuel_tick(delta: float) -> void:
+	var d := WeaponData.get_def(special_id)
+	var was := fuel
 	if not flaming:
-		fuel = minf(fuel_tank, fuel + fuel_tank / float(WeaponData.get_def(special_id).get("refill_full", 36.0)) * delta)
-	var shown := ceili(fuel - 0.05) if fuel > 0.05 else 0
-	var was := int(ammo.get(special_id, 0))
-	if shown != was:
+		fuel = minf(fuel_tank, fuel + delta / float(d.get("tab_refill", 4.0)))
+	if was < 1.0 and fuel >= 1.0 and is_player:
+		notice.emit(self, "%s READY" % String(d.get("label", special_id)).to_upper())
+	var shown := maxi(1, floori(fuel + 0.001))
+	if int(ammo.get(special_id, 0)) != shown:
 		ammo[special_id] = shown
-		if was == 0 and shown > 0 and is_player:
-			notice.emit(self, "%s READY" % String(WeaponData.get_def(special_id).get("label", special_id)).to_upper())
-		if (was == 0) != (shown == 0):
+		if not weapon_order.has(special_id):
 			_refresh_slots()
+
+
+## Round 29: spend Megafire tabs on something else (the Earthquake Slam). False when the bar is short.
+func spend_tabs(n: float) -> bool:
+	if fuel + 0.001 < n:
+		return false
+	fuel = maxf(0.0, fuel - n)
+	return true
 
 
 ## Hellfire Sermon (Brimstone's secondary): the bell, the burning crown, and the reflection in take_damage.
@@ -2282,8 +2314,16 @@ func _slam_tick(delta: float) -> void:
 		_slam_horn -= delta
 		if _slam_horn <= 0.0:
 			slam_time = float(_slam.get("time", 3.0))
-			speed = maxf(speed, float(stats.max_speed) * 0.9) # it tears off
+			speed = maxf(speed, float(stats.max_speed) * 1.2) # it tears off (round 29: harder, like TMB's)
+			linear_velocity += flat_forward() * float(_slam.get("kick", 14.0))
 			GameFeel.play("ram_impact", global_position + Vector3.UP, self, -6.0, 0.6)
+			GameFeel.play("turbo", global_position + Vector3.UP, self, 0.0, 0.7)
+			if is_player: # round 29 (owner, TMB clips): the view pulls wide, blurs inward and shakes as it goes
+				ZoomBurst.play(get_tree(), 0.85)
+				if GameFeel.camera:
+					GameFeel.camera.add_shake(0.9)
+					if GameFeel.camera.has_method("kick_fov"):
+						GameFeel.camera.kick_fov(24.0)
 		return
 	if slam_time <= 0.0:
 		return
@@ -2429,21 +2469,16 @@ func _secondary() -> void:
 	var cost := int(WeaponData.SECONDARY_COST.get(id, 1))
 	if shield_time > 0.0:
 		return # shield up: no attacks but the guns
-	if id == "drive_by": # round 28: Thumper's Drive-By is paid in fuel, not charges
-		var dd := WeaponData.get_def(id)
-		var fc := float(dd.get("fuel_cost", 3.0))
-		if is_instance_valid(_drive_by):
-			return
-		if fuel < fc:
+	if id == "earthquake_slam": # round 29: Thumper's slam is paid in Megafire tabs, not charges
+		var qd := WeaponData.get_def(id)
+		var need := float(qd.get("tabs", 2.0))
+		if not spend_tabs(need):
 			if is_player:
-				notice.emit(self, "DRIVE-BY NEEDS %d S OF FUEL" % int(fc))
+				notice.emit(self, "EARTHQUAKE SLAM NEEDS %d TABS" % int(need))
 				GameFeel.ui("not_available", get_tree())
 			return
-		fuel -= fc
 		_break_invisibility()
-		_drive_by = DriveBy.start(self, dd)
-		if is_player:
-			notice.emit(self, "DRIVE-BY")
+		EarthquakeSlam.start(self, qd)
 		return
 	if id == "sweet_bot" and is_instance_valid(bot): # round 19: the robot is out: R L U orders the barrage
 		if not bot.fire_again() and is_player:

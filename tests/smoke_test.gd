@@ -1573,12 +1573,10 @@ func _run() -> void:
 		fe._car_i = i
 		fe._show_car()
 		var id: String = FrontEnd.CARS[i]
-		if id == "brimstone": # round 28: his picture comes later from the owner
-			looks_ok = looks_ok and fe._no_pic.visible
-			continue
-		looks_ok = looks_ok and FrontEnd._portrait_tex(id, "idle") != null and FrontEnd._portrait_tex(id, "select") != null
+		looks_ok = looks_ok and FrontEnd._portrait_tex(id, "idle") != null and FrontEnd._portrait_tex(id, "select") != null \
+			and not fe._no_pic.visible # round 29: Brimstone has the owner's PREACHER picture now
 	await _frames(2)
-	_check(looks_ok and fe._stand.get_child_count() >= 1, "every driver has a picture before and after the pick (Brimstone: PICTURE COMING), and the car turns on the stand")
+	_check(looks_ok and fe._stand.get_child_count() >= 1, "every driver has a picture before and after the pick, and the car turns on the stand")
 	# round 28: Thumper, Darkside and Brimstone are built: in the line-up, on the stand, and they can be picked
 	_check(FrontEnd.SOON.is_empty() and FrontEnd.CARS.has("thumper") and FrontEnd.CARS.has("darkside") and FrontEnd.CARS.has("brimstone"),
 		"Thumper, Darkside and Brimstone are in the driver select (nothing COMING SOON)")

@@ -245,11 +245,14 @@ func _energy_moves(v: Vehicle, delta: float) -> void:
 	if second == "rim_shot" and charges >= 2 and to.length() < 40.0 and ahead < deg_to_rad(15.0) and randf() < 0.25 * aggression:
 		v.want_move = "secondary"
 		return
-	# Round 28: Thumper's crew at a car off his side; Brimstone's sermon when someone is hurting him;
-	# Darkside's ash on a car close behind or beside him that still has energy to lose.
-	if second == "drive_by" and v.fuel >= 5.0 and _side_target(v, 25.0) and randf() < 0.5 * aggression:
-		v.want_move = "secondary"
-		return
+	# Round 29: Thumper's Earthquake Slam on a car right beside him (or two near him), keeping fire for the
+	# Megafire; round 28: Brimstone's sermon when someone is hurting him; Darkside's ash on a car close behind or
+	# beside him that still has energy to lose.
+	if second == "earthquake_slam" and v.fuel >= 3.0 and not v.flaming:
+		var near := _cars_within(v, 9.0)
+		if (near >= 1 and to.length() < 9.0 and randf() < 0.45 * aggression) or (near >= 2 and randf() < 0.7):
+			v.want_move = "secondary"
+			return
 	var hurt := _last_health - v.health
 	_last_health = v.health
 	if second == "hellfire_sermon" and charges >= 2 and v.sermon_time <= 0.0 and hurt > 6.0 \
@@ -823,6 +826,9 @@ func _shoot(v: Vehicle, delta: float) -> void:
 	var angle := v.flat_forward().angle_to(Vector3(to.x, 0, to.z).normalized())
 	if dist < 70.0 and angle < 0.35 and _clear_shot(v, t):
 		v.in_fire_guns = true
+	if v.flaming: # round 29: keep the Megafire on while the target is inside it, let go (saving the tab) when not
+		v.in_fire_weapon = dist < float(WeaponData.get_def("megafire").get("range", 16.0)) + 2.0 and angle < 0.4
+		return
 	if mode == "retreat" and dist > 30.0:
 		return # busy getting away
 	if _special_timer <= 0.0 and v.ammo.get(v.special_id, 0) > 0 and _special_makes_sense(v, dist, angle):
@@ -832,8 +838,8 @@ func _shoot(v: Vehicle, delta: float) -> void:
 		if v.special_id == "napalm_cone" and angle < 0.12 and dist > 18.0 and dist < 50.0 and randf() < 0.35:
 			_hold = Vehicle.charge_full("napalm_cone") + 0.1 # charged shot: straight, double damage
 			v.in_fire_weapon = true
-		elif v.special_id == "megafire": # round 28: Thumper burns in short bursts
-			_hold = randf_range(0.6, 1.6)
+		elif v.special_id == "megafire": # round 29: lit on a full tab, then held while the target is in the fire
+			_hold = 0.3
 			v.in_fire_weapon = true
 		elif v.special_id == "charged_missiles": # round 21: Roadkill loads some missiles before letting go
 			var full := Vehicle.charge_full("charged_missiles")
@@ -916,8 +922,8 @@ func _special_makes_sense(v: Vehicle, dist: float, angle: float) -> bool:
 			return dist < 65.0 and angle < 0.6
 		"crowd_controller": # design: when a car is right on him or something holds him
 			return dist < 11.0 or v.clamped_time > 0.0 or _held_by_taser(v)
-		"megafire": # round 28: only inside the flame's reach
-			return dist < 15.0 and angle < 0.3 and _clear_shot(v, v.target)
+		"megafire": # round 29: only inside the fire's reach, and with two tabs at least (one is the ignition)
+			return v.fuel >= 2.0 and dist < 15.0 and angle < 0.3 and _clear_shot(v, v.target)
 		"sinner_bomber": # the sinner runs the rest of the way: anything in reach and roughly ahead
 			return dist > 12.0 and dist < 70.0 and angle < 0.9
 		"darkside_slam": # a long, straight charge at a car dead ahead
@@ -925,20 +931,14 @@ func _special_makes_sense(v: Vehicle, dist: float, angle: float) -> bool:
 	return dist < 60.0 and angle < 0.3
 
 
-## A live car off one of the car's sides (60-120 degrees) within reach: Thumper's Drive-By has a target.
-func _side_target(v: Vehicle, reach: float) -> bool:
+## Round 29: how many live cars are within reach of this car (Thumper's Earthquake Slam).
+func _cars_within(v: Vehicle, reach: float) -> int:
+	var n := 0
 	for node in v.get_tree().get_nodes_in_group("vehicles"):
 		var o := node as Vehicle
-		if o == v or o.is_dead or o.is_hidden():
-			continue
-		var to := o.global_position - v.global_position
-		to.y = 0.0
-		if to.length() > reach or to.length() < 2.0:
-			continue
-		var off := rad_to_deg(v.flat_forward().angle_to(to.normalized()))
-		if off > 60.0 and off < 120.0:
-			return true
-	return false
+		if o != v and not o.is_dead and not o.is_hidden() and o.global_position.distance_to(v.global_position) < reach:
+			n += 1
+	return n
 
 
 func _held_by_taser(v: Vehicle) -> bool:

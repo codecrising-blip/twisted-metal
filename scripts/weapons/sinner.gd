@@ -12,6 +12,8 @@ enum State { FLY, RUN, CLING, DROP }
 
 const LAYER := 64
 const GRAVITY := 30.0
+const TURN := 3.2 # rad/s: how fast he swings round toward his car (round 29: smooth arcs)
+const ACCEL := 45.0 # m/s²: building up to his sprint
 
 var owner_car: Vehicle
 var lock: Vehicle
@@ -66,8 +68,8 @@ func _ready() -> void:
 	_model = _body()
 	add_child(_model)
 	_anim = _model.get_meta("anim")
-	_anim.play("run_burn")
-	_anim.speed_scale = 2.4
+	_anim.play(_run_clip())
+	_anim.speed_scale = 1.5 # round 29 (owner): a calm, driven sprint, not arms flailing twelve times a second
 	_fuse_snd = GameFeel.loop("taser_loop", self, -10.0, 8.0)
 	if _fuse_snd:
 		_fuse_snd.pitch_scale = 2.6 # a hissing, spitting fuse
@@ -162,12 +164,19 @@ func _run(delta: float) -> void:
 		to.y = 0.0
 		if to.length() > 0.5:
 			dir = to.normalized()
-	var want := dir * speed
-	var flat := Vector3(velocity.x, 0.0, velocity.z).move_toward(want, 70.0 * delta) # turns on a coin: cuts corners
+	# Round 29 (owner: "too chaotic"): he swings round in a smooth arc (TURN rad/s) and builds up speed,
+	# instead of snapping to the target every frame; the body turns with his path, eased.
+	var flat := Vector3(velocity.x, 0.0, velocity.z)
+	var cur := flat.normalized() if flat.length() > 0.5 else dir
+	var ang := cur.signed_angle_to(dir, Vector3.UP)
+	cur = cur.rotated(Vector3.UP, clampf(ang, -TURN * delta, TURN * delta))
+	var spd := move_toward(flat.length(), speed, ACCEL * delta)
+	flat = cur * spd
 	velocity = Vector3(flat.x, velocity.y - GRAVITY * delta, flat.z)
 	move_and_slide()
 	if flat.length() > 1.0:
-		look_at(global_position + flat, Vector3.UP)
+		var face := Basis.looking_at(flat, Vector3.UP)
+		global_basis = global_basis.slerp(face, minf(1.0, delta * 8.0)).orthonormalized()
 	for node in get_tree().get_nodes_in_group("vehicles"):
 		var o := node as Vehicle
 		if o == owner_car or o.is_dead:
@@ -177,6 +186,11 @@ func _run(delta: float) -> void:
 		if absf(local.x) < size.x * 0.5 + 0.6 and absf(local.z) < size.z * 0.5 + 0.6 and local.y > -0.5 and local.y < size.y + 1.0:
 			_grab(o)
 			return
+
+
+## The plain sprint (round 29) when the dummy has it, else the old burning run.
+func _run_clip() -> String:
+	return "sprint" if _anim.has_animation("sprint") else "run_burn"
 
 
 func _nearest() -> Vehicle:
@@ -256,7 +270,8 @@ func _shake_off() -> void:
 			o.notice.emit(o, "SHOOK HIM OFF")
 	victim = null
 	collision_mask = 1
-	_anim.play("run_burn", 0.1)
+	_anim.play(_run_clip(), 0.2)
+	_anim.speed_scale = 1.5
 
 
 ## Shot or burnt while he runs.

@@ -17,6 +17,7 @@ const MODES := ["near", "far", "car"]
 static var mode := "near" # kept across restarts
 
 var _shake := 0.0
+var fov_kick := 0.0 # round 29: degrees added to the view for a moment (the Darkside Slam pulls the view wide)
 var _orbit := 0.0
 var _looking_back := false
 var rear_view := false # R3 (round 7): toggled, looks back until pressed again
@@ -30,6 +31,10 @@ func follow(v: Vehicle) -> void:
 	height = c[0]
 	distance = c[1]
 	snap()
+
+
+func kick_fov(degrees: float) -> void:
+	fov_kick = maxf(fov_kick, degrees)
 
 
 func add_shake(amount: float) -> void:
@@ -83,7 +88,8 @@ func _physics_process(delta: float) -> void:
 
 	var look := target.global_position + fwd * 4.0 + Vector3.UP * height * 0.45
 	look_at(look)
-	fov = lerpf(fov, 70.0 + clampf(_cam_speed() - 20.0, 0.0, 25.0) * 0.6, 4.0 * delta)
+	fov_kick = move_toward(fov_kick, 0.0, delta * 30.0)
+	fov = lerpf(fov, 70.0 + clampf(_cam_speed() - 20.0, 0.0, 25.0) * 0.6 + fov_kick, 9.0 * delta if fov_kick > 0.0 else 4.0 * delta)
 	_apply_shake(delta)
 
 

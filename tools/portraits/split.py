@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 
 REF, WORK = sys.argv[1], sys.argv[2]
-for car in ["mr_grimm", "outlaw", "sweet_tooth", "roadkill", "axel", "thumper"]:
+for car in ["mr_grimm", "outlaw", "sweet_tooth", "roadkill", "axel", "thumper", "thumper_v1", "brimstone"]:
     im = Image.open("%s/owner_%s.webp" % (REF, car)).convert("RGB")
     a = np.asarray(im).astype(int)
     w = a.shape[1]

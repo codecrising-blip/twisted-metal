@@ -54,37 +54,72 @@ func _run() -> void:
 		v.auto_target = false
 	await _frames(10)
 
-	# ---- Thumper: Megafire burns a car 8 m ahead, drains the tank, doesn't burn him.
+	# ---- Thumper (round 29): Megafire = a bar of 8 tabs, 0.7 s a tab, a full tab to light it, 4 s to refill one.
 	_put(th, 0, 40, 0)
 	_put(dummy, 0, 32, 0)
 	await _frames(10)
-	var h0 := dummy.health
-	var f0 := th.fuel
+	_check(th.fuel_tank == 8.0 and th.fuel >= 7.99, "Thumper's Megafire bar: 8 tabs, full at the start (%.1f / %.1f)" % [th.fuel, th.fuel_tank])
 	th.selected = th.weapon_order.find("megafire")
-	th.in_fire_weapon = true
-	th.want_fire_weapon = true
+	th.in_fire_weapon = true # a tap: lit, let go at once
+	await _frames(2)
+	th.in_fire_weapon = false
+	await _frames(20)
+	_check(th.flaming, "a tap still burns on (the ignition costs a whole tab)")
+	await _frames(40)
+	_check(not th.flaming and absf(th.fuel - 7.0) < 0.15, "the tap burned exactly one tab (%.2f left)" % th.fuel)
+	var h0 := dummy.health
+	th.in_fire_weapon = true # hold for a second on a car 8 m ahead
 	await _frames(60)
 	th.in_fire_weapon = false
-	await _frames(2)
-	_check(th.fuel_tank == 10.0, "Thumper's tank holds 10 s (was %.1f)" % th.fuel_tank)
-	_check(f0 - th.fuel > 0.6, "the flame drains the tank (%.2f -> %.2f)" % [f0, th.fuel])
-	_check(dummy.health < h0 - 6.0, "Megafire burns a car 8 m ahead (%.1f -> %.1f)" % [h0, dummy.health])
-	_check(dummy.burn_time > 0.0, "and sets it burning")
+	await _frames(45)
+	_check(dummy.health < h0 - 25.0, "Megafire burns hard (%.1f -> %.1f in about a second)" % [h0, dummy.health])
+	_check(dummy.burn_time > 0.0 or dummy.health < h0 - 25.0, "and sets it burning")
 	th.ignite(4.0, dummy)
 	_check(th.burn_time <= 0.0, "Hot Engine: Thumper never burns")
 	_check(not th.flaming, "the flame stops when fire is let go")
-	# Drive-By hits a car off his side.
-	_put(th, 0, 40, 0)
-	_put(dummy, 14, 40, 0)
+	# the whole bar on Outlaw: about 80% of her health (owner)
+	_put(dummy, 0, 32, 0)
 	dummy.heal(999.0)
 	dummy.burn_time = 0.0
+	th.fuel = 8.0
 	await _frames(5)
 	h0 = dummy.health
-	th.fuel = 10.0
-	th.energy_move("secondary")
+	th.in_fire_weapon = true
+	await _frames(360)
+	th.in_fire_weapon = false
+	var left := th.fuel
 	await _frames(150)
-	_check(th.fuel <= 7.8, "Drive-By costs 3 s of fuel (%.2f left)" % th.fuel)
-	_check(dummy.health < h0 - 3.0, "Drive-By hits a car at his side (%.1f -> %.1f)" % [h0, dummy.health])
+	var share := (h0 - dummy.health) / dummy.max_health
+	_check(share > 0.74 and share < 0.9, "the full bar takes %.0f%% of Outlaw (owner: about 80%%)" % (share * 100.0))
+	_check(left < 0.15, "and empties the bar in about 5.6 s (%.2f)" % left)
+	th.fuel = 0.6
+	th.in_fire_weapon = true
+	await _frames(5)
+	_check(not th.flaming, "no ignition without a full tab")
+	th.in_fire_weapon = false
+	await _frames(242)
+	_check(th.fuel > 1.55 and th.fuel < 1.68, "a tab refills in 4 s (%.2f)" % th.fuel)
+	# Earthquake Slam (round 29): costs 2 tabs, throws a car beside him away and rolls it.
+	_put(th, 0, 40, 0)
+	_put(dummy, 5, 40, 0)
+	dummy.heal(999.0)
+	await _frames(5)
+	h0 = dummy.health
+	th.fuel = 8.0
+	var d0 := dummy.global_position.distance_to(th.global_position)
+	th.energy_move("secondary")
+	await _frames(4)
+	var vy := dummy.linear_velocity.y
+	var spin := dummy.angular_velocity.length()
+	await _frames(40)
+	_check(th.fuel > 5.95 and th.fuel < 6.3, "Earthquake Slam costs 2 tabs (%.2f left, a little refilled since)" % th.fuel)
+	_check(dummy.global_position.distance_to(th.global_position) > d0 + 4.0, "it throws a car beside him away (%.1f -> %.1f m)" % [d0, dummy.global_position.distance_to(th.global_position)])
+	_check(vy > 3.0 and spin > 1.0, "lifting it on the near side so it rolls (up %.1f m/s, spin %.1f)" % [vy, spin])
+	_check(dummy.health < h0 - 5.0, "and hurts it (%.1f -> %.1f)" % [h0, dummy.health])
+	await _frames(120)
+	_put(dummy, 0, 32, 0)
+	_put(th, 0, 40, 0)
+	dummy.heal(999.0)
 
 	# ---- Brimstone: the sinner runs down a car and blows on it; the sermon reflects damage.
 	_put(br, -40, 40, 0)

@@ -226,24 +226,24 @@ const DEFS := {
 		"radius": 5.4, "spins": 2, "time": 0.8, "steal": 0.25, "heal": 0.25, "cooldown": 1.0, "sound_db": 3.5, # round 24: one Roadkill length
 	},
 	# ---- Round 28 (owner: "build Thumper, Darkside and Brimstone with their secondaries"), design 01 ch 9-11.
-	# Thumper (Bruce): Megafire. Hold fire: a jet of flame out from under the hood, a 14 m cone (+-12 deg),
-	# 12 a second + burning. A fuel tank instead of charges (owner, round 12: 10 s): it refills from empty to
-	# full in refill_full s (design: 36 s) whenever the flame is off. The only special with a fuel gauge.
+	# Thumper (Bruce): Megafire, reworked in round 29 (owner): a glowing sheet of fire across the whole width of his
+	# nose, halfway between a beam and a flame (TM4's Super Thumper). A bar of "tabs" (8) instead of charges: one
+	# tab burns in tab_time s (0.7: 5.6 s for the full bar), one tab comes back in tab_refill s (4), only while the
+	# fire is off. Lighting it needs a FULL tab and burns at least one tab (a tap still costs 0.7 s); holding on drains
+	# the bar; letting go keeps what is left of the tab. dps: the whole bar on Outlaw (296) = ~80% with the burning.
+	# The fire is a box ahead of the grille: half_w at the nose widening by spread a metre, range m long.
 	"megafire": {
-		"label": "Megafire", "kind": "flame", "handler": "flame", "color": Color(1.0, 0.45, 0.1), "special": true,
-		"range": 14.0, "cone": 12.0, "dps": 12.0, "burn": 3.0, "tank": 10.0, "refill_full": 36.0, "start_fuel": 6.0,
-		"cooldown": 0.0, "sound_db": 2.0,
+		"label": "Megafire", "kind": "flame", "handler": "flame", "color": Color(1.0, 0.5, 0.12), "special": true,
+		"range": 16.0, "half_w": 1.2, "spread": 0.12, "height": 2.6, "dps": 43.0, "burn": 2.0,
+		"tabs": 8, "tab_time": 0.7, "tab_refill": 4.0, "cooldown": 0.0, "sound_db": 2.5,
 	},
-	# Thumper's secondary: Drive-By (design 9, R L U, costs fuel_cost s of the tank): two of his crew lean out of
-	# the side windows for "time" s with small machine guns and fire on any car 60-120 degrees off either side
-	# within range, dps a side. The only side attack in the game.
-	"drive_by": {
-		"label": "Drive-By", "kind": "bullet", "handler": "drive_by", "color": Color(1.0, 0.85, 0.4),
-		"time": 6.0, "range": 30.0, "arc_from": 60.0, "arc_to": 120.0, "dps": 5.0, "fuel_cost": 3.0, "sound_db": 2.0,
-	},
-	"drive_by_round": {
-		"label": "Drive-By", "kind": "bullet", "color": Color(1.0, 0.8, 0.35),
-		"speed": 140.0, "damage": 0.55, "homing": 0.0, "life": 0.4,
+	# Thumper's secondary (round 29, owner; replaces the Drive-By): Earthquake Slam. A sonic boom out from under the
+	# car: a blue wave along the ground to "radius" m. Every car it reaches is thrown away from him (push, falling off
+	# with distance) and takes damage; cars inside "lift_r" are lifted on the side facing him, so they roll over.
+	# Super heavy cars only slide. Costs "tabs" of the Megafire bar (it is his special's power).
+	"earthquake_slam": {
+		"label": "Earthquake Slam", "kind": "slam", "handler": "quake", "color": Color(0.35, 0.65, 1.0),
+		"radius": 16.0, "lift_r": 8.0, "push": 26.0, "lift": 9.0, "damage": 14.0, "tabs": 2.0, "sound_db": 4.0,
 	},
 	# Thumper's energy move (Backfire, design 9): his rear attack is a burst of flame out of the back, 8 m, 12 + burning.
 	"backfire": {
@@ -273,7 +273,7 @@ const DEFS := {
 	# if he drives it into a wall. Cars he brushes aside take their ram damage x brush_mult (up to brush_cap).
 	"darkside_slam": {
 		"label": "Darkside Slam", "kind": "slam", "handler": "slam", "color": Color(0.85, 0.08, 0.06), "special": true,
-		"horn": 0.3, "time": 3.0, "speed_mult": 1.5, "steer": 0.25, "damage": 30.0, "wall_bonus": 15.0, "pin": 1.5,
+		"horn": 0.3, "time": 3.0, "speed_mult": 1.9, "accel_mult": 8.0, "kick": 14.0, "steer": 0.25, "damage": 30.0, "wall_bonus": 15.0, "pin": 1.5,
 		"brush_mult": 1.5, "brush_cap": 25.0, "shake": 0.8, "cooldown": 1.0, "recharge": 15.0, "sound_db": 2.0,
 	},
 	# Darkside's secondary: Ash Cloud (design 11, one charge). His stacks pour out ash for "time" s; the cloud
@@ -281,7 +281,7 @@ const DEFS := {
 	# Darkside gets half of what they lose. The only weapon that steals energy.
 	"ash_cloud": {
 		"label": "Ash Cloud", "kind": "ash", "handler": "ash", "color": Color(0.25, 0.24, 0.23),
-		"time": 6.0, "linger": 4.0, "width": 8.0, "drain": 15.0, "sound_db": 2.0,
+		"time": 6.0, "linger": 4.5, "width": 12.0, "drain": 15.0, "sound_db": 2.0,
 	},
 	# Spectre: ghost missile that flies through walls.
 	"ghost_missile": {
@@ -299,7 +299,7 @@ const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "
 
 ## Secondary weapons (design 1.6): paid in charges of the car's special, Sweet Bot two, the rest one.
 const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1, "boomerang": 1, "rim_shot": 1, "reaper_sweep": 2, "tyre_dash": 1,
-	"hellfire_sermon": 1, "ash_cloud": 1} # Thumper's Drive-By is paid in fuel ("fuel_cost" s of the tank)
+	"hellfire_sermon": 1, "ash_cloud": 1} # Thumper's Earthquake Slam is paid in Megafire tabs ("tabs")
 const BOT_HEALTH := 59.0 # owner, round 16: a power missile and a fire missile (45 + 14) take it down
 const BOT_MISSILES := 20
 const BOT_GAP := 0.1 # seconds between missiles: the barrage lasts two seconds

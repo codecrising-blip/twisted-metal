@@ -46,7 +46,11 @@ func _draw() -> void:
 	if def.get("special", false):
 		draw_string(font, Vector2(144, 71), "SPECIAL", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, SPECIAL_GREEN)
 	var count: int = player.ammo.get(current, 0)
-	draw_string(font, Vector2(W - 140, 98), "x%d" % count, HORIZONTAL_ALIGNMENT_RIGHT, 120, 46, color.lightened(0.15))
+	var tabs_bar := current == player.special_id and player.fuel_tank > 0.0 # round 29: Megafire = a bar of tabs
+	if tabs_bar:
+		_tab_bar(Rect2(W - 196, 62, 176, 26), player.fuel, int(player.fuel_tank), player.flaming)
+	else:
+		draw_string(font, Vector2(W - 140, 98), "x%d" % count, HORIZONTAL_ALIGNMENT_RIGHT, 120, 46, color.lightened(0.15))
 	var locked := player.locked_left(current)
 	if locked > 0.0:
 		_ban(box, locked, true)
@@ -83,7 +87,9 @@ func _draw() -> void:
 		var sel: bool = id == current
 		var chip := Rect2(x, 112, 58, 34)
 		if d.get("special", false):
-			_special_chip(chip, sel, int(player.ammo.get(id, 0)))
+			_special_chip(chip, sel, -1 if player.fuel_tank > 0.0 else int(player.ammo.get(id, 0)))
+			if player.fuel_tank > 0.0:
+				_tab_bar(Rect2(chip.position.x + 26, chip.position.y + 9, 28, 16), player.fuel, int(player.fuel_tank), player.flaming)
 			if player.locked_left(id) > 0.0:
 				_ban(chip, player.locked_left(id), false)
 			x += 64.0
@@ -121,7 +127,28 @@ func _special_chip(chip: Rect2, sel: bool, count: int) -> void:
 	var base := chip.position + Vector2(8, 26)
 	draw_string_outline(font, base, "S", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color(0.0, 0.08, 0.02))
 	draw_string(font, base, "S", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, lime)
-	draw_string(font, chip.position + Vector2(30, 24), str(count), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, lime)
+	if count >= 0:
+		draw_string(font, chip.position + Vector2(30, 24), str(count), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, lime)
+
+
+## Round 29 (owner): Thumper's Megafire shows a bar of tabs, no number: full tabs bright, the one filling
+## or burning down partly lit, empty ones dark; while it burns the bar glows hot. A whole tab lights it.
+func _tab_bar(r: Rect2, fuel: float, tabs: int, burning: bool) -> void:
+	var gap := 2.0 if r.size.x > 60.0 else 1.0
+	var w := (r.size.x - gap * (tabs - 1)) / float(tabs)
+	var hot := Color(1.0, 0.62, 0.15)
+	var full := Color(1.0, 0.82, 0.3) if burning else SPECIAL_GREEN
+	for k in tabs:
+		var cell := Rect2(r.position.x + k * (w + gap), r.position.y, w, r.size.y)
+		draw_rect(cell, Color(0.06, 0.08, 0.06, 0.9))
+		var f := clampf(fuel - float(k), 0.0, 1.0)
+		if f > 0.0:
+			var c := full if f >= 0.999 else (hot if burning else SPECIAL_GREEN.darkened(0.45))
+			draw_rect(Rect2(cell.position, Vector2(cell.size.x * f, cell.size.y)), c)
+		draw_rect(cell, Color(0.0, 0.0, 0.0, 0.8), false, 1.0)
+	if burning and r.size.x > 60.0:
+		var pulse := 0.35 + 0.25 * sin(Time.get_ticks_msec() * 0.02)
+		draw_rect(r.grow(2.0), Color(1.0, 0.5, 0.1, pulse), false, 2.0)
 
 
 ## The universal SPECIAL emblem (owner, session 6, after a TM Head-On reference: a green S): a dark

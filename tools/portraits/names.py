@@ -37,7 +37,8 @@ _raw = {}
 
 def raw(car):
     if car not in _raw:
-        _raw[car] = np.asarray(Image.open("%s/%s_idle_raw.png" % (W, car)).convert("RGB")).astype(np.float32)
+        src = "thumper_v1" if car == "thumper" else car  # round 29: the old BRUCE COCHRANE sheet keeps the glyphs
+        _raw[car] = np.asarray(Image.open("%s/%s_idle_raw.png" % (W, src)).convert("RGB")).astype(np.float32)
     return _raw[car]
 
 
@@ -163,4 +164,4 @@ if DEBUG:
     sheet.save(W + "/glyphs.png")
 else:
     outlaw()
-    thumper()
+    # thumper(): round 26 only; since round 29 the owner's new Thumper sheet carries BRUCE itself

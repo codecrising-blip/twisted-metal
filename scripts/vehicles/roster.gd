@@ -99,12 +99,12 @@ const CARS := {
 		"tagline": "Twenty years between two wheels.",
 	},
 	# Round 28 (owner): Thumper, Brimstone and Darkside, with their secondaries (design 01 ch 9-11).
-	# Thumper: TM2's purple lowrider (the textured TM2 rip; the design named TM3's, no TM3 reference is in
-	# the repo). Hot Engine: never set burning (direct hits still hurt). Backfire: his rear attack is a flame.
+	# Thumper: Bruce's purple '64 lowrider (round 29: the owner's design sheet). Hot Engine: never set burning
+	# (direct hits still hurt). Backfire: his rear attack is a flame. Megafire runs on a bar of 8 tabs.
 	"thumper": {
 		"name": "Thumper", "ram": 6.0, "engine": "taxi", "driver": "Bruce",
 		"spd": 6, "arm": 7, "hnd": 5, "spc": 6, "class": "medium",
-		"special": "megafire", "secondary": "drive_by",
+		"special": "megafire", "secondary": "earthquake_slam",
 		"fireproof": true, "backfire": true, "rear_attack_cost": 25.0,
 		"size": Vector3(2.3, 1.5, 6.0), "camera": [4.6, 10.5],
 		"hood": Vector2(0.95, -2.2), "glass": Vector2(1.2, -1.25), "glass_n": Vector3(0, 0.65, -0.76),
