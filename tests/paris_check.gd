@@ -106,6 +106,7 @@ func _run() -> void:
 		var y := _ray_y(p.x, p.z, p.y + 2.0)
 		_check(absf(y - (p.y - 0.6)) < 0.7, "pickup %s on its ground (hit %.2f)" % [p, y])
 		_check(not _in_block(p) or p.y > ParisArena.ROOF_Y, "pickup %s outside the buildings (or on a roof)" % p)
+		_check(_fits(_arena.get_world_3d().direct_space_state, p - Vector3(0, 0.6, 0)), "pickup %s clear of landmarks and walls" % p)
 	for r: Dictionary in a.ramps:
 		var top: Vector3 = r.top
 		var y := _ray_y(top.x, top.z, top.y + 3.0)
@@ -165,3 +166,7 @@ func _run() -> void:
 	for g: Array in groups:
 		print("SLOT %d spots near %s" % [g.size(), g[0]])
 	_check(groups.is_empty(), "no narrow slots at street level (%d)" % groups.size())
+	# Round 29: the landmarks stand (the tower's feet, the arc's piers) and the arc lets cars through.
+	_check(_ray_y(ParisArena.TOWER.x + 21.0, ParisArena.TOWER.y + 21.0) > 10.0, "Eiffel tower foot is solid")
+	var e := ParisArena.ETOILE
+	_check(absf(_ray_y(e.x, e.y, 20.0)) < 0.3, "the Arc de Triomphe's main arch is open to drive through")

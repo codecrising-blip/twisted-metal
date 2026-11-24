@@ -116,6 +116,7 @@ func build() -> void:
 	_montmartre()
 	_city_blocks()
 	ParisBlocks.build(self, blocks)
+	ParisLandmarks.build(self)
 	_rooftops()
 	_boundary()
 	_trees()
@@ -1178,6 +1179,11 @@ func _blocked(p: Vector2) -> bool:
 			return true
 	if p.distance_to(ETOILE) < RING_R + 11.0:
 		return true
+	for f: Array in ParisLandmarks.footprints():
+		var c: Vector2 = f[0]
+		var h: Vector2 = f[1]
+		if absf(p.x - c.x) < h.x + 3.0 and absf(p.y - c.y) < h.y + 3.0:
+			return true
 	for b: Dictionary in blocks:
 		if Geometry2D.is_point_in_polygon(p, b.poly):
 			return true
@@ -1326,12 +1332,12 @@ func _points() -> void:
 		Vector3(-120, QUAY_Y + 0.6, river_z(-120) - 20.0), Vector3(40, QUAY_Y + 0.6, river_z(40) + 20.0),
 		Vector3(-150, 0.6, -134), Vector3(-80, 0.6, -128), Vector3(82, 0.6, -60), Vector3(150, 0.6, -100),
 		Vector3(-190, 0.6, 175), Vector3(-130, 0.6, 205), Vector3(0, 0.6, 175), Vector3(112, 0.6, 170),
-		Vector3(228, 0.6, 196), Vector3(-240, 8.6, -75), Vector3(MONT.x, 14.6, MONT.y), Vector3(196, 0.6, -100)])
+		Vector3(228, 0.6, 196), Vector3(-240, 8.6, -75), Vector3(236, 14.6, -170), Vector3(226, 0.6, -88)])
 	for i in weapon_points.size():
 		weapon_kinds.append("")
 	# Round 29 (owner): three health on the street, the rest up top, the mega on the rooftop circuit.
 	health_points.assign([Vector3(TOWER.x, 0.6, TOWER.y), Vector3(230, 0.6, 130), Vector3(160, 0.6, -150),
-		Vector3(-240, 8.6, -80), Vector3(MONT.x + 8, 14.6, MONT.y)])
+		Vector3(-240, 8.6, -81), Vector3(214, 14.6, -170)])
 	mega_points.assign([Vector3(-172, ROOF_Y + 0.6, -78)])
 	turbo_points.assign([Vector3(-150, 0.6, -210), Vector3(-10, 0.6, -95), Vector3(100, 0.6, -128), Vector3(-160, 0.6, 140),
 		Vector3(30, 0.6, 196), Vector3(205, 0.6, 120), Vector3(-200, QUAY_Y + 0.6, river_z(-200) + 20.0),
@@ -1363,6 +1369,10 @@ func level_of(p: Vector3) -> String:
 		if Vector2(p.x, p.z).distance_to(MONT) < 90.0:
 			return "hill"
 	return "street"
+
+
+func water_material() -> Material:
+	return _m.water
 
 
 func buildings_body() -> StaticBody3D:

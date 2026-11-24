@@ -808,6 +808,31 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   `slit_pivot` by `DarksideSlamFx`; second rear axle markers `m_wheel_rr2/rl2`. **Shared:** `tools/blender/carkit.py`
   (rod, quad, section, ring_solid, tyre, wire_wheel, crewman sculpt, chain); BlenderCars reads `m_meta_<name>` markers
   as model metadata. Tests: `tests/_new_cars_check.gd` (all three cars' rules), `_special_film.gd` takes env `FOE_X`.
+- **Round 29, full text `docs/design/34-owner-round-29.md`:** **Megafire** (Thumper) = bar of 8 tabs, no numbers
+  (`fuel` in tabs, `tab_time` 0.7 s each, `tab_refill` 4 s; ignition needs a full tab and burns at least one; let go =
+  the partial tab is kept; ~79% of Outlaw over the full 5.6 s, dps 43) drawn as a beam between laser and fire
+  (`scripts/fx/megafire.gdshader`, ribbons + cross-section slices: ribbons alone are edge-on from the chase camera;
+  blend_mix: additive washed out over the pavers). **Earthquake Slam** replaces Drive-By (`EarthquakeSlam`, 2 tabs:
+  blue wave `quake_wave.gdshader`, stereo 808 boom for the player, damage + throw, cars inside `lift_r` rolled by
+  `blast_knock`). **Darkside slam:** kick 14 m/s, x1.9 speed, `ZoomBurst` radial blur + `ChaseCamera.kick_fov`.
+  **Ash Cloud:** a real smoke screen (`ash_cover` makes `is_hidden()` true). Gotcha: StandardMaterial3D
+  `BILLBOARD_PARTICLES` ignores particle scale unless `billboard_keep_scale` (every FxKit particle is drawn 1 m; only
+  the ash fixed). **Sermon:** no crown; red sky overlay + sun/ambient tinted red (`SermonFx`), `hellfire_horn`
+  (synthesised, `tools/synth_round29.py`). Sinner runs slower (`sprint` clip, smooth turning). **Models:** Thumper v2 and
+  Brimstone v2 from the owner's sheets (`docs/reference/owner_sheets/`; Brimstone's stained glass = `ModelLib.stained`,
+  `bed_plate` pops on launch, brazier FoamFire). Darkside's new sheet and the second Preacher sheet never arrived.
+  **Paris fixes:** the Seine is shallow (`WATER_Y` -5.45, drivable bed `BED_Y` -6, cobbled banks off the lower quays,
+  `_physics_process` wading drag to 13 m/s + `FxKit.splash`); the cars-only water barrier (the bridges' invisible
+  walls) is gone, piers and island walls solid. Ramps/viaducts: `ramp_height()` 6 m fillets both ends, ends land past
+  the mansard (`CROSSINGS`, `TROCA_LINK`, `CHAMPS_RAMP`: two crossings and the Trocadero link had been hanging short of
+  their roofs). Montmartre: one straight climb from the new road `lepic`. Trees = TOPPLE `Breakable`s drawn by the row
+  MultiMesh (`Breakable.breaking` signal gives the falling one its mesh). Slots: zones cut past the map edge,
+  `_square_to_wall`, terraces to the edge walls; `tests/paris_check.gd` scans for slots (want none). Health: 3 street,
+  2 up top, mega on the roofs. **Landmarks** (`tools/blender/build_paris_landmarks.py tower|monuments|buildings` ->
+  `paris_tower/monuments/buildings.glb`, placed + colliders by `ParisLandmarks`): Eiffel tower (feet solid, you drive
+  under), Arc de Triomphe on the Champs line (drive through), obelisk + fountains, Louvre palace round its court +
+  glass pyramid, Notre-Dame, Sacre-Coeur, Moulin Rouge (sails turn), Opera, Invalides, Chaillot wings. Not yet: Grand
+  Palais hall, tower lift/fall, Mona Lisa passage, metro, gargoyles, backdrop. Paris views 43-92 draws, 106-363k prims.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
