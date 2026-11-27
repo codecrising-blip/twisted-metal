@@ -20,39 +20,26 @@ T.reset()
 V = Vector
 R = 0.5   # the wheel
 FACE = 0.25  # x of the clamp's plate: just outside the tyre's sidewall
-yellow = T.M("paint", (0.8, 0.52, 0.012), wear=0.35, rust=0.25, dirt=0.35)
 white = T.M("paint", (0.62, 0.62, 0.59), wear=0.35, rust=0.2, dirt=0.4)
 black = T.M("paint", (0.02, 0.02, 0.022), wear=0.4, rust=0.2, dirt=0.4)
 dark = T.M("steel", (0.03, 0.03, 0.033), wear=0.5, rust=0.4, dirt=0.5)
 bare = T.M("steel", (0.2, 0.2, 0.2), wear=0.4, rust=0.35, dirt=0.4)
 gold = T.M("steel", (0.55, 0.38, 0.08), wear=0.3, rust=0.1, dirt=0.3)
 g_red = T.glow((1.0, 0.06, 0.03))
-g_white = T.glow((1.0, 0.95, 0.85))
 g_blue = T.glow((0.1, 0.3, 1.0))
-g_amber = T.glow((1.0, 0.5, 0.02))
 decals = []
-
-
-def aim(d):
-    q = Vector(d).normalized().to_track_quat("Z", "Y").to_euler()
-    return (math.degrees(q.x), math.degrees(q.y), math.degrees(q.z))
 
 
 def rod(a, b, r, mat, n=10):
     a, b = Vector(a), Vector(b)
     v = b - a
-    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=aim(v), mat=mat, n=n)
+    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=T.aim(v), mat=mat, n=n)
 
 
 def bar(a, b, w, d, mat, bevel=0.008):
     a, b = Vector(a), Vector(b)
     v = b - a
-    return T.box((w, d, v.length), loc=tuple((a + b) / 2), rot=aim(v), mat=mat, bevel=bevel)
-
-
-def spike(base, d, length, r, mat=bare, n=8):
-    d = Vector(d).normalized()
-    return T.cyl(r, length, loc=tuple(Vector(base) + d * length / 2), rot=aim(d), mat=mat, n=n, r2=r * 0.08)
+    return T.box((w, d, v.length), loc=tuple((a + b) / 2), rot=T.aim(v), mat=mat, bevel=bevel)
 
 
 def ring(x, radius, r, mat, n=28, a0=0.0, a1=360.0):
@@ -87,10 +74,6 @@ def arm(deg, parts, mat, inner_plate=True):
     parts.append(bar(o, i, 0.1, 0.08, mat))                        # over the tread
     if inner_plate:
         parts.append(bar(i, at(-0.24, R - 0.12, deg), 0.12, 0.05, mat))  # down the inside: the claw
-
-
-def hazard(c, n, up, size):
-    decals.append(T.Decal(T.hazard_image(stripes=7), tuple(c), tuple(n), tuple(up), size, depth=0.05, kinds=("paint",)))
 
 
 def words(s, c, n, up, size, color=(0.02, 0.02, 0.02)):

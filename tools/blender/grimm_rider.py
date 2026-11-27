@@ -12,7 +12,7 @@ import math
 
 import bpy  # first
 import bmesh
-from mathutils import Matrix, Vector
+from mathutils import Vector
 
 import tmlib as T
 
@@ -52,8 +52,8 @@ class Sculpt:
         me = bpy.data.meshes.new_from_object(self.ob.evaluated_get(dg))
         bpy.data.objects.remove(self.ob)
         bpy.data.metaballs.remove(self.mb)
-        ob = bpy.data.objects.new(self.mb.name if False else "sculpt", me)
-        T._link(ob)
+        ob = bpy.data.objects.new("sculpt", me)
+        T.link(ob)
         me.materials.append(mat)
         if ratio < 1.0:
             T.decimate(ob, ratio)

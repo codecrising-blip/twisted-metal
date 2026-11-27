@@ -47,7 +47,6 @@ const C_COBBLE := Color("6B6458")
 const C_SIDEWALK := Color("A89D88") # round 31: was B9AE98
 const C_GRAVEL := Color("CDBA8E")
 const C_LAWN := Color("6F8F48")
-const C_WATER := Color("4E6B6A")
 const C_CURB := Color("8C877E")
 const C_ZINC := Color("6F7C86")
 const C_GOLD := Color("C9A54A")
@@ -227,19 +226,11 @@ void fragment() {
 
 # ---------------------------------------------------------------- environment
 
-## Round 31 (owner: Paris "too bright and white"): the light, by mood. "toned" (default) = the 4 pm sun, less
-## glare; "haze" = war smoke browning the sky; "overcast" = grey, soft. `-- mood:<name>` picks one for a run.
-static var mood := "toned"
-const MOODS := {
-	"bright": {"exposure": 0.98, "sun": 1.45, "sun_col": Color("FFF1DC"), "amb": Color(0.6, 0.64, 0.72), "amb_e": 0.75,
-		"fog": Color(0.8, 0.76, 0.68), "fog_d": 0.0011, "sat": 0.95, "con": 1.08, "sky": Color(1, 1, 1), "haze": Color(0, 0, 0), "haze_a": 0.0},
-	"toned": {"exposure": 0.86, "sun": 1.3, "sun_col": Color("FFE9CC"), "amb": Color(0.55, 0.57, 0.62), "amb_e": 0.7,
-		"fog": Color(0.7, 0.66, 0.6), "fog_d": 0.0016, "sat": 0.9, "con": 1.12, "sky": Color(0.9, 0.88, 0.85), "haze": Color(0.72, 0.64, 0.54), "haze_a": 0.25},
-	"haze": {"exposure": 0.82, "sun": 1.15, "sun_col": Color("FFD2A0"), "amb": Color(0.56, 0.5, 0.44), "amb_e": 0.72,
-		"fog": Color(0.55, 0.47, 0.38), "fog_d": 0.0032, "sat": 0.85, "con": 1.12, "sky": Color(0.78, 0.68, 0.58), "haze": Color(0.5, 0.42, 0.34), "haze_a": 0.6},
-	"overcast": {"exposure": 0.9, "sun": 0.55, "sun_col": Color("E4E8EE"), "amb": Color(0.62, 0.64, 0.68), "amb_e": 1.0,
-		"fog": Color(0.6, 0.62, 0.64), "fog_d": 0.0028, "sat": 0.75, "con": 1.06, "sky": Color(0.72, 0.74, 0.78), "haze": Color(0.62, 0.64, 0.67), "haze_a": 0.55},
-}
+## Round 32: the owner's pick of four lights (round 31 sheet, panel D): an overcast day. Soft grey light, weak
+## shadows, muted colour; the panorama (tools/blender/build_paris_backdrop.py) is rendered under the same sky.
+const LOOK := {"exposure": 0.9, "sun": 0.55, "sun_col": Color("E4E8EE"), "amb": Color(0.62, 0.64, 0.68), "amb_e": 1.0,
+	"fog": Color(0.6, 0.62, 0.64), "fog_d": 0.0028, "sat": 0.75, "con": 1.06, "sky": Color(0.72, 0.74, 0.78),
+	"haze": Color(0.62, 0.64, 0.67), "haze_a": 0.55}
 const SKY_SHADER := """
 shader_type sky;
 uniform sampler2D pano : source_color, filter_linear_mipmap;
@@ -253,36 +244,25 @@ void sky() {
 }
 """
 
+
 func _environment() -> void:
-	for a: String in OS.get_cmdline_user_args():
-		if a.begins_with("mood:") and MOODS.has(a.substr(5)):
-			mood = a.substr(5)
-	var md: Dictionary = MOODS[mood]
+	var md: Dictionary = LOOK
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
-	var sky := Sky.new()
-	var sm := ProceduralSkyMaterial.new()
-	sm.sky_top_color = Color(0.33, 0.5, 0.74)
-	sm.sky_horizon_color = Color(0.84, 0.79, 0.7) # warm haze low on the horizon (4 pm)
-	sm.sky_curve = 0.18
-	sm.ground_horizon_color = Color(0.72, 0.66, 0.58)
-	sm.ground_bottom_color = Color(0.3, 0.28, 0.25)
-	sm.sun_angle_max = 10.0
-	sky.sky_material = sm
 	# Round 30 (owner: "the map has no background from there"): the city beyond the edge walls, one pre-rendered
-	# panorama (tools/blender/build_paris_backdrop.py). The procedural sky above stays as the fallback.
-	if ResourceLoader.exists(BACKDROP):
-		var sh := Shader.new()
-		sh.code = SKY_SHADER
-		var pano := ShaderMaterial.new()
-		pano.shader = sh
-		pano.set_shader_parameter("pano", load(BACKDROP))
-		var t: Color = md.sky
-		var hz: Color = md.haze
-		pano.set_shader_parameter("tint", Vector3(t.r, t.g, t.b))
-		pano.set_shader_parameter("haze", Vector3(hz.r, hz.g, hz.b))
-		pano.set_shader_parameter("haze_amt", md.haze_a)
-		sky.sky_material = pano
+	# panorama, its lower part blended into the haze of the day.
+	var sh := Shader.new()
+	sh.code = SKY_SHADER
+	var pano := ShaderMaterial.new()
+	pano.shader = sh
+	pano.set_shader_parameter("pano", load(BACKDROP))
+	var t: Color = md.sky
+	var hz: Color = md.haze
+	pano.set_shader_parameter("tint", Vector3(t.r, t.g, t.b))
+	pano.set_shader_parameter("haze", Vector3(hz.r, hz.g, hz.b))
+	pano.set_shader_parameter("haze_amt", md.haze_a)
+	var sky := Sky.new()
+	sky.sky_material = pano
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = md.amb # sky fill in the shadows
@@ -486,7 +466,6 @@ func _river() -> void:
 					Vector3(0, 0, side), false, COL_WALL)
 				if not _bridge_lands(xm, side):
 					_parapet_piece(x0, x1, iz0 - side * 0.5, iz1 - side * 0.5, 0.0, 0.0, side)
-
 
 
 ## Does a bridge land on the island's edge here?

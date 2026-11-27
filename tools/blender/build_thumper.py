@@ -172,7 +172,7 @@ for sx in (1, -1):
     body.append(K.rod(V((x, y_(5.04), 1.15)), V((x, y_(5.6), 1.15)), 0.055, gun, n=12))     # perforated jacket
     for k in range(5):
         a = k * 72
-        body.append(T.cyl(0.012, 0.02, loc=(x + math.cos(math.radians(a)) * 0.056, y_(5.15 + k * 0.08), 1.15 + math.sin(math.radians(a)) * 0.056), rot=K.aim((math.cos(math.radians(a)), 0, math.sin(math.radians(a)))), mat=dark, n=6))
+        body.append(T.cyl(0.012, 0.02, loc=(x + math.cos(math.radians(a)) * 0.056, y_(5.15 + k * 0.08), 1.15 + math.sin(math.radians(a)) * 0.056), rot=T.aim((math.cos(math.radians(a)), 0, math.sin(math.radians(a)))), mat=dark, n=6))
     body.append(K.rod(V((x, y_(5.6), 1.15)), V((x, NOSE + 0.25, 1.15)), 0.028, gun, n=10))  # barrel past the nose
     body.append(T.cyl(0.045, 0.1, loc=(x, NOSE + 0.2, 1.15), rot=(-90, 0, 0), mat=gun, n=12))  # muzzle brake
     body.append(T.box((0.14, 0.2, 0.14), loc=(x - sx * 0.17, y_(4.72), 1.06), mat=armor, bevel=0.01))  # ammo can

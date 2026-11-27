@@ -1,5 +1,5 @@
 class_name LosAngelesArena
-extends Node3D
+extends ArenaKit
 ## Stage 1 and the test stage: Twisted Metal 2's "Los Angeles: Quake Zone Rumble", rebuilt with the
 ## owner's layout (session 5):
 ##   - a raised battleground in the middle, PLAT_H (= about three Outlaws) above the roads, bigger
@@ -18,7 +18,6 @@ extends Node3D
 ## real shop buildings with depth (LaBuildings), tall LA fan palms and date palms, the HOLLYWOOD sign
 ## on its hill. Fixed seed: the layout is the same every run.
 
-signal easter_egg(title: String, text: String)
 
 const HALF := 155.0 # inner face of the outer wall
 const WALL_CHAMFER := 24.0
@@ -45,7 +44,6 @@ const TOWER_AT := Vector3(52, PLAT_H, 48)
 const BURNT_AT := Vector3(-52, PLAT_H, -38)
 const VEHICLE_BARRIER_LAYER := 16 # physics layer 5: only cars collide with it
 const BARRIER_H := 120.0
-const SIGN_Z := -200.0 # where the hills' sign area is in the baked backdrop
 const SIGN3D_Z := -178.0 # the real 3D letters, on a scaffold past the north fence
 const SIGN_BASE_Y := 21.0 # above the fence: hit them with a missile fired nose-up (the tunnel-roof ramps) # the HOLLYWOOD letters, on the hill north of the arena
 const BACKDROP := "res://assets/backdrops/los_angeles_city.jpg"
@@ -112,7 +110,7 @@ func build() -> void:
 	add_child(props)
 	props.build(self)
 	_points()
-	_flush_batch()
+	flush_batch()
 
 
 # ---------------------------------------------------------------- static batching
@@ -120,31 +118,9 @@ func build() -> void:
 ## Owner's performance plan (session 6): everything in the stage that never moves or breaks is
 ## merged into ONE mesh per material, so the static stage costs about one draw call per material
 ## instead of one per piece (roads, lines, cracks, walls, buildings, props, signs, cables...).
-## Breakables, pickups and cars stay separate. Call batch_* while building; _flush_batch() at the end.
-var _batch := {} # "material id|shadows" -> {st, mat, shadows}
-static var _text_mats := {}
+## Breakables, pickups and cars stay separate. Call batch_* (ArenaKit) while building; flush_batch() at the end.
 
 
-func batch_mesh(mesh: Mesh, xf := Transform3D.IDENTITY, shadows := true, override: Material = null) -> void:
-	for i in mesh.get_surface_count():
-		var mat: Material = override if override else mesh.surface_get_material(i)
-		if mat == null:
-			continue
-		var key := "%d|%d" % [mat.get_instance_id(), int(shadows)]
-		if not _batch.has(key):
-			var st := SurfaceTool.new()
-			st.begin(Mesh.PRIMITIVE_TRIANGLES)
-			_batch[key] = {"st": st, "mat": mat, "shadows": shadows}
-		(_batch[key].st as SurfaceTool).append_from(mesh, i, xf)
-
-
-## A finished MeshBuilder (instead of mb.commit(self, ...)). xf places it (a billboard's frame).
-func batch_builder(mb: MeshBuilder, shadows := true, grime := 0.0, xf := Transform3D.IDENTITY) -> void:
-	batch_mesh(mb.build_mesh(grime, 0.0, true), xf, shadows) # plain paints fold into 2 shared materials
-
-
-## Text as real geometry (replaces Label3D, which costs a draw call each). The text faces +Z of xf.
-## neon = unshaded and bright (shop signs); otherwise lit paint.
 ## The biggest font size (up to `largest`) at which `text` fits a w x h metre frame (round 13: signs'
 ## lettering ran off their boards).
 static func fit_font(text: String, pixel_size: float, w: float, h: float, largest: int) -> int:
@@ -159,48 +135,6 @@ static func fit_font(text: String, pixel_size: float, w: float, h: float, larges
 			break
 		fs -= 4
 	return fs
-
-
-func batch_text(text: String, xf: Transform3D, font_size: int, pixel_size: float, color: Color, neon := false) -> void:
-	var tm := TextMesh.new()
-	tm.text = text
-	tm.font_size = font_size
-	tm.pixel_size = pixel_size
-	tm.depth = 0.0
-	var arrays := tm.get_mesh_arrays()
-	if arrays.is_empty() or (arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array).is_empty():
-		return
-	var raw := ArrayMesh.new()
-	raw.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	var key := "%s|%d" % [color.to_html(), int(neon)]
-	if not _text_mats.has(key):
-		var m := StandardMaterial3D.new()
-		m.albedo_color = color
-		m.roughness = 0.8 # one-sided: readable from the front only, like the old labels
-		if neon:
-			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_text_mats[key] = m
-	batch_mesh(_indexed(raw), xf, false, _text_mats[key])
-
-
-## append_from() drops non-indexed parts once the merged mesh holds indexed ones: index first.
-static func _indexed(mesh: Mesh) -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.create_from(mesh, 0)
-	st.index()
-	return st.commit()
-
-
-func _flush_batch() -> void:
-	for key: String in _batch:
-		var e: Dictionary = _batch[key]
-		var mi := MeshInstance3D.new()
-		mi.mesh = (e.st as SurfaceTool).commit()
-		mi.material_override = e.mat
-		if not e.shadows:
-			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(mi)
-	_batch.clear()
 
 
 # ---------------------------------------------------------------- layout data (static)
@@ -301,10 +235,6 @@ static func edge_distance(x: float, z: float) -> float:
 	return r / s - r
 
 
-static func on_battleground(x: float, z: float) -> bool:
-	return edge_distance(x, z) > 0.0
-
-
 ## Ground height: the raised battleground (with the crater), its ramps, and the road hills.
 static func height_at(x: float, z: float) -> float:
 	var ed := edge_distance(x, z)
@@ -381,30 +311,10 @@ static func road_distance(x: float, z: float) -> float:
 
 # ---------------------------------------------------------------- merged geometry helpers
 
-var _solid_body: StaticBody3D
-
-
-## One shared collider for merged static geometry (draw calls are the HD 5500's bottleneck, so
-## the visible parts are merged with MeshBuilder and only box shapes are added here).
-func _solid(size: Vector3, xf: Transform3D) -> void:
-	if _solid_body == null:
-		_solid_body = StaticBody3D.new()
-		_solid_body.name = "MergedColliders"
-		_solid_body.collision_layer = 1
-		_solid_body.collision_mask = 0
-		add_child(_solid_body)
-	var shape := CollisionShape3D.new()
-	var b := BoxShape3D.new()
-	b.size = size
-	shape.shape = b
-	shape.transform = xf
-	_solid_body.add_child(shape)
-
-
 ## Box (visual + collider) in arena space, merged into mb.
 func _solid_box_mb(mb: MeshBuilder, mat: Material, size: Vector3, xf: Transform3D, bevel := 0.0) -> void:
 	mb.box(mat, size, xf, bevel)
-	_solid(size, xf)
+	solid(size, xf)
 
 
 ## A straight beam from a to b (square section t) into mb.
@@ -504,7 +414,7 @@ func _environment() -> void:
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
 	if ResourceLoader.exists(BACKDROP):
-		# The city below, the mountains and the smog: one pre-rendered panorama (tests/bake_backdrop.gd).
+		# The city below, the mountains and the smog: one pre-rendered panorama (tools/blender/build_la_backdrop.py).
 		var pano := PanoramaSkyMaterial.new()
 		pano.panorama = load(BACKDROP)
 		sky.sky_material = pano
@@ -1444,15 +1354,6 @@ func _insulator() -> StandardMaterial3D:
 	return _insulator_mat
 
 
-func _member(parent: Node3D, a: Vector3, b: Vector3, t: float, mat: Material) -> MeshInstance3D:
-	if a.distance_to(b) < 0.01:
-		return null
-	var mi := MeshKit.box(parent, Vector3(t, t, a.distance_to(b)), (a + b) * 0.5, mat)
-	var dir := (b - a).normalized()
-	mi.basis = Basis.looking_at(dir, Vector3.UP if absf(dir.y) < 0.98 else Vector3.RIGHT)
-	return mi
-
-
 func _on_tower_leg_broken(leg: Breakable, by: Vehicle) -> void:
 	FxKit.explosion(self, leg.global_position + Vector3.UP * 3.0, 1.0, Color(0.5, 0.75, 1.0))
 	_tower_legs -= 1
@@ -1720,9 +1621,7 @@ func _bushes() -> void:
 			continue
 		var s := _rng.randf_range(0.8, 1.5)
 		xforms.append(Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(s, s * _rng.randf_range(0.8, 1.2), s)), ground(p.x, p.z)))
-	var shrubs := _scatter(_bush_mesh(), xforms)
-	shrubs.visibility_range_end = 170.0
-	add_child(shrubs)
+	scatter(_bush_mesh(), xforms).visibility_range_end = 170.0
 
 
 ## One shrub (a few low-poly lumps of dark and olive green), shared by every bush on the stage.
@@ -1741,35 +1640,29 @@ func _bush_mesh() -> ArrayMesh:
 	return _shrub
 
 
-## Many copies of one mesh in a single draw (per material): bushes, scrub.
-func _scatter(mesh: Mesh, xforms: Array[Transform3D]) -> MultiMeshInstance3D:
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.mesh = mesh
-	mm.instance_count = xforms.size()
-	for i in xforms.size():
-		mm.set_instance_transform(i, xforms[i])
-	var mmi := MultiMeshInstance3D.new()
-	mmi.multimesh = mm
-	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return mmi
-
-
 # ---------------------------------------------------------------- beyond the wall
 
-## The hills north of the arena (outside the walls, out of reach) with the HOLLYWOOD sign on the
-## slope. Chaparral: scrub over dry earth, eroded ridges running down. Each letter breaks when
-## shot. Too high to hit from the ground: try the tunnel roof.
-static func hill_height(x: float, z: float) -> float:
-	var t := clampf((-165.0 - z) / 125.0, 0.0, 1.0)
-	var lateral := exp(-pow((x + 10.0) / 190.0, 2.0)) * 0.65 + 0.35
-	var rise := 88.0 * sin(t * PI * 0.5)
-	var peaks := 16.0 * exp(-pow((x + 10.0) / 45.0, 2.0)) + 12.0 * exp(-pow((x - 150.0) / 60.0, 2.0)) \
-		+ 9.0 * exp(-pow((x + 175.0) / 55.0, 2.0))
-	# Eroded spurs: sharp ridges and rounded gullies running down the slope. Gentler under the sign.
-	var spur := (0.45 - absf(sin(x * 0.052 + sin(z * 0.035) * 0.9))) * 14.0
-	spur *= lerpf(0.3, 1.0, smoothstep(35.0, 80.0, absf(x + 10.0)))
-	return -25.0 + (rise + (peaks + spur) * smoothstep(0.15, 0.7, t)) * lateral
+## Letter strokes (center lines) on a 4 x 6.5 grid; the HOLLYWOOD sign's tall, bold sans letters.
+const GLYPHS := {
+	"H": [[Vector2(0, 0), Vector2(0, 6.5)], [Vector2(4, 0), Vector2(4, 6.5)], [Vector2(0, 3.3), Vector2(4, 3.3)]],
+	"L": [[Vector2(0, 6.5), Vector2(0, 0), Vector2(3.8, 0)]],
+	"Y": [[Vector2(0, 6.5), Vector2(2, 3.1), Vector2(4, 6.5)], [Vector2(2, 3.1), Vector2(2, 0)]],
+	"W": [[Vector2(0, 6.5), Vector2(0.9, 0), Vector2(2, 4.3), Vector2(3.1, 0), Vector2(4, 6.5)]],
+	"D": [[Vector2(0, 0), Vector2(0, 6.5), Vector2(1.8, 6.5), Vector2(3.2, 5.8), Vector2(4, 4.4),
+		Vector2(4, 2.1), Vector2(3.2, 0.7), Vector2(1.8, 0), Vector2(0, 0)]],
+}
+
+
+static func glyph_strokes(ch: String) -> Array:
+	if ch == "O": # a tall rounded oval
+		var ring: Array[Vector2] = []
+		for k in 21:
+			var a := TAU * k / 20.0
+			var c := cos(a)
+			var sn := sin(a)
+			ring.append(Vector2(2.0 + 2.0 * signf(c) * pow(absf(c), 0.75), 3.25 + 3.25 * signf(sn) * pow(absf(sn), 0.75)))
+		return [ring]
+	return GLYPHS[ch]
 
 
 ## The HOLLYWOOD secret (owner, round 6): the hills behind stay a picture, but the nine letters
@@ -1809,7 +1702,7 @@ func _hollywood_sign() -> void:
 		add_child(letter)
 		letter.add_box_shape(Vector3(5.0 * u, 7.5 * u, 1.2), Vector3(0, 3.75 * u, 0))
 		var lmb := MeshBuilder.new()
-		for stroke: Array in LaOutside.glyph_strokes(word[i]):
+		for stroke: Array in glyph_strokes(word[i]):
 			for k in stroke.size() - 1:
 				var a: Vector2 = stroke[k]
 				var b: Vector2 = stroke[k + 1]

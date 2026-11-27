@@ -435,46 +435,6 @@ static func grass(base: Color, tile_m := 12.0, seed := 1) -> StandardMaterial3D:
 	return m
 
 
-## Chaparral hillside (the hills around LA): clumps of dark scrub over dry tan earth, darker in
-## the folds. Seen from far away, so one tile covers tile_m meters.
-static func chaparral(tile_m := 40.0, seed := 1) -> StandardMaterial3D:
-	var key := "chaparral_%.1f_%d" % [tile_m, seed]
-	if _cache.has(key):
-		return _cache[key]
-	var size := 256
-	var rng := RandomNumberGenerator.new()
-	rng.seed = seed
-	var big := FastNoiseLite.new()
-	big.seed = rng.randi()
-	big.frequency = 0.012
-	big.fractal_octaves = 3
-	var clump := FastNoiseLite.new()
-	clump.seed = rng.randi()
-	clump.frequency = 0.07
-	clump.fractal_octaves = 2
-	var fine := FastNoiseLite.new()
-	fine.seed = rng.randi()
-	fine.frequency = 0.7
-	var scrub := Color(0.16, 0.19, 0.1)
-	var sage := Color(0.3, 0.31, 0.2)
-	var dry := Color(0.47, 0.4, 0.27)
-	var dirt := Color(0.38, 0.3, 0.21)
-	var img := Image.create(size, size, false, Image.FORMAT_RGB8)
-	for y in size:
-		for x in size:
-			var b := big.get_noise_2d(x, y) * 0.5 + 0.5
-			var k := clump.get_noise_2d(x, y) * 0.5 + 0.5
-			var f := fine.get_noise_2d(x, y) * 0.5 + 0.5
-			var c := dry.lerp(dirt, smoothstep(0.55, 0.8, b))
-			c = c.lerp(sage, smoothstep(0.35, 0.55, k) * 0.8)
-			c = c.lerp(scrub, smoothstep(0.52, 0.66, k + (b - 0.5) * 0.3))
-			c = c.darkened((1.0 - f) * 0.3)
-			img.set_pixel(x, y, c)
-	var m := _world_material(img, tile_m, 1.0)
-	_cache[key] = m
-	return m
-
-
 ## Stone block wall (retaining walls): courses of rough blocks with mortar, rain streaks.
 static func masonry(base: Color, tile_m := 4.0, seed := 1) -> StandardMaterial3D:
 	var key := "masonry_%s_%.1f_%d" % [base.to_html(), tile_m, seed]

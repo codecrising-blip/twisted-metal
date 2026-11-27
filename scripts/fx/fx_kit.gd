@@ -96,6 +96,18 @@ static func _budget(p: CPUParticles3D) -> void:
 		p.amount = maxi(2, int(p.amount * k))
 
 
+## A one-shot burst emitter drawn in world space (every particle at once unless explosiveness says less).
+static func burst(mesh: Mesh, amount: int, lifetime: float, explosiveness := 1.0) -> CPUParticles3D:
+	var p := CPUParticles3D.new()
+	p.mesh = mesh
+	p.one_shot = true
+	p.explosiveness = explosiveness
+	p.amount = amount
+	p.lifetime = lifetime
+	p.local_coords = false
+	return p
+
+
 static func _ramp(colors: Array) -> Gradient:
 	var offsets := PackedFloat32Array()
 	var cols := PackedColorArray()
@@ -173,13 +185,7 @@ static func explosion(parent: Node, pos: Vector3, size := 1.0, tint := Color(1.0
 	parent.add_child(root)
 	root.global_position = pos
 
-	var ball := CPUParticles3D.new()
-	ball.mesh = particle_mesh(true)
-	ball.one_shot = true
-	ball.explosiveness = 0.95
-	ball.amount = int(28 * size) + 6
-	ball.lifetime = 0.6
-	ball.local_coords = false
+	var ball := burst(particle_mesh(true), int(28 * size) + 6, 0.6, 0.95)
 	ball.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	ball.emission_sphere_radius = 0.6 * size
 	ball.spread = 180.0
@@ -203,13 +209,7 @@ static func explosion(parent: Node, pos: Vector3, size := 1.0, tint := Color(1.0
 	root.add_child(sm)
 	sm.emitting = true
 
-	var sparks := CPUParticles3D.new()
-	sparks.mesh = particle_mesh(true)
-	sparks.one_shot = true
-	sparks.explosiveness = 1.0
-	sparks.amount = int(18 * size) + 4
-	sparks.lifetime = 0.9
-	sparks.local_coords = false
+	var sparks := burst(particle_mesh(true), int(18 * size) + 4, 0.9)
 	sparks.spread = 180.0
 	sparks.gravity = Vector3(0, -18, 0)
 	sparks.initial_velocity_min = 8.0 * size
@@ -271,13 +271,7 @@ static func explosion(parent: Node, pos: Vector3, size := 1.0, tint := Color(1.0
 static func spark(parent: Node, pos: Vector3, normal := Vector3.UP) -> void:
 	if parent == null or not parent.is_inside_tree():
 		return
-	var p := CPUParticles3D.new()
-	p.mesh = particle_mesh(true)
-	p.one_shot = true
-	p.explosiveness = 1.0
-	p.amount = 6
-	p.lifetime = 0.35
-	p.local_coords = false
+	var p := burst(particle_mesh(true), 6, 0.35)
 	p.direction = normal
 	p.spread = 60.0
 	p.gravity = Vector3(0, -15, 0)
@@ -299,13 +293,7 @@ static func spark(parent: Node, pos: Vector3, normal := Vector3.UP) -> void:
 static func shield_sparks(parent: Node, pos: Vector3, normal: Vector3) -> void:
 	if parent == null or not parent.is_inside_tree():
 		return
-	var p := CPUParticles3D.new()
-	p.mesh = particle_mesh(true)
-	p.one_shot = true
-	p.explosiveness = 1.0
-	p.amount = 14
-	p.lifetime = 0.4
-	p.local_coords = false
+	var p := burst(particle_mesh(true), 14, 0.4)
 	p.direction = normal if normal.length() > 0.01 else Vector3.UP
 	p.spread = 70.0
 	p.gravity = Vector3(0, -12, 0)
@@ -330,13 +318,7 @@ static func crash_burst(parent: Node, pos: Vector3, normal: Vector3, power: floa
 	var root := Node3D.new()
 	parent.add_child(root)
 	root.global_position = pos
-	var sparks := CPUParticles3D.new()
-	sparks.mesh = particle_mesh(true)
-	sparks.one_shot = true
-	sparks.explosiveness = 1.0
-	sparks.amount = int(14 + 26 * power * GraphicsSettings.particles())
-	sparks.lifetime = 0.7
-	sparks.local_coords = false
+	var sparks := burst(particle_mesh(true), int(14 + 26 * power * GraphicsSettings.particles()), 0.7)
 	sparks.direction = (normal + Vector3.UP * 0.6).normalized()
 	sparks.spread = 75.0
 	sparks.gravity = Vector3(0, -20, 0)
@@ -508,13 +490,7 @@ static func shatter(parent: Node, center: Vector3, extents: Vector3, dir: Vector
 	root.add_child(p)
 	p.emitting = true
 	if glass: # glints: tiny white sparkles that catch the light for a moment
-		var g := CPUParticles3D.new()
-		g.mesh = particle_mesh(true)
-		g.one_shot = true
-		g.explosiveness = 0.9
-		g.amount = int(24 * GraphicsSettings.particles())
-		g.lifetime = 0.6
-		g.local_coords = false
+		var g := burst(particle_mesh(true), int(24 * GraphicsSettings.particles()), 0.6, 0.9)
 		g.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
 		g.emission_box_extents = extents.abs()
 		g.direction = p.direction

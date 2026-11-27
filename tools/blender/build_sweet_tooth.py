@@ -55,7 +55,7 @@ profile = [(REAR, FLOOR), (NOSE - 0.02, FLOOR), (NOSE, FLOOR + 0.13), (NOSE, 1.2
            (1.98, 1.58), (1.72, 2.58), (1.6, ROOF), (REAR, ROOF)]
 shell = T.prism(profile, HW * 2, mat=paint, plane="YZ", name="shell")
 T.bevel(shell, 0.07, 2, 20)
-for (ay, track) in ((FA, TRACK_F), (RA, TRACK_R)):
+for ay in (FA, RA):
     for sx in (1, -1):
         T.cut(shell, T.cyl(0.69, 0.62, (sx * (HW - 0.16), ay, R), rot=(0, 90, 0), n=20))
 # the box's back opens (round 19): a hollow behind the tailgate, lined dark

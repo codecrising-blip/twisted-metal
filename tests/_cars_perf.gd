@@ -38,7 +38,6 @@ func _run() -> void:
 	var dc_max := 0
 	var dc_sum := 0
 	var tri_sum := 0
-	var cam: Camera3D = main.camera
 	for k in (180 if "render" in args else 600):
 		await process_frame
 		phys += Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)

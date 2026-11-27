@@ -3,7 +3,7 @@ extends Node3D
 ## Right now it runs the quality preview: Sweet Tooth vs Outlaw only (`-- full` for all five).
 ## The player has 3 lives (owner, session 3): a wreck costs one and you come back after 6 seconds
 ## in the same fight; the last one lost is game over. Stage 1 = TM2 Los Angeles with 4 enemies.
-## Run with `-- junkyard` after the project path to play the old Junkyard instead.
+## `-- paris` runs Paris (the front end sets `stage`).
 
 ## Quality preview (owner, session 5): one on one in Los Angeles, Sweet Tooth vs Outlaw.
 ## Round 20: the pause menu picks any of the cars remade in Blender for you (keys 1-5); round 22: and for the
@@ -75,9 +75,7 @@ func _ready() -> void:
 		var foe := opponent_car if opponent_car != "" else ("sweet_tooth" if player_car == "outlaw" else "outlaw")
 		drivers = [player_car, foe] # a mirror match is allowed
 	var args := OS.get_cmdline_user_args()
-	if "junkyard" in args:
-		arena = JunkyardArena.new()
-	elif "paris" in args or stage == "paris":
+	if "paris" in args or stage == "paris":
 		arena = ParisArena.new()
 	else:
 		arena = LosAngelesArena.new()

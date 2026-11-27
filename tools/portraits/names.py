@@ -134,26 +134,6 @@ def outlaw():
     print("outlaw: JAMIE ROBERTS from x 42 to", int(x2))
 
 
-def thumper():
-    base = Image.open(W + "/thumper_idle_clean.png").convert("RGB")
-    # BRUCE as the owner drew it, in place: one glyph spanning the five letters
-    G["BRUCE"] = ("thumper", [(52, 660), (232, 660), (232, 764), (131, 787), (91, 797), (52, 800)])
-    g = glyph("BRUCE")
-    a = raw("thumper")
-    # where it sat: the top-left of its trimmed box
-    red = a[..., 0] - np.maximum(a[..., 1], a[..., 2])
-    pm = Image.new("L", (a.shape[1], a.shape[0]), 0)
-    ImageDraw.Draw(pm).polygon(G["BRUCE"][1], fill=255)
-    m = (np.clip((red - 28.0) / 30.0, 0, 1) * (np.asarray(pm) > 0)) > 0.3
-    ys, xs = np.nonzero(m)
-    items = [(g, xs.min(), ys.min())]
-    sw = swoosh(165.0, -0.19, 1.0)
-    items.insert(0, (sw, 84.0, 772.0))
-    lay = letter_layer(base.size, items)
-    ink(base, lay).save(W + "/thumper_idle_named.png")
-    print("thumper: BRUCE")
-
-
 if DEBUG:
     keys = [k for k in G]
     ims = [glyph(k) for k in keys]
@@ -164,4 +144,3 @@ if DEBUG:
     sheet.save(W + "/glyphs.png")
 else:
     outlaw()
-    # thumper(): round 26 only; since round 29 the owner's new Thumper sheet carries BRUCE itself

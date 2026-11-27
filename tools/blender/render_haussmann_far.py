@@ -38,12 +38,12 @@ if rail is not None:
     nt.links.new(bs.outputs[0], out.inputs[0])
 
 
-def load(name, srgb):
+def load(name):
     a = np.asarray(Image.open(os.path.join(T.OUT, name)).convert("RGB")).astype(np.float32) / 255.0
     return a
 
 
-tex = (load("haussmann_albedo.webp", True), load("haussmann_normal.webp", False), load("haussmann_orm.webp", False))
+tex = (load("haussmann_albedo.webp"), load("haussmann_normal.webp"), load("haussmann_orm.webp"))
 
 
 def column(name, grounds, floors):

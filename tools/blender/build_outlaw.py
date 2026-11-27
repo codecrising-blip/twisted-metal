@@ -90,7 +90,6 @@ def side(sx):
     # side glass frames (the mesh over the glass is painted on)
     for (y0, y1) in PANES:
         yc, ln = (y0 + y1) / 2, (y1 - y0)
-        xg = sx * 0.9
         for z in (BELT + 0.045, ROOF - 0.13):
             xx = sx * (0.985 - (z - BELT) / (ROOF - 0.07 - BELT) * (0.985 - 0.76))
             body.append(T.box((0.03, ln, 0.03), (xx + sx * 0.012, yc, z), mat=armor))
@@ -229,10 +228,6 @@ if "--shape" in sys.argv:
     T.preview(out, size=(1000, 620), eye=(4.8, 5.6, 2.5), look=(0, 0.1, 0.8), fov=40, samples=12)
     T.preview(out.replace(".png", "_b.png"), size=(1000, 620), eye=(-5.2, -5.0, 2.9), look=(0, 0, 0.8), fov=40, samples=12)
     sys.exit(0)
-
-# ---------------------------------------------------------------- paint job
-def in_cabin(P):
-    return (P[:, 1] > -0.86) & (P[:, 1] < 0.8)
 
 def doors(P, N):  # white doors
     return ((np.abs(N[:, 0]) > 0.5) & (P[:, 1] > -1.12) & (P[:, 1] < 1.0) & (P[:, 2] > SILL + 0.02) & (P[:, 2] < BELT + 0.03)).astype(np.float32)

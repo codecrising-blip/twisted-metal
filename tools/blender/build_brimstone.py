@@ -41,7 +41,6 @@ dark = T.M("steel", (0.015, 0.015, 0.014), wear=0.3, rust=0.4, dirt=0.4)
 gun = T.M("steel", (0.06, 0.06, 0.06), wear=0.3, rust=0.3, dirt=0.3, rough=0.4)
 chain_m = T.M("steel", (0.12, 0.11, 0.1), wear=0.2, rust=0.6, dirt=0.3)
 glassy = T.M("glassy", (0.03, 0.03, 0.035), wear=0.0, rust=0.0, dirt=0.4)
-stained = T.M("glassy", (0.2, 0.2, 0.2), wear=0.0, rust=0.0, dirt=0.25, name="br_stained")
 rubber = T.M("rubber", (0.016, 0.016, 0.016), dirt=0.4)
 rim = T.M("steel", (0.035, 0.035, 0.035), wear=0.3, rust=0.4, dirt=0.4)
 lamp = T.glow((0.95, 0.9, 0.7))
@@ -51,10 +50,8 @@ burlap = T.M("cloth", (0.28, 0.22, 0.13), dirt=0.5)
 rags = T.M("cloth", (0.06, 0.055, 0.05), dirt=0.5)
 tnt = T.M("plastic", (0.45, 0.05, 0.035), wear=0.2, dirt=0.4, rough=0.6)
 iron = T.M("steel", (0.08, 0.055, 0.045), wear=0.5, rust=0.85, dirt=0.5, rough=0.7, name="br_iron")
-coal = T.glow((0.9, 0.25, 0.05))
 import bpy
 STAINED = bpy.data.materials.new("stained") # round 29: lit stained glass, its own picture (brimstone_stained.png)
-stained_faces = []
 markers = []
 decals = []
 
@@ -166,7 +163,7 @@ foot_a, foot_b = V((0.0, y_(3.75), 1.2)), V((0.0, NOSE + 0.98, 0.96))
 sd = (foot_b - foot_a)
 body.append(T.box((0.2, sd.length - 0.42, 0.17), loc=tuple(foot_a + sd.normalized() * ((sd.length - 0.42) / 2)), rot=(math.degrees(math.atan2(sd.z, sd.y)), 0, 0), mat=iron, bevel=0.01))
 tip_from = foot_a + sd.normalized() * (sd.length - 0.42)
-body.append(T.cyl(0.13, 0.42, loc=tuple(tip_from + sd.normalized() * 0.21), rot=K.aim(sd), mat=stake_w, n=4, r2=0.004))   # the sharpened point
+body.append(T.cyl(0.13, 0.42, loc=tuple(tip_from + sd.normalized() * 0.21), rot=T.aim(sd), mat=stake_w, n=4, r2=0.004))   # the sharpened point
 body.append(T.box((1.4, 0.2, 0.17), loc=(-0.08, y_(3.95), 1.24), rot=(0, 0, 4), mat=iron, bevel=0.01))                          # its iron arms across the hood
 body.append(T.box((0.2, 0.55, 0.17), loc=(0.0, y_(3.45), 1.27), rot=(-4, 0, 0), mat=iron, bevel=0.01))                           # the head against the glass
 for (cx, cy) in ((-0.68, 3.97), (0.52, 3.93), (0.0, 3.5), (0.0, 4.4)):                                                            # rivets where it is welded
@@ -224,7 +221,6 @@ T.cut(lb, T.box((PIT, PIT, DEPTH + 0.1), loc=(0, PY0, BED_Z - DEPTH / 2 + 0.05))
 for sx in (1, -1):  # the well's iron walls
     body.append(T.box((0.03, PIT, DEPTH), loc=(sx * PIT / 2, PY0, BED_Z - DEPTH / 2), mat=iron))
     body.append(T.box((PIT, 0.03, DEPTH), loc=(0, PY0 + sx * PIT / 2, BED_Z - DEPTH / 2), mat=iron))
-bars = []
 nb = 7
 for k in range(nb):  # spiked bars round the rim
     t = (k + 0.5) / nb - 0.5

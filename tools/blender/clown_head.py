@@ -81,7 +81,7 @@ def _skull():
     dg = bpy.context.evaluated_depsgraph_get()
     me0 = bpy.data.meshes.new_from_object(ob.evaluated_get(dg))
     smooth = bpy.data.objects.new("clown_smooth", me0)
-    T._link(smooth)
+    T.link(smooth)
     bvh0 = _surface(smooth)
     bpy.data.objects.remove(smooth)
     for root, tip, r0 in TONGUES:
@@ -100,7 +100,7 @@ def _skull():
     bpy.data.objects.remove(ob)
     bpy.data.metaballs.remove(mb)
     sk = bpy.data.objects.new("clown_skin", me)
-    T._link(sk)
+    T.link(sk)
     me.materials.append(_mats()["skin"])
     bvh = _surface(sk)  # the features are laid on the full-detail sculpt, before it is cut down
     T.decimate(sk, 0.06)

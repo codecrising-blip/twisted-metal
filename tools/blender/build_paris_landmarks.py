@@ -23,26 +23,21 @@ T.reset()
 PART = next((a for a in sys.argv[1:] if a in ("tower", "monuments", "buildings")), "tower")
 
 
-def lin(h):
-    c = [int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4)]
-    return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
-
-
-STONE = T.M("ashlar", lin("D8C9AC"), 0.3, 0.0, 0.35)
-STONE_DK = T.M("stone", lin("A3967F"), 0.35, 0.0, 0.5)
-CATHEDRAL = T.M("ashlar", lin("CBC2AE"), 0.35, 0.0, 0.55)
-WHITE = T.M("stone", lin("EEEAE0"), 0.15, 0.0, 0.3)
-GRANITE = T.M("stone", lin("B39684"), 0.25, 0.0, 0.3)
-EIFFEL = T.M("paint", lin("6B4E3A"), 0.25, 0.2, 0.35)
-STEEL = T.M("steel", lin("4C5155"), 0.25, 0.2, 0.4)
-GOLD = T.M("steel", lin("C9A54A"), 0.08, 0.0, 0.2)
-SLATE = T.M("stone", lin("50575D"), 0.15, 0.0, 0.4)
-ZINC = T.M("stone", lin("6F7C86"), 0.15, 0.0, 0.45)
-COPPER = T.M("paint", lin("5E8C78"), 0.2, 0.0, 0.35)
-RED = T.M("paint", lin("9E1B1B"), 0.25, 0.05, 0.4)
-WOOD = T.M("paint", lin("5A3B26"), 0.3, 0.1, 0.5)
-DARK = T.M("paint", lin("1E1A18"), 0.05, 0.0, 0.1)  # deep openings, window voids
-BRONZE = T.M("steel", lin("3F5A4C"), 0.2, 0.1, 0.4)
+STONE = T.M("ashlar", T.lin("D8C9AC"), 0.3, 0.0, 0.35)
+STONE_DK = T.M("stone", T.lin("A3967F"), 0.35, 0.0, 0.5)
+CATHEDRAL = T.M("ashlar", T.lin("CBC2AE"), 0.35, 0.0, 0.55)
+WHITE = T.M("stone", T.lin("EEEAE0"), 0.15, 0.0, 0.3)
+GRANITE = T.M("stone", T.lin("B39684"), 0.25, 0.0, 0.3)
+EIFFEL = T.M("paint", T.lin("6B4E3A"), 0.25, 0.2, 0.35)
+STEEL = T.M("steel", T.lin("4C5155"), 0.25, 0.2, 0.4)
+GOLD = T.M("steel", T.lin("C9A54A"), 0.08, 0.0, 0.2)
+SLATE = T.M("stone", T.lin("50575D"), 0.15, 0.0, 0.4)
+ZINC = T.M("stone", T.lin("6F7C86"), 0.15, 0.0, 0.45)
+COPPER = T.M("paint", T.lin("5E8C78"), 0.2, 0.0, 0.35)
+RED = T.M("paint", T.lin("9E1B1B"), 0.25, 0.05, 0.4)
+WOOD = T.M("paint", T.lin("5A3B26"), 0.3, 0.1, 0.5)
+DARK = T.M("paint", T.lin("1E1A18"), 0.05, 0.0, 0.1)  # deep openings, window voids
+BRONZE = T.M("steel", T.lin("3F5A4C"), 0.2, 0.1, 0.4)
 GLASS = T.glass((0.03, 0.045, 0.06))
 LIGHTS = T.glow((1.0, 0.82, 0.45))
 
@@ -132,7 +127,7 @@ def dome(objs, r, z, h, mat, n=24, onion=0.0, lantern=None, at=(0.0, 0.0)):
 items = {}  # name -> object
 
 
-def finish(name, objs, offset=(0, 0, 0)):
+def finish(name, objs):
     ob = T.join(objs, name)
     items[name] = ob
     return ob
@@ -239,7 +234,7 @@ def eiffel():
 # ------------------------------------------------------------------ monuments
 
 def arc():
-    W, D, H = 36.0, 18.0, 40.0
+    W, D = 36.0, 18.0
     body = T.box((W, D, 28.0), (0, 0, 14.0), mat=STONE)
     T.cut(body, arch_cutter(12.0, 24.0, D + 2.0, "Y"))
     T.cut(body, arch_cutter(7.0, 15.0, W + 2.0, "X"))

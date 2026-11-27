@@ -15,9 +15,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tmlib as T
-import numpy as np
 from mathutils import Matrix, Vector
-from PIL import Image
 
 T.reset()
 V = Vector
@@ -49,40 +47,21 @@ FA, RA = 1.12, -1.12  # axles
 body = []
 
 
-def aim(d):
-    q = Vector(d).normalized().to_track_quat("Z", "Y").to_euler()
-    return (math.degrees(q.x), math.degrees(q.y), math.degrees(q.z))
-
-
 def rod(a, b, r, mat, n=10, r2=None):
     a, b = Vector(a), Vector(b)
     v = b - a
-    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=aim(v), mat=mat, n=n, r2=r2)
+    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=T.aim(v), mat=mat, n=n, r2=r2)
 
 
 def limb(a, b, w, d, mat, bevel=0.02):
     a, b = Vector(a), Vector(b)
     v = b - a
-    return T.box((w, d, v.length), loc=tuple((a + b) / 2), rot=aim(v), mat=mat, bevel=bevel)
+    return T.box((w, d, v.length), loc=tuple((a + b) / 2), rot=T.aim(v), mat=mat, bevel=bevel)
 
 
 def side_prism(outline, x, width, mat, bevel=0.015):
     """A part drawn as its side outline (y, z) and given its width across X."""
     return T.prism(outline, width, loc=(x, 0, 0), mat=mat, plane="YZ", bevel=bevel)
-
-
-def strip(path, width, thick, mat, up=V((0, 0, 1)), taper=1.0):
-    secs = []
-    n = len(path)
-    for k, p in enumerate(path):
-        p = Vector(p)
-        t = (Vector(path[min(k + 1, n - 1)]) - Vector(path[max(k - 1, 0)])).normalized()
-        side = t.cross(up).normalized()
-        nrm = side.cross(t).normalized()
-        w = width * (1.0 + (taper - 1.0) * k / (n - 1)) / 2
-        secs.append([tuple(p + side * w + nrm * thick / 2), tuple(p - side * w + nrm * thick / 2),
-                     tuple(p - side * w - nrm * thick / 2), tuple(p + side * w - nrm * thick / 2)])
-    return T.loft(secs, mat=mat, angle=35.0)
 
 
 # ---------------------------------------------------------------- the bike (side view L: front to the left)
@@ -124,20 +103,20 @@ n_r = V((0, -up_r.z, up_r.y))
 mid = (ra + rb) / 2
 for sx in (1, -1):
     c = V((SX + sx * 0.3, 0, 0)) + mid + n_r * 0.012
-    body.append(T.box((0.07, 0.03, 0.6), loc=tuple(c), rot=aim(up_r), mat=tm2_metal, bevel=0.006))
+    body.append(T.box((0.07, 0.03, 0.6), loc=tuple(c), rot=T.aim(up_r), mat=tm2_metal, bevel=0.006))
     for k in range(5):
         body.append(T.sphere(0.012, loc=tuple(c + up_r * (-0.24 + k * 0.12) + n_r * 0.016), mat=tm2_metal, n=6))
 for k in range(6):
-    body.append(T.box((0.035, 0.03, 0.06), loc=tuple(V((SX + (k - 2.5) * 0.08, 0, 0)) + ra + up_r * 0.08 + n_r * 0.01), rot=aim(up_r), mat=tm2_metal, bevel=0.006))
+    body.append(T.box((0.035, 0.03, 0.06), loc=tuple(V((SX + (k - 2.5) * 0.08, 0, 0)) + ra + up_r * 0.08 + n_r * 0.01), rot=T.aim(up_r), mat=tm2_metal, bevel=0.006))
 sk = V((SX, 0, 0)) + mid + up_r * 0.05 + n_r * 0.03
 right = V((1, 0, 0))
 body.append(T.sphere(0.19, loc=tuple(sk + up_r * 0.04), mat=tm2, n=18, scale=(1.0, 0.42, 0.82)))    # cranium (relief)
-body.append(T.box((0.22, 0.06, 0.1), loc=tuple(sk - up_r * 0.15 + n_r * 0.01), rot=aim(up_r), mat=tm2, bevel=0.025))  # jaw
+body.append(T.box((0.22, 0.06, 0.1), loc=tuple(sk - up_r * 0.15 + n_r * 0.01), rot=T.aim(up_r), mat=tm2, bevel=0.025))  # jaw
 for k in range(6):  # teeth
-    body.append(T.box((0.026, 0.03, 0.05), loc=tuple(sk + right * (k - 2.5) * 0.034 - up_r * 0.11 + n_r * 0.05), rot=aim(up_r), mat=tm2, bevel=0.006))
+    body.append(T.box((0.026, 0.03, 0.05), loc=tuple(sk + right * (k - 2.5) * 0.034 - up_r * 0.11 + n_r * 0.05), rot=T.aim(up_r), mat=tm2, bevel=0.006))
 for sx in (1, -1):
     body.append(T.sphere(0.052, loc=tuple(sk + right * sx * 0.075 + up_r * 0.03 + n_r * 0.06), mat=tm2, n=10, scale=(1.1, 0.6, 1.0)))  # sockets
-    body.append(T.box((0.05, 0.04, 0.09), loc=tuple(sk + right * sx * 0.15 - up_r * 0.05 + n_r * 0.03), rot=aim(up_r), mat=tm2, bevel=0.015))  # cheek bones
+    body.append(T.box((0.05, 0.04, 0.09), loc=tuple(sk + right * sx * 0.15 - up_r * 0.05 + n_r * 0.03), rot=T.aim(up_r), mat=tm2, bevel=0.015))  # cheek bones
 # the front: three round ports low down
 for k in range(3):
     body.append(T.cyl(0.055, 0.04, loc=(SX + (k - 1) * 0.2, 0.17, 0.27), rot=(-90, 0, 0), mat=tm2, n=14))

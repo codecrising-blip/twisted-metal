@@ -20,7 +20,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tmlib as T
-from grimm_rider import Sculpt, cloth
+import carkit as K
+from grimm_rider import Sculpt
 from mathutils import Matrix, Vector
 
 T.reset()
@@ -53,17 +54,6 @@ APEX = 2.08         # where each frame's legs meet, beside his hands
 FOOT_Y, FOOT_Z = 0.86, 0.18  # the front and back feet
 FEET = 0.4          # platform top: where he stands
 body = []
-
-
-def aim(d):
-    q = Vector(d).normalized().to_track_quat("Z", "Y").to_euler()
-    return (math.degrees(q.x), math.degrees(q.y), math.degrees(q.z))
-
-
-def rod(a, b, r, mat, n=12, r2=None):
-    a, b = Vector(a), Vector(b)
-    v = b - a
-    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=aim(v), mat=mat, n=n, r2=r2)
 
 
 def channel(xc, a, b, rungs=True):
@@ -130,7 +120,7 @@ for sx in (1, -1):
 body.append(T.box((0.9, 0.06, 0.06), loc=(0, BY, FEET + 1.48), mat=black, bevel=0.006))
 body.append(T.box((0.9, 0.06, 0.06), loc=(0, BY, FEET + 0.05), mat=black, bevel=0.006))
 for sx in (1, -1):
-    body.append(rod((sx * 0.42, BY, FEET + 0.05), (-sx * 0.42, BY, FEET + 1.48), 0.025, black, n=8))
+    body.append(K.rod((sx * 0.42, BY, FEET + 0.05), (-sx * 0.42, BY, FEET + 1.48), 0.025, black, n=8))
 # the platform between the frames
 body.append(T.box(((XF - FW / 2) * 2, 1.1, FEET - 0.16), loc=(0, 0, (FEET + 0.16) / 2), mat=mech_m, bevel=0.02))
 body.append(T.box(((XF - FW / 2) * 2 - 0.06, 1.04, 0.03), loc=(0, 0, FEET + 0.0), mat=rail_m, bevel=0.008))
@@ -209,8 +199,8 @@ for sx in (1, -1):  # dark straps round his upper arms (AX-5/6) and cuffs where 
     sh = at(sx * 0.19, 0.0, 1.445)
     el = at(sx * 0.425, -0.015, 1.42)
     wr = at(sx * 0.29, 0.0, 1.58)
-    body.append(T.cyl(0.066, 0.045, loc=tuple(sh.lerp(el, 0.42)), rot=aim(el - sh), mat=strap, n=16))
-    body.append(T.cyl(0.042, 0.05, loc=tuple(wr), rot=aim(wr - el), mat=black, n=14))
+    body.append(T.cyl(0.066, 0.045, loc=tuple(sh.lerp(el, 0.42)), rot=T.aim(el - sh), mat=strap, n=16))
+    body.append(T.cyl(0.042, 0.05, loc=tuple(wr), rot=T.aim(wr - el), mat=black, n=14))
     # the goggles: a dark cup round each eye with a red lens inside it
     body.append(T.cyl(0.022, 0.032, loc=tuple(at(sx * 0.034, 0.083, 1.678)), rot=(-90, 0, 0), mat=dark, n=14))
     body.append(T.cyl(0.016, 0.01, loc=tuple(at(sx * 0.034, 0.1, 1.678)), rot=(-90, 0, 0), mat=goggle, n=14))

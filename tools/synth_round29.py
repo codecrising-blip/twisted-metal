@@ -120,7 +120,6 @@ boom = band(rng.standard_normal(n), 25, 260) * np.exp(-tt * 3.2) * 1.4
 rumble_l = band(rng.standard_normal(n), 20, 120) * np.exp(-tt * 1.1) * 0.6
 rumble_r = band(rng.standard_normal(n), 20, 120) * np.exp(-tt * 1.1) * 0.6
 # the wave rolling out: a whoosh sweeping from one ear to the other and back wider
-sweep = np.zeros(n)
 wn = band(rng.standard_normal(n), 300, 2600)
 ew = np.exp(-((tt - 0.25) / 0.22) ** 2)
 pan = 0.5 + 0.5 * np.sin(2 * np.pi * 1.6 * tt)

@@ -35,7 +35,6 @@ var _fuse_snd: AudioStreamPlayer3D
 var _spark := 0.0
 var _scan := 0.0
 var _done := false
-var _victim_floor := true
 var _from := Vector3.ZERO # where he was thrown from (the range counts from here)
 var _punched := false # round 31 (owner): one big punch into the windshield before he blows
 

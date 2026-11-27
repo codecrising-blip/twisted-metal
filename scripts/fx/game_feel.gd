@@ -172,32 +172,6 @@ static func stream_peak(stream: AudioStream) -> float:
 	return float(SoundPeaks.PEAKS.get(stream.resource_path.get_file().get_basename(), 0.0))
 
 
-## The peak of a named sound (its first file when it has variants).
-static func peak_of(name: String) -> float:
-	var list := streams(name)
-	return stream_peak(list[0]) if not list.is_empty() else 0.0
-
-
-## A build-up (an incoming whistle, a charge) timed so its loudest moment lands `seconds` from now,
-## on the impact: started later if there is time, or part-way through if there isn't. Fire and forget
-## (SatStrike times its own whistle, because it also cuts the tail at the beam).
-static func play_to_land(name: String, pos: Vector3, parent: Node, seconds: float, volume_db := 0.0, pitch := 1.0) -> void:
-	if parent == null or not parent.is_inside_tree():
-		return
-	var lead := peak_of(name) / pitch
-	if seconds <= lead:
-		var p := play(name, pos, parent, volume_db, pitch)
-		if p:
-			p.pitch_scale = pitch # exact: the timing depends on it
-			p.play((lead - seconds) * pitch)
-		return
-	parent.get_tree().create_timer(seconds - lead, false).timeout.connect(func():
-		if is_instance_valid(parent) and parent.is_inside_tree():
-			var p2 := play(name, pos, parent, volume_db, pitch)
-			if p2:
-				p2.pitch_scale = pitch)
-
-
 ## Screen sounds (menus): not placed in the world, keep playing while the game is paused.
 static func ui(name: String, tree: SceneTree, volume_db := -4.0) -> void:
 	var list := streams(name)

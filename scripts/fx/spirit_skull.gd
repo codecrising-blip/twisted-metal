@@ -149,13 +149,7 @@ static func burst(world: Node, pos: Vector3) -> void:
 	tw.chain().tween_callback(f.queue_free)
 	GameFeel.flash(world, pos, 1.6, PINK, 0.08)
 	_ground_glow(world, Specials.ground_below(world, pos + Vector3.UP * 1.5) + Vector3.UP * 0.12, 9.0, 0.55)
-	var p := CPUParticles3D.new()
-	p.mesh = FxKit.particle_mesh(true)
-	p.one_shot = true
-	p.explosiveness = 0.9
-	p.amount = 60
-	p.lifetime = 0.5 # quick: sparks left falling on the car read as it burning (owner, round 24)
-	p.local_coords = false
+	var p := FxKit.burst(FxKit.particle_mesh(true), 60, 0.5, 0.9) # quick: sparks left falling on the car read as it burning (owner, round 24)
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
 	p.emission_sphere_radius = 0.6
 	p.direction = Vector3.UP

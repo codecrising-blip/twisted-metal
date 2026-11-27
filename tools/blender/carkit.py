@@ -1,5 +1,5 @@
 """Shared pieces for the car builds of round 28 (Thumper, Brimstone, Darkside): rods, glass quads, body
-sections, open tyre rings, a wire wheel and a sculpted crewman. Import after tmlib (bpy first).
+sections, open tyre rings, a wire wheel and a chain. Import after tmlib (bpy first).
 Blender space: +Y forward, +Z up, metres; wheels are built along X (their axle) and placed by markers."""
 import math
 
@@ -12,15 +12,10 @@ import tmlib as T
 V = Vector
 
 
-def aim(d):
-    q = Vector(d).normalized().to_track_quat("Z", "Y").to_euler()
-    return (math.degrees(q.x), math.degrees(q.y), math.degrees(q.z))
-
-
 def rod(a, b, r, mat, n=12, r2=None):
     a, b = Vector(a), Vector(b)
     v = b - a
-    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=aim(v), mat=mat, n=n, r2=r2)
+    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=T.aim(v), mat=mat, n=n, r2=r2)
 
 
 def quad(p, mat, th=0.012):
@@ -86,51 +81,6 @@ def wire_wheel(name, R, w, rubber, white, chrome, dark, spokes=36):
     return T.join(parts, name)
 
 
-# ------------------------------------------------------------------ a crewman (Thumper's Drive-By), sculpted
-
-def crewman(name, at, side, mats):
-    """One of Bruce's crew from the waist up, sitting on the door sill facing +Y with a compact machine gun
-    held at the shoulder: one melted surface for the body in its hooded jacket (chest, shoulders and arms
-    flow together), the head and hands in skin, a black knit cap and a dark bandana over the face.
-    `at` = the sill point (the node's pivot), `side` = +1 right, -1 left (the gun arm is on the outer side)."""
-    import grimm_rider as GR
-    jacket, skin, cap, bandana, gun = mats
-    P = V(at)
-    s = side
-    body = GR.Sculpt(name + "_body", res=0.02)
-    body.ball(P + V((0, -0.02, 0.02)), 0.17, size=(1.25, 0.95, 0.8))         # hips on the sill
-    body.ball(P + V((0, 0.0, 0.2)), 0.16, size=(1.2, 0.85, 1.0))             # belly
-    body.ball(P + V((0, 0.01, 0.4)), 0.19, size=(1.3, 0.85, 1.0))            # chest
-    body.ball(P + V((0, -0.08, 0.5)), 0.12, size=(1.4, 1.0, 0.8))            # the hood bunched behind the neck
-    sh_o, sh_i = P + V((s * 0.22, 0.0, 0.5)), P + V((-s * 0.22, 0.0, 0.5))
-    el_o, el_i = P + V((s * 0.24, 0.2, 0.33)), P + V((-s * 0.12, 0.26, 0.3))
-    ha_o, ha_i = P + V((s * 0.06, 0.4, 0.42)), P + V((0.0, 0.58, 0.4))
-    body.ball(sh_o, 0.1)
-    body.ball(sh_i, 0.1)
-    body.chain(sh_o, el_o, 0.075, 0.065)
-    body.chain(el_o, ha_o + V((0, -0.05, 0)), 0.065, 0.05)
-    body.chain(sh_i, el_i, 0.075, 0.065)
-    body.chain(el_i, ha_i + V((0, -0.05, 0)), 0.065, 0.05)
-    parts = [body.mesh(jacket, ratio=0.12)]
-    head = GR.Sculpt(name + "_head", res=0.014)
-    head.ball(P + V((0, 0.02, 0.6)), 0.05)                                     # neck
-    head.ball(P + V((0, 0.03, 0.74)), 0.105, size=(0.9, 1.0, 1.15))          # skull
-    head.ball(P + V((0, 0.09, 0.7)), 0.06, size=(1.0, 0.8, 0.9))             # jaw
-    head.ball(ha_o, 0.045)
-    head.ball(ha_i, 0.045)
-    parts.append(head.mesh(skin, ratio=0.18))
-    parts.append(T.sphere(0.112, loc=tuple(P + V((0, 0.02, 0.785))), mat=cap, n=14, scale=(0.95, 1.05, 0.8)))   # knit cap
-    parts.append(T.cyl(0.028, 0.2, loc=tuple(P + V((0, 0.02, 0.73))), rot=(0, 90, 0), mat=cap, n=10))           # its turned-up brim, side to side
-    parts.append(T.sphere(0.098, loc=tuple(P + V((0, 0.07, 0.69))), mat=bandana, n=14, scale=(1.02, 0.9, 0.62)))  # bandana over nose and mouth
-    # the gun: receiver, barrel shroud, magazine, folded stock against the outer shoulder
-    g = P + V((s * 0.03, 0.5, 0.45))
-    parts.append(T.box((0.06, 0.32, 0.09), loc=tuple(g), mat=gun, bevel=0.008))
-    parts.append(rod(g + V((0, 0.16, 0.01)), g + V((0, 0.34, 0.01)), 0.018, gun, n=8))
-    parts.append(T.box((0.045, 0.05, 0.16), loc=tuple(g + V((0, 0.05, -0.11))), rot=(-12, 0, 0), mat=gun, bevel=0.005))
-    parts.append(T.box((0.03, 0.2, 0.03), loc=tuple(g + V((0, -0.2, -0.01))), mat=gun, bevel=0.004))
-    return T.join(parts, name)
-
-
 def chain(parts, a, b, mat, sag=0.12, link=0.035):
     """A hanging chain a -> b: round links alternately flat and on edge along a sagging line."""
     a, b = V(a), V(b)
@@ -142,4 +92,4 @@ def chain(parts, a, b, mat, sag=0.12, link=0.035):
         axis = d.cross(V((0, 0, 1))) if i % 2 else V((0, 0, 1)).cross(d).cross(d)
         if axis.length < 1e-4:
             axis = V((1, 0, 0))
-        parts.append(T.cyl(link, link * 0.4, loc=tuple((p + q) / 2), rot=aim(axis), mat=mat, n=8))
+        parts.append(T.cyl(link, link * 0.4, loc=tuple((p + q) / 2), rot=T.aim(axis), mat=mat, n=8))

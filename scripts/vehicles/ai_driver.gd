@@ -242,9 +242,6 @@ func _energy_moves(v: Vehicle, delta: float) -> void:
 			and randf() < 0.25 * aggression:
 		v.want_move = "secondary"
 		return
-	if second == "rim_shot" and charges >= 2 and to.length() < 40.0 and ahead < deg_to_rad(15.0) and randf() < 0.25 * aggression:
-		v.want_move = "secondary"
-		return
 	# Round 29: Thumper's Earthquake Slam on a car right beside him (or two near him), keeping fire for the
 	# Megafire; round 28: Brimstone's sermon when someone is hurting him; Darkside's ash on a car close behind or
 	# beside him that still has energy to lose.

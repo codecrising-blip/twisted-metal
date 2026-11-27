@@ -91,7 +91,7 @@ static func build(id: String) -> Node3D:
 	if marks.has("m_top"):
 		m.set_meta("top", (marks["m_top"] as Transform3D).origin)
 	if marks.has("m_head"):
-		HeroModels._headlight_beam(m, (marks["m_head"] as Transform3D).origin)
+		_headlight_beam(m, (marks["m_head"] as Transform3D).origin)
 	var cone_parent: Node3D = m
 	var cone_at := Vector3.ZERO
 	if marks.has("mascot") and marks.has("m_mascot"): # round 19: Sweet Tooth's head on its roof spring (bobs)
@@ -108,22 +108,10 @@ static func build(id: String) -> Node3D:
 	if LEAN.has(id):
 		m.set_meta("lean", LEAN[id])
 	# Round 28: markers named m_meta_<name> become model metadata (Thumper's nozzle, Brimstone's sinner and bell),
-	# and the parts the specials move get their own nodes: Thumper's gunmen (hidden until the Drive-By, turning at
-	# the shoulder marker m_gunman_*), the sinner chained in Brimstone's bed, Darkside's red slit.
+	# and the parts the specials move get their own nodes: the sinner chained in Brimstone's bed, Darkside's slit.
 	for mk: String in names:
 		if mk.begins_with("m_meta_"):
 			m.set_meta(mk.substr(7), (marks[mk] as Transform3D).origin)
-	for part: String in ["gunman_l", "gunman_r"]:
-		if marks.has(part) and marks.has("m_" + part):
-			var pivot := Node3D.new()
-			pivot.name = part
-			pivot.position = (marks["m_" + part] as Transform3D).origin
-			var mi := ModelLib.instance(id, part)
-			mi.name = "mesh"
-			mi.position = -pivot.position
-			pivot.add_child(mi)
-			pivot.visible = false
-			m.add_child(pivot)
 	if marks.has("bed_sinner"):
 		m.add_child(ModelLib.instance(id, "bed_sinner"))
 	if marks.has("bed_plate"): # round 29: the floor of the sinner's well; Sinner.start kicks it up
@@ -148,7 +136,7 @@ static func build(id: String) -> Node3D:
 		sm.position = -sp.position
 		sp.add_child(sm)
 		m.add_child(sp)
-	HeroModels._ground_shadow(m, SHADOW.get(id, Vector2(2.8, 5.8)))
+	_ground_shadow(m, SHADOW.get(id, Vector2(2.8, 5.8)))
 	return m
 
 
@@ -185,3 +173,40 @@ static func cone_fire_blue(m: Node3D, blue: bool) -> void:
 	fire.amount = 16 if blue else 10
 	var glow: Light3D = m.get_meta("cone_glow")
 	glow.light_color = Color(0.3, 0.55, 1.0) if blue else Color(1.0, 0.45, 0.12)
+
+
+## Soft dark patch on the ground under the car (contact shadow): keeps it from looking pasted on.
+static var _shadow_mat: StandardMaterial3D
+
+static func _ground_shadow(m: Node3D, size: Vector2) -> void:
+	if _shadow_mat == null:
+		_shadow_mat = StandardMaterial3D.new()
+		_shadow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_shadow_mat.albedo_texture = FxKit.soft_texture()
+		_shadow_mat.albedo_color = Color(0, 0, 0, 0.6)
+		_shadow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_shadow_mat.disable_receive_shadows = true
+	var mi := MeshInstance3D.new()
+	var q := QuadMesh.new()
+	q.size = size
+	q.orientation = PlaneMesh.FACE_Y
+	mi.mesh = q
+	mi.material_override = _shadow_mat
+	mi.position = Vector3(0, 0.03, 0)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	m.add_child(mi)
+
+
+## The real headlight (HIGH only; LOW fakes the beam: VehicleFx.headlight_beams).
+static func _headlight_beam(m: Node3D, pos: Vector3) -> void:
+	var spot := SpotLight3D.new()
+	spot.position = pos
+	spot.light_color = Color(1.0, 0.93, 0.8)
+	spot.light_energy = 3.0
+	spot.spot_range = 32.0
+	spot.spot_angle = 30.0
+	spot.spot_attenuation = 0.8
+	spot.rotation_degrees = Vector3(-6, 0, 0)
+	spot.add_to_group(GraphicsSettings.HEADLIGHT_GROUP)
+	spot.visible = false # switched with the headlights button (Vehicle.toggle_headlights)
+	m.add_child(spot)

@@ -8,9 +8,7 @@ sparks. Those faces are flat pictures that always look at the viewer, so this re
 - a soft red aura round it (blurred alpha), so it reads as glowing light, not paint.
     /tmp/bpy3.13/bin/python tools/blender/build_spirit_skull.py
 Writes assets/fx/spirit_skull.png (512 x 512, RGBA, straight alpha)."""
-import math
 import os
-import sys
 
 import bpy
 import numpy as np

@@ -81,7 +81,7 @@ func _cyl(mat: Material, r: float, h: float, pos: Vector3, rot := Vector3.ZERO, 
 
 
 func _solid(size: Vector3, pos: Vector3) -> void:
-	_arena._solid(size, _xf(pos))
+	_arena.solid(size, _xf(pos))
 
 
 ## Text facing out of the front (toward the arena), merged into the static stage as geometry.

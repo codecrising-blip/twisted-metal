@@ -16,6 +16,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tmlib as T
+import carkit as K
 from mathutils import Matrix, Vector
 
 T.reset()
@@ -46,17 +47,6 @@ body = []
 def y_(d):
     """Distance from the tail in the side view (metres) -> our y."""
     return TAIL + d
-
-
-def aim(d):
-    q = Vector(d).normalized().to_track_quat("Z", "Y").to_euler()
-    return (math.degrees(q.x), math.degrees(q.y), math.degrees(q.z))
-
-
-def rod(a, b, r, mat, n=12, r2=None):
-    a, b = Vector(a), Vector(b)
-    v = b - a
-    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=aim(v), mat=mat, n=n, r2=r2)
 
 
 def section(y, hw, zb, zt, c=0.07, tuck=0.06):
@@ -133,7 +123,7 @@ for k in range(3):
 body.append(T.box((0.72, 0.07, 0.015), loc=(0, y_(3.36), 1.003), mat=dark))
 # side pipes along the sills, two slots in each front fender
 for sx in (1, -1):
-    body.append(rod(V((sx * 1.04, y_(2.2), 0.47)), V((sx * 1.04, y_(3.95), 0.47)), 0.055, tm2_metal))
+    body.append(K.rod(V((sx * 1.04, y_(2.2), 0.47)), V((sx * 1.04, y_(3.95), 0.47)), 0.055, tm2_metal))
     body.append(T.cyl(0.07, 0.1, loc=(sx * 1.04, y_(2.15), 0.47), rot=(-90, 0, 0), mat=tm2_metal, n=14))
     body.append(T.cyl(0.05, 0.11, loc=(sx * 1.04, y_(2.14), 0.47), rot=(-90, 0, 0), mat=dark, n=12))
     for k in range(2):
@@ -147,7 +137,7 @@ for sx in (1, -1):
     for k in range(8):
         body.append(T.cyl(0.055, 0.28, loc=(x, y_(3.28 + k * 0.105), 1.27), mat=tm2_metal, n=12))
     body.append(T.box((0.1, 0.86, 0.06), loc=(x, y_(3.65), 1.14), mat=dark, bevel=0.01))
-    body.append(rod(V((x, y_(4.08), 1.29)), V((x, y_(4.9), 1.29)), 0.055, gun_steel))
+    body.append(K.rod(V((x, y_(4.08), 1.29)), V((x, y_(4.9), 1.29)), 0.055, gun_steel))
     body.append(T.cyl(0.075, 0.1, loc=(x, y_(4.88), 1.29), rot=(-90, 0, 0), mat=gun_steel, n=14))
     body.append(T.cyl(0.07, 0.12, loc=(x, y_(4.12), 1.29), rot=(-90, 0, 0), mat=gun_steel, n=14))
     markers.append(T.marker("m_gun_" + ("r" if sx > 0 else "l"), (x, y_(4.97), 1.29)))

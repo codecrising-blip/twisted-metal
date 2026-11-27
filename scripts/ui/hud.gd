@@ -239,22 +239,6 @@ func _label(text: String, size: int, color: Color, title := false) -> Label:
 	return l
 
 
-func _plain_bar(color: Color, width: float) -> ProgressBar:
-	var bar := ProgressBar.new()
-	bar.custom_minimum_size = Vector2(width, 10)
-	bar.show_percentage = false
-	bar.max_value = 100.0
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0, 0, 0, 0.6)
-	bg.border_color = Color(0.3, 0.28, 0.26, 0.8)
-	bg.set_border_width_all(1)
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = color
-	bar.add_theme_stylebox_override("background", bg)
-	bar.add_theme_stylebox_override("fill", fill)
-	return bar
-
-
 # ---------------------------------------------------------------- runtime
 
 func _process(delta: float) -> void:

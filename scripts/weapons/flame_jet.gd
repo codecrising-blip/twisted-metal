@@ -259,7 +259,6 @@ static func burn_box(by: Vehicle, origin: Vector3, fwd: Vector3, reach: float, h
 
 ## Everything in a cone of fire: cars (not behind walls), props, running sinners.
 static func scorch(by: Vehicle, origin: Vector3, fwd: Vector3, reach: float, cone_deg: float, damage: float, burn: float) -> void:
-	var world := by.get_parent()
 	var space := by.get_world_3d().direct_space_state
 	var cone := deg_to_rad(cone_deg)
 	for node in by.get_tree().get_nodes_in_group("vehicles"):

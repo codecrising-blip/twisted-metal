@@ -23,7 +23,7 @@ import sys
 
 import bpy  # first: it puts bmesh and mathutils on the path
 import bmesh
-from mathutils import Euler, Matrix, Quaternion, Vector
+from mathutils import Euler, Vector
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(ROOT, "assets", "models")
@@ -405,7 +405,6 @@ def shape_sheet(rig, path):
     bmesh.ops.create_grid(bm, x_segments=1, y_segments=1, size=3.0)
     bm.to_mesh(floor)
     s.collection.objects.link(bpy.data.objects.new("floor", floor))
-    shots = []
     tiles = []
     for act, frames in (("run_burn", (1, 6, 11, 16, 21, 26, 31, 36)), ("kneel", (1, 12)), ("crawl", (1, 12, 24)), ("prone", (1,)), ("limp", (1,))):
         rig.animation_data.action = bpy.data.actions[act]

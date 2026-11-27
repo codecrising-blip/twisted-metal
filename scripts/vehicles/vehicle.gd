@@ -210,7 +210,7 @@ var _clamp_spark := 0.0
 var _clamp_hurt := 0.0
 var _clamp_by: Vehicle
 var _clamp_snd: AudioStreamPlayer3D
-var _energy_mines: Array = []
+var _energy_mines: Array = [] # live energy mines (Mine.drop_energy keeps at most 3)
 var _shield_mat: ShaderMaterial # round 17: a forest-green force-field shell hovering round the whole car
 var _shield_flare := 0.0 # a hit brightens the whole field for a moment
 var _shield_hit_age := 9.0 # seconds since the field last blocked a hit (the hot patch fades)
@@ -256,7 +256,6 @@ var ash_cover := 0.0 # round 29: Darkside pouring his ash: nobody can see or loc
 var _bed_sinner: Node3D
 var _locked := {} # weapon id -> seconds left of a meltdown lock
 var _charge_hum: AudioStreamPlayer3D
-var _charge_hum_t := 0.0
 var _knock := 0.0 # seconds left of "thrown": tyres barely grip, so blasts carry the car sideways
 var _designed_spin := 0.0 # seconds left of a flip a weapon gave the car (the stabiliser keeps out)
 var _wheel_rest: Dictionary = {} # wheel node -> its resting position
@@ -960,10 +959,6 @@ func is_on_floor() -> bool:
 	return _grounded
 
 
-func get_floor_normal() -> Vector3:
-	return _ground_n
-
-
 ## Mass in physics units (kg-like). `weight` is the design class (1.0 light .. 2.8 super heavy).
 func rigid_mass() -> float:
 	return weight * 1000.0
@@ -1386,7 +1381,7 @@ func _combat(delta: float) -> void:
 		elif in_fire_weapon:
 			charge_time = minf(charge_time + delta, charge_full(charging_id))
 			_charge_hold += delta
-			_charge_sound(delta)
+			_charge_sound()
 			_charge_notes()
 			var melt := meltdown_at(charging_id)
 			if melt > 0.0 and _charge_hold >= melt:
@@ -1786,7 +1781,7 @@ func _cancel_charge() -> void:
 ## Charging sound (owner, round 6): a tap makes no sound. Held, five beeps climb in pitch
 ## ("pew, Pew, PEw, PEW, PEW") until the shot is full; held past full, a humming buzz that keeps
 ## going and climbs until you let go or it melts down.
-func _charge_sound(delta: float) -> void:
+func _charge_sound() -> void:
 	if not is_player:
 		return
 	if charging_id == "charged_missiles": # round 24: the owner's barrage charge sound, looped until let go
@@ -2072,12 +2067,6 @@ func _slot_fx(slots: Array, loaded: int, col: Color) -> void:
 		m.emission = col
 		var g: StandardMaterial3D = lens.get_meta("glow")
 		g.albedo_color = Color(col.r, col.g, col.b, 0.55)
-
-
-## The next special comes back this many seconds sooner (Roadkill catching his blade).
-func special_bonus(seconds: float) -> void:
-	if ammo.get(special_id, 0) < special_charges:
-		_special_timer += seconds
 
 
 ## A turbo pickup fills the bar up again (turbo never refills by itself).
@@ -2594,9 +2583,6 @@ func _secondary() -> void:
 			_break_invisibility()
 			var blade := Boomerang.start(self, WeaponData.get_def("boomerang"))
 			blade.refund = cost
-		"rim_shot": # round 21: Axel's secondary (replaced by the tyre dash in round 23; kept for other cars)
-			_break_invisibility()
-			RimShot.start(self, WeaponData.get_def("rim_shot"))
 		"tyre_dash": # round 23: Axel's secondary
 			_break_invisibility()
 			start_dash(WeaponData.get_def("tyre_dash"))

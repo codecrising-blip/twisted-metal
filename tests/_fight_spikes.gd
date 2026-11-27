@@ -72,7 +72,4 @@ func _run() -> void:
 		fcensus[key] = int(fcensus.get(key, 0)) + 1
 	for k in fcensus:
 		print("  FIRE %3d x %s" % [fcensus[k], k])
-	var kills := 0
-	for e: Vehicle in main.enemies:
-		kills += 1 if e.is_dead else 0
 	quit()

@@ -207,14 +207,7 @@ const DEFS := {
 		"launch": {"light": 18.0, "medium": 12.6, "heavy": 8.1, "super": 4.5},
 		"cooldown": 1.0, "recharge": 15.0, "sound_db": 3.5,
 	},
-	# Axel's secondary: Rim Shot (design 01). A spiked tyre rolls along the ground at 45 m/s and bounces
-	# off walls up to 3 times in 4 s: 20 to each car it rolls through (it goes on), 2 cars at most.
-	"rim_shot": {
-		"label": "Rim Shot", "kind": "tyre", "color": Color(0.85, 0.85, 0.8), "handler": "rim_shot",
-		"speed": 45.0, "damage": 20.0, "bounces": 3, "max_hits": 2, "life": 4.0, "push": 6.0,
-		"squish": 0.05, "shake": 0.3, "cooldown": 1.0, "sound_db": 3.5,
-	},
-	# Axel's secondary (round 23, owner's design; replaces Rim Shot for him): Tyre Dash. His tyres close in, he
+	# Axel's secondary (round 23, owner's design): Tyre Dash. His tyres close in, he
 	# tears off at speed_mult x his top speed for "time" s with "handling" x steering, taking "armor" x damage,
 	# bouncing off walls; each car he hits takes ram_damage, again only after a wall bounce (Vehicle._dash_ram).
 	"tyre_dash": {
@@ -312,12 +305,11 @@ const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "
 
 ## Secondary weapons (design 1.6): paid in charges of the car's special, Sweet Bot two, the rest one (Soul Harvest
 ## was two until round 31, owner).
-const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1, "boomerang": 1, "rim_shot": 1, "reaper_sweep": 1, "tyre_dash": 1,
+const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1, "boomerang": 1, "reaper_sweep": 1, "tyre_dash": 1,
 	"hellfire_sermon": 1, "ash_cloud": 1} # Thumper's Earthquake Slam is paid in Megafire tabs ("tabs")
 const BOT_HEALTH := 59.0 # owner, round 16: a power missile and a fire missile (45 + 14) take it down
 const BOT_MISSILES := 20
 const BOT_GAP := 0.1 # seconds between missiles: the barrage lasts two seconds
-const BOT_WAIT := 30.0 # left waiting this long, it blows itself up (harmless)
 const BOT_RANGE := 70.0 # how far it looks for a target
 
 ## Owner, session 3: a health pickup restores a share of max health, so armor matters all match.

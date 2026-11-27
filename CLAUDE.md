@@ -42,10 +42,9 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
   driven further than in real time.
 - The headless smoke test takes about 20 s (it drives, fights and respawns in real time).
 - After adding a new `class_name` script, run `--import` once or other scripts can't find the class.
-- **Rebake the LA backdrop** after changing `scripts/arena/la_city.gd` (needs xvfb, about a minute):
-  `xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --path . -s tests/bake_backdrop.gd -- /tmp/faces 2048`
-  then `python3 tests/cube_to_panorama.py /tmp/faces assets/backdrops/los_angeles_city.jpg 6144`. Keep the `.import`
-  next to the jpg on VRAM compression with mipmaps (uncompressed it would cost ~100 MB of video memory).
+- **Backdrops** are Cycles renders: `/tmp/bpy3.13/bin/python tools/blender/build_la_backdrop.py` /
+  `build_paris_backdrop.py` write `assets/backdrops/*.jpg`. Keep each `.import` on VRAM compression with mipmaps
+  (uncompressed a 6k panorama costs ~100 MB of video memory).
 - **Performance budget (owner's HD 5500 lagged, worst near the power tower):** keep draw calls low. Merge static
   pieces with MeshBuilder (`_solid()` / `_solid_box_mb()` in LA add colliders to one shared body), share one mesh
   between repeated props (palms, stands, lamps), no dynamic lights on pickups/missiles on LOW, decorative lights in
@@ -70,8 +69,8 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
   HeightMapShape3D: ~2 ms per car per physics tick on Godot Physics, and low FPS runs several ticks per frame (spiral).
   Now a quadtree trimesh (`_ground_faces`: big triangles where flat, 13k instead of 205k): ~0.24 ms. (2) 37% of the
   stage's triangles were bushes (384 tris x 537), 420 of them on the hills OUTSIDE the walls. Owner's rule: nothing
-  past the walls costs frames. Hills, HOLLYWOOD sign (its easter egg is gone) and blimp moved to `la_outside.gd`, BAKE
-  ONLY, rendered into the backdrop; bushes ~84 tris, fade at 170 m. Views: 430-570k -> 230-350k triangles.
+  past the walls costs frames. Hills, HOLLYWOOD sign (its easter egg is gone) and blimp are only in the backdrop
+  picture (round 32: the GL bake scripts are gone, the backdrop is a Blender render); bushes ~84 tris, fade at 170 m. Views: 430-570k -> 230-350k triangles.
   (3) HUD filter copied the screen with mipmaps every frame: no mipmaps, and on LOW it only runs while a hit flashes.
   (4) Pit of fire on LOW: ~45 flame quads instead of ~110 (the pit's FirePool draws no flames of its own).
   (5) `max_physics_steps_per_frame` 4. (6) F3 shows physics ms, scripts ms, draws, triangles. AI rate untouched (owner).
@@ -254,7 +253,7 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   (the old floor snap glued them: Outlaw could not reach the hill-top health), flips land where they land, a car on
   its roof slides and stops (no more instant zero). `flipped` = lying on roof/side; **gas + left/right** rolls it back
   (`_upside_watch`, owner round 5; AI does the same). Same API as before: `velocity` is a property over
-  `linear_velocity`, `speed`, `is_on_floor()`, `get_floor_normal()`; renamed `push()` (was apply_impulse),
+  `linear_velocity`, `speed`, `is_on_floor()`, renamed `push()` (was apply_impulse),
   `freeze_for()` (was freeze), `weight` (was mass) because RigidBody3D owns those names. Rams still deal design damage
   and knock the cars apart (bodies alone stick together). Physics per tick in a fight: 6.6 -> 1.55 ms.
 - **Round 6 (owner: "lag is GONE", physics "so much better"), full text `docs/design/11-owner-round-6.md`:**
@@ -488,7 +487,7 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   **Black ball found:** Godot 4.3 Compatibility draws not-yet-emitted CPUParticles3D slots as opaque black quads at the
   emitter while it runs (godotengine/godot#107978): smoke, explosions, the old burning-driver smoke. `FxKit.ghost_guard`
   on `node_added` (main.gd): running emitters pre-fill (`preprocess` = lifetime), one-shots fire all at once; additive
-  ones are immune. `tests/_particle_bug.gd` shows it. **Fire:** the sheet fire (`tmb_fire`) was "narrow", and the first
+  ones are immune. **Fire:** the sheet fire (`tmb_fire`) was "narrow", and the first
   four car-fire previews were rejected; TMB fire = a rounded "foamy" heap of crossed thin strands (pyre) / hair strands
   (burning car), streaming back and swinging with turns. `FoamFire` (`scripts/fx/foam_fire.gd(shader)`): world-space
   puffs born in `box` with `inherit` of the emitter's velocity, losing it at `drag` (physics swing for free), one
@@ -504,8 +503,7 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   is drawn black for one frame: the dot inside explosions). `tests/_fire_styles.gd -- 1 scene(park|side|drive|spot|pit)
   out frames every`. **Headlights (owner: "lag when turned on"):** measured: the first switch-on built the fake beams,
   textures and shaders on the spot (one 234 ms frame against ~117; after it 1-3%). Built hidden with the car, prewarmed
-  (`GameFeel.prewarm` also warms FoamFire); ground pool = trapezoid hugging its lit texture (`VehicleFx._pool_mesh`).
-  `tests/_light_perf.gd`. **Secondary weapons (combo R L U, `Vehicle._secondary`, paid in special charges
+  (`GameFeel.prewarm` also warms FoamFire); ground pool = trapezoid hugging its lit texture (`VehicleFx._pool_mesh`). **Secondary weapons (combo R L U, `Vehicle._secondary`, paid in special charges
   `WeaponData.SECONDARY_COST`; `Roster` "secondary"):** **Sweet Bot** (`SweetBot`, owner's round-16 design; Blender model
   `tools/blender/build_sweet_bot.py`: legs + `upper` turning at `m_waist`, `m_tube_l/r0..9` muzzles, `m_cone` flame; 3.3k
   tris): 2 charges, dropped behind the truck facing back, waits; the special's fire button (HUD "FIRE: LAUNCH BOT", it is
@@ -537,7 +535,7 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   reverse; wears off after 5 s of DRIVING = moving (`MOVING_SPEED` 2 m/s) OR gas held (`GAS_GRINDS`: against a wall
   counts, owner); 15 on hit + `SCRAPE_DPS` 5 while driving (25), then it breaks off; sparks, `Streak` from its foot,
   scratch marks, hit = flash + shockwave + scale pop. Clips: `tests/_secondary_clip.gd -- botdoor|clampcam ...`,
-  `tests/_clamp_lineup.gd` (`-- full`). Gotcha: AI cars may have a shield up at spawn (clamp refused).
+  Gotcha: AI cars may have a shield up at spawn (clamp refused).
   **Second pass (owner):** the robot is only its TOP half on the wheeled chassis (the truck box between was cut:
   `build_sweet_bot.py` drops the upper body `DZ` 0.88 onto the chassis, ~1.75 m, ~16k tris; decals and markers move
   with it); **AI hunts an enemy robot** (`AIDriver._bot_plan` / `_enemy_bot`: within `BOT_HUNT_RANGE` 50 m on its
@@ -611,7 +609,7 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   and "axel" (4/7/7/6 medium, ram 9.5, size 3.8 x 2.8 x 2.8, special `crowd_controller`). **Boomerang Blast**
   (`Boomerang`): 45 m/s out with light homing to 55 m or the first car (16), swings back to Roadkill at 50 m/s
   (32; the car cut going out is cut again only after the blade left it: 48 both ways), walls break it, props are cut
-  through, caught = `Vehicle.special_bonus(5)`. **Crowd Controller** (`CrowdRing`): 0.4 s tyre sparks + lift, then a
+  through, caught = the charge comes back. **Crowd Controller** (`CrowdRing`): 0.4 s tyre sparks + lift, then a
   ring to 12 m in 0.35 s, 16 -> 8, thrown away (not super heavy), burning, jumping it dodges; `Mine.fizzle()` for
   mines inside (group "mines"), `TaserLink.break_link()`, `Vehicle.release_clamp()`, chain bomb unhooked. AI: blade
   within 50 m ahead with a clear shot; ring when a car is within 10 m or he is held. Pause menu picks any Blender car
@@ -627,7 +625,7 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   differently): `LosAngelesArena.hill_lift()` raises everything draped on the road hills by `HILL_LIFT` 0.12.
   **Stabiliser** (`Vehicle._stabilise`, Roster `"stable"`: Axel, Mr. Grimm): pitch/roll spin damped (`STAB_DAMP` 6),
   tilt pulled level (`STAB_RIGHT` 14, x`STAB_AIR` 0.35 in the air), off during a weapon's flip (`_designed_spin`).
-  Angled kicker crossings: Axel 114-135 deg -> 18. `tests/_hill_drive.gd -- id yaw [turbo] x z frames`.
+  Angled kicker crossings: Axel 114-135 deg -> 18.
   **Straight weapons fly level** (owner: "angle of attack zero"): `Vehicle.flies_straight(id)` (bullets, homing <= 0.6:
   power, skull, charged cone) use `level_forward()` (along the ground under the car, level when flat, in the air level)
   and leave from `straight_from()` (no higher than `STRAIGHT_FIRE_H` 1.7 m: Sweet Tooth's mortar is 3.8 m up); the skull
@@ -667,7 +665,7 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   echoes, red aura, gold sparkles (the Projectile's `_trail`); `launch()` = rider `Vehicle.tint_flash` red, pink
   ground glow, three faces burst round the bike; `burst()` at the hit. No GameFeel.flash at launch (a big flash
   sphere is a white dome). The bone/ghost skull of rounds 21-22 is gone (`ghost_skull.gdshader` deleted).
-  **Axel's secondary = Tyre Dash** (`tyre_dash`, 1 charge; Rim Shot stays in the code, unused): `Vehicle.start_dash`,
+  **Axel's secondary = Tyre Dash** (`tyre_dash`, 1 charge; Rim Shot removed in round 32): `Vehicle.start_dash`,
   `dash_time` 5 s: gas held for him, top x1.6, accel x2.5, steering x0.5, damage taken x0.5; walls bounce him
   (`_dash_bounce`: velocity reflected, heading snapped, no wall damage, re-arms his ram); each car he hits takes 30
   once (`_dash_ram`; `_ram` skips pairs with a dasher) until a wall bounce; `TyreDash` = the look (wheel pivots slide
@@ -917,10 +915,9 @@ tools/blender/carkit.py     round 28: shared car parts (wire wheel, tyre, chain,
 scripts/core/               InputSetup (all key/pad bindings), ChaseCamera, MeshKit (simple primitives),
                             MeshBuilder (detailed models merged per material: chamfered boxes, lofts, lathes),
                             MatKit (generated paint/rust/chrome/rubber textures; world-mapped ground: pavement,
-                            pavers, grass, masonry, chaparral), GraphicsSettings (LOW/HIGH)
+                            pavers, grass, masonry), GraphicsSettings (LOW/HIGH)
 scripts/vehicles/           Vehicle (driving, wall rule, rams, states, combat), Roster (stats from SPD/ARM/HND/SPC),
-                            VehicleModels (dispatch + simple prototype cars), HeroModels (detailed Sweet Tooth
-                            and Outlaw), VehicleFx (gatling spin, muzzle flash, turbo flames, mascot spring,
+                            VehicleModels (dispatch: BlenderCars + prototype Junkyard Dog / Spectre), VehicleFx (gatling spin, muzzle flash, turbo flames, mascot spring,
                             tire smoke), PlayerController, AIDriver (hunt / chase / attack runs / retreat,
                             detours for pickups, weapon choice, ramps, max 2 on player)
 scripts/weapons/            WeaponData (all balance numbers), Projectile (missiles, cones, napalm can), Mine (Remote),
@@ -928,14 +925,12 @@ scripts/weapons/            WeaponData (all balance numbers), Projectile (missil
                             shots, salvos, blasts), SatStrike + SatMarker, TaserLink, ChainBomb, FirePool
 scripts/arena/los_angeles.gd  stage 1 / test stage (TM2 Quake Zone): heightmap (raised battleground, ramps, crater,
                             road hills), spline road, tunnels, cage, tower, sign; spot() = named places for tests
-scripts/arena/la_city.gd    BAKE ONLY: the 3D city rendered into the LA backdrop panorama (not built in the game)
 scripts/arena/la_buildings.gd  LA's seven real buildings along the walls (motel, liquor, donuts, theater, tacos,
                             auto parts, pawn): depth, parapets, awnings, signs, all in one MeshBuilder
 scripts/arena/la_props.gd   LA street furniture: toppling street lights, burnt wrecks, billboards, power lines,
                             traffic lights, barriers, dumpsters, containers, rubble, manholes, stains,
                             hydrants, trash cans, cones, bus stops
-scripts/arena/junkyard.gd   the old prototype stage, now free play (`-- junkyard`)
-scripts/arena/arena_kit.gd  shared base for new stages (round 27): batching, face() + collision, quadtree ground
+scripts/arena/arena_kit.gd  shared base of every stage (LA + Paris extend it): batching, face() + collision, solids
 scripts/arena/paris.gd      stage 2 (round 27): Seine trench, quays, bridges, roads, parks, terraces, blocks, points
 scripts/arena/paris_blocks.gd  Haussmann blocks from the kit (near) / rendered-facade shells (far)
 tools/blender/build_haussmann.py + render_haussmann_far.py  the Paris facade kit and its far-away facades
@@ -951,7 +946,7 @@ scripts/ui/hud_status.gd    bottom-left panel: name, lives, segmented health (tr
 scripts/ui/hud_weapons.gd   bottom-right panel: selected weapon (drawn icon, ammo), other weapons as chips
 scripts/ui/hud_target.gd    top-center: locked enemy, health-coloured bar, trail, heartbeat + beep when low
 scripts/ui/radar.gd         top-right radar: turns with the car; enemies, pickups, walls/road from radar_lines()
-tests/                      smoke_test.gd (headless, ~185 checks), screenshot.gd, bake_backdrop.gd + cube_to_panorama.py,
+tests/                      smoke_test.gd (headless, ~185 checks), screenshot.gd, paris_check.gd, sound_peaks.py,
                             map_check.gd (traps + narrow slots over the whole map), ai_ramp_check.gd (AI gets up
                             from beside each ramp: 12/12 in round 14), ai_bridge_check.gd (roof/deck/road, 6/6),
                             _perf.gd (draw calls)

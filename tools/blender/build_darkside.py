@@ -125,7 +125,7 @@ for sx in (1, -1):
     for row in range(6):
         for k in range(7):
             a = 2 * math.pi * (k + 0.5 * (row % 2)) / 7
-            body.append(T.cyl(0.02, 0.01, loc=(x + math.cos(a) * 0.136, y + math.sin(a) * 0.136, 1.17 + row * 0.12), rot=K.aim((math.cos(a), math.sin(a), 0)), mat=dark, n=5))
+            body.append(T.cyl(0.02, 0.01, loc=(x + math.cos(a) * 0.136, y + math.sin(a) * 0.136, 1.17 + row * 0.12), rot=T.aim((math.cos(a), math.sin(a), 0)), mat=dark, n=5))
     for z in (1.0, 2.0):
         body.append(T.cyl(0.1, 0.05, loc=(x, y, z), mat=chrome, n=14))
     body.append(T.box((0.2, 0.06, 0.06), loc=(x - sx * 0.1, y, 2.0), mat=dark))

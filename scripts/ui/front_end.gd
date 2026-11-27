@@ -663,25 +663,7 @@ func _show_cars() -> void:
 	_root.add_child(flames)
 	# the car on a turning stand, in the middle
 	var vs := _view()
-	var holder := SubViewportContainer.new()
-	holder.stretch = true
-	holder.position = Vector2(430, 140)
-	holder.size = Vector2(vs.x - 850, 470)
-	_root.add_child(holder)
-	var vp := SubViewport.new()
-	vp.own_world_3d = true
-	vp.transparent_bg = true
-	vp.msaa_3d = Viewport.MSAA_2X
-	holder.add_child(vp)
-	var env := WorldEnvironment.new()
-	var e := Environment.new()
-	e.background_mode = Environment.BG_CLEAR_COLOR
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.6, 0.5, 0.45)
-	e.ambient_light_energy = 0.7
-	e.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.environment = e
-	vp.add_child(env)
+	var vp := _car_view(_root, Vector2(430, 140), Vector2(vs.x - 850, 470), Color(0.6, 0.5, 0.45), 0.7)
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-38, -30, 0)
 	sun.light_energy = 1.4
@@ -697,25 +679,7 @@ func _show_cars() -> void:
 	cam.fov = 36.0
 	vp.add_child(cam)
 	cam.look_at_from_position(Vector3(0, 2.3, 7.4), Vector3(0, 0.75, 0))
-	var disc := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 2.9
-	cm.bottom_radius = 3.0
-	cm.height = 0.14
-	disc.mesh = cm
-	disc.position = Vector3(0, -0.07, 0)
-	disc.material_override = MeshKit.mat(Color(0.3, 0.28, 0.26), 0.45, 0.6)
-	vp.add_child(disc)
-	var rim := MeshInstance3D.new()
-	var tm := TorusMesh.new()
-	tm.inner_radius = 2.93
-	tm.outer_radius = 2.99
-	rim.mesh = tm
-	var rm := StandardMaterial3D.new()
-	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rm.albedo_color = Color(0.85, 0.3, 0.06)
-	rim.material_override = rm
-	vp.add_child(rim)
+	_turntable(vp, 2.9, 0.14, Color(0.3, 0.28, 0.26), 0.45, 2.93, 2.99, Color(0.85, 0.3, 0.06))
 	_stand = Node3D.new()
 	vp.add_child(_stand)
 	_soon = _label(_root, "COMING SOON", 46, DIM, HORIZONTAL_ALIGNMENT_CENTER)
@@ -1000,25 +964,7 @@ func _match_card(id: String, size: Vector2, index: int) -> Control:
 	bg.color = Color(0.05, 0.03, 0.02, 0.85)
 	bg.size = size
 	card.add_child(bg)
-	var holder := SubViewportContainer.new()
-	holder.stretch = true
-	holder.position = Vector2(4, 4)
-	holder.size = size - Vector2(8, 8)
-	card.add_child(holder)
-	var vp := SubViewport.new()
-	vp.own_world_3d = true
-	vp.transparent_bg = true
-	vp.msaa_3d = Viewport.MSAA_2X
-	holder.add_child(vp)
-	var env := WorldEnvironment.new()
-	var e := Environment.new()
-	e.background_mode = Environment.BG_CLEAR_COLOR
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	e.ambient_light_color = Color(0.5, 0.42, 0.38)
-	e.ambient_light_energy = 0.6
-	e.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.environment = e
-	vp.add_child(env)
+	var vp := _car_view(card, Vector2(4, 4), size - Vector2(8, 8), Color(0.5, 0.42, 0.38), 0.6)
 	var key := DirectionalLight3D.new()
 	key.rotation_degrees = Vector3(-30, -40 + index * 13, 0)
 	key.light_energy = 1.5
@@ -1034,25 +980,7 @@ func _match_card(id: String, size: Vector2, index: int) -> Control:
 	cam.fov = 34.0
 	vp.add_child(cam)
 	cam.look_at_from_position(Vector3(5.2, 1.9, 8.6), Vector3(0, 0.35, 0)) # front three-quarter, a little above
-	var disc := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 2.6
-	cm.bottom_radius = 2.7
-	cm.height = 0.12
-	disc.mesh = cm
-	disc.position = Vector3(0, -0.06, 0)
-	disc.material_override = MeshKit.mat(Color(0.22, 0.2, 0.19), 0.5, 0.6)
-	vp.add_child(disc)
-	var ring := MeshInstance3D.new()
-	var tm := TorusMesh.new()
-	tm.inner_radius = 2.62
-	tm.outer_radius = 2.7
-	ring.mesh = tm
-	var rm := StandardMaterial3D.new()
-	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	rm.albedo_color = Color(0.9, 0.32, 0.06)
-	ring.material_override = rm
-	vp.add_child(ring)
+	_turntable(vp, 2.6, 0.12, Color(0.22, 0.2, 0.19), 0.5, 2.62, 2.7, Color(0.9, 0.32, 0.06))
 	var stand := Node3D.new()
 	vp.add_child(stand)
 	var model := VehicleModels.build(id)
@@ -1097,3 +1025,50 @@ func _show_loading() -> void:
 	main_script.opponent_car = ""
 	main_script.full_roster = false
 	get_tree().change_scene_to_file(MAIN_SCENE)
+
+
+## A transparent 3D view of its own (ACES, coloured ambient light) for a car on a stand, inside `parent`.
+func _car_view(parent: Control, pos: Vector2, size: Vector2, ambient: Color, ambient_energy: float) -> SubViewport:
+	var holder := SubViewportContainer.new()
+	holder.stretch = true
+	holder.position = pos
+	holder.size = size
+	parent.add_child(holder)
+	var vp := SubViewport.new()
+	vp.own_world_3d = true
+	vp.transparent_bg = true
+	vp.msaa_3d = Viewport.MSAA_2X
+	holder.add_child(vp)
+	var env := WorldEnvironment.new()
+	var e := Environment.new()
+	e.background_mode = Environment.BG_CLEAR_COLOR
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	e.ambient_light_color = ambient
+	e.ambient_light_energy = ambient_energy
+	e.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.environment = e
+	vp.add_child(env)
+	return vp
+
+
+## The stand under the car: a dark disc of radius r with a glowing ring round its edge.
+func _turntable(vp: SubViewport, r: float, h: float, disc_color: Color, rough: float, ring_in: float, ring_out: float, ring_color: Color) -> void:
+	var disc := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = r
+	cm.bottom_radius = r + 0.1
+	cm.height = h
+	disc.mesh = cm
+	disc.position = Vector3(0, -h * 0.5, 0)
+	disc.material_override = MeshKit.mat(disc_color, rough, 0.6)
+	vp.add_child(disc)
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = ring_in
+	tm.outer_radius = ring_out
+	ring.mesh = tm
+	var rm := StandardMaterial3D.new()
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.albedo_color = ring_color
+	ring.material_override = rm
+	vp.add_child(ring)

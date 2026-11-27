@@ -247,13 +247,7 @@ static func _embers(big: float) -> CPUParticles3D:
 
 ## A charged dart's burst: fast sparks of its colour flying out in every direction (additive).
 static func _dart_burst(world: Node, pos: Vector3, c: Color) -> void:
-	var p := CPUParticles3D.new()
-	p.mesh = FxKit.particle_mesh(true)
-	p.one_shot = true
-	p.explosiveness = 1.0
-	p.amount = 18
-	p.lifetime = 0.35
-	p.local_coords = false
+	var p := FxKit.burst(FxKit.particle_mesh(true), 18, 0.35)
 	p.direction = Vector3.UP
 	p.spread = 180.0
 	p.gravity = Vector3(0, -12.0, 0)

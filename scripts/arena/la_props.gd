@@ -330,16 +330,6 @@ func _traffic_lights() -> void:
 
 # ---------------------------------------------------------------- barriers, bins, containers
 
-func _barrier_mesh() -> ArrayMesh:
-	if _meshes.has("barrier"):
-		return _meshes.barrier
-	var mb := MeshBuilder.new()
-	var conc := _concrete()
-	mb.loft(conc, [MeshBuilder.section(-1.5, 0.4, 0.3, 0.4, 0.05, 0.12), MeshBuilder.section(1.5, 0.4, 0.3, 0.4, 0.05, 0.12)], Transform3D.IDENTITY, 1)
-	mb.box(MatKit.flat(Color(0.62, 0.5, 0.12), 0.8), Vector3(0.62, 0.12, 2.9), MeshBuilder.at(Vector3(0, 0.12, 0)), 0.0)
-	_meshes.barrier = mb.build_mesh(0.7, 0.0, true)
-	return _meshes.barrier
-
 
 func _dumpster_mesh() -> ArrayMesh:
 	if _meshes.has("dumpster"):

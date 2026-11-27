@@ -84,7 +84,6 @@ func _run() -> void:
 	main._start_music()
 	var brains: Array = main.enemies.map(func(e: Vehicle): return e.controller)
 	_park(main)
-	var enemy_starts: Array = main.enemies.map(func(e: Vehicle): return e.global_position)
 
 	# Driving: the player starts on the south road facing east.
 	var start := player.global_position

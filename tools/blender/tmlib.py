@@ -33,7 +33,6 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(ROOT, "assets", "models")
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT_COND = "/usr/share/fonts/truetype/liberation/LiberationSansNarrow-Bold.ttf"
 
 _mats = {}
 _kinds = []  # index -> dict(kind=..., params)
@@ -53,9 +52,21 @@ def reset():
     return s
 
 
-def _link(ob):
+def link(ob):
     bpy.context.scene.collection.objects.link(ob)
     return ob
+
+
+def aim(d):
+    """Euler rotation (degrees) that turns +Z along d."""
+    q = Vector(d).normalized().to_track_quat("Z", "Y").to_euler()
+    return (math.degrees(q.x), math.degrees(q.y), math.degrees(q.z))
+
+
+def lin(h):
+    """A hex colour ("RRGGBB", sRGB) as linear RGB."""
+    c = [int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4)]
+    return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
 
 
 def _activate(ob, others=()):
@@ -140,7 +151,7 @@ def _new_obj(name, bm, mat=None, loc=(0, 0, 0), rot=(0, 0, 0), smooth=None):
     ob = bpy.data.objects.new(name, me)
     ob.location = loc
     ob.rotation_euler = Euler([math.radians(a) for a in rot], "XYZ")
-    _link(ob)
+    link(ob)
     if mat is not None:
         me.materials.append(mat)
     if smooth is not None:
@@ -283,7 +294,7 @@ def text(s, size, loc=(0, 0, 0), rot=(90, 0, 0), mat=None, depth=0.01, name="tex
     cu.align_y = "CENTER"
     cu.resolution_u = 2
     ob = bpy.data.objects.new(name, cu)
-    _link(ob)
+    link(ob)
     ob.location = loc
     ob.rotation_euler = Euler([math.radians(a) for a in rot], "XYZ")
     dg = bpy.context.evaluated_depsgraph_get()
@@ -292,7 +303,7 @@ def text(s, size, loc=(0, 0, 0), rot=(90, 0, 0), mat=None, depth=0.01, name="tex
     mo = bpy.data.objects.new(name, me)
     mo.location = loc
     mo.rotation_euler = Euler([math.radians(a) for a in rot], "XYZ")
-    _link(mo)
+    link(mo)
     if mat is not None:
         me.materials.append(mat)
     return mo
@@ -334,15 +345,6 @@ def bevel(ob, width=0.02, segments=2, angle=30.0):
     return shade(ob, 35.0)
 
 
-def subsurf(ob, levels=1):
-    m = ob.modifiers.new("sub", "SUBSURF")
-    m.levels = levels
-    m.render_levels = levels
-    bpy.context.view_layer.update()
-    apply(ob)
-    return shade(ob, 50.0)
-
-
 def decimate(ob, ratio):
     m = ob.modifiers.new("dec", "DECIMATE")
     m.ratio = ratio
@@ -353,7 +355,7 @@ def decimate(ob, ratio):
 def dup(ob, loc=None, rot=None, scale=None, name=None):
     o = ob.copy()
     o.data = ob.data.copy()
-    _link(o)
+    link(o)
     if loc is not None:
         o.location = loc
     if rot is not None:
@@ -393,7 +395,6 @@ def join(objs, name="joined"):
             remap.append(mats.index(m))
         tmp = bmesh.new()
         tmp.from_mesh(o.data)
-        off = len(bm.verts)
         vs = [bm.verts.new(v.co) for v in tmp.verts]
         for f in tmp.faces:
             try:
@@ -418,7 +419,7 @@ def join(objs, name="joined"):
     for o in objs:
         bpy.data.objects.remove(o)
     ob = bpy.data.objects.new(name, me)
-    _link(ob)
+    link(ob)
     return ob
 
 
@@ -527,7 +528,6 @@ def holes_image(n=14, seed=1, size=(512, 256), r=(4, 9)):
 def splatter_image(color=(0.11, 0.012, 0.01), n=60, seed=1, size=(256, 256)):
     """Dried spatter (blood, oil): one heavy patch thrown out into drops and runs."""
     rng = np.random.default_rng(seed)
-    a = np.zeros((size[1], size[0]), dtype=np.float32)
     im = Image.new("L", size, 0)
     d = ImageDraw.Draw(im)
     cx, cy = size[0] * 0.5, size[1] * 0.42
@@ -584,7 +584,7 @@ def marker(name, loc):
     """An empty: exported as a named node, read by the game (wheel positions, muzzles, ...)."""
     ob = bpy.data.objects.new(name, None)
     ob.location = loc
-    _link(ob)
+    link(ob)
     return ob
 
 
@@ -717,7 +717,6 @@ def gbuffer(objs, size=1024, ao_samples=24, ao_dist=0.6, bevel_r=0.02, margin=6,
             hi = np.maximum(hi, p)
     lo -= 0.05
     span = (hi + 0.05) - lo
-    saved = {m: None for m in mats}
 
     def run(kind, samples, build, bake_type="EMIT"):
         img = bpy.data.images.new("bake_" + kind, w, h, alpha=True, float_buffer=True, is_data=True)
@@ -848,7 +847,6 @@ def _blur(a, r):
 
 RUST_A = np.array([0.20, 0.075, 0.03], dtype=np.float32)
 RUST_B = np.array([0.36, 0.16, 0.06], dtype=np.float32)
-RUST_DARK = np.array([0.07, 0.035, 0.02], dtype=np.float32)
 BARE = np.array([0.22, 0.21, 0.20], dtype=np.float32)
 PRIMER = np.array([0.32, 0.12, 0.08], dtype=np.float32)
 DUST = np.array([0.27, 0.23, 0.18], dtype=np.float32)
@@ -1225,7 +1223,7 @@ def preview(path, objs=None, size=(960, 540), eye=(4.5, -6.0, 3.2), look=(0, 0, 
     cam_d.lens_unit = "FOV"
     cam_d.angle = math.radians(fov)
     cam = bpy.data.objects.new("pv_cam", cam_d)
-    _link(cam)
+    link(cam)
     made.append(cam)
     cam.location = eye
     d = Vector(look) - Vector(eye)
@@ -1236,7 +1234,7 @@ def preview(path, objs=None, size=(960, 540), eye=(4.5, -6.0, 3.2), look=(0, 0, 
     sd.angle = math.radians(4)
     so = bpy.data.objects.new("pv_sun", sd)
     so.rotation_euler = Euler([math.radians(a) for a in sun], "XYZ")
-    _link(so)
+    link(so)
     made.append(so)
     world = bpy.data.worlds.new("pv_world")
     world.use_nodes = True
@@ -1297,7 +1295,7 @@ def preview(path, objs=None, size=(960, 540), eye=(4.5, -6.0, 3.2), look=(0, 0, 
     scene.view_settings.view_transform = "Standard"
     try:
         bpy.ops.render.render(write_still=True)
-    except RuntimeError as e:
+    except RuntimeError:
         scene.cycles.use_denoising = False
         bpy.ops.render.render(write_still=True)
     scene.cycles.use_denoising = False
@@ -1376,9 +1374,9 @@ def transfer_colors(g, tris, uvs, tex, mats, ray=0.3, reach=0.8, upscale=4):
     for k in range(len(ids)):
         p = Vector(P[k].tolist())
         d = Vector(N[k].tolist())
-        loc, nor, fi, dist = bvh.ray_cast(p + d * ray, -d, ray * 2.0)
+        loc, _, fi, dist = bvh.ray_cast(p + d * ray, -d, ray * 2.0)
         if fi is None:
-            loc, nor, fi, dist = bvh.find_nearest(p, reach)
+            loc, _, fi, dist = bvh.find_nearest(p, reach)
         if fi is not None:
             hp[k] = loc[:]
             hf[k] = fi

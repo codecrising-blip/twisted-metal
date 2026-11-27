@@ -32,29 +32,24 @@ MT = 2.72
 SERIF = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
 
 
-def lin(h):
-    c = [int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4)]
-    return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
-
-
-ASHLAR = T.M("ashlar", lin("D8C9AC"), 0.3, 0.0, 0.3)
-RUSTIC = T.M("rustic", lin("D3C3A5"), 0.35, 0.0, 0.5)
-MOULD = T.M("stone", lin("DDD0B5"), 0.3, 0.0, 0.4)
-PLINTH = T.M("stone", lin("8F8A80"), 0.45, 0.0, 0.8)
-ZINC = T.M("stone", lin("6F7C86"), 0.15, 0.0, 0.45)
-SEAM = T.M("stone", lin("A7B0B5"), 0.15, 0.0, 0.35)
-IRON = T.M("paint", lin("1E2420"), 0.35, 0.25, 0.4)
-FRAME = T.M("paint", lin("E2DCCD"), 0.3, 0.05, 0.45)
-DOOR = T.M("paint", lin("1F3A2E"), 0.3, 0.05, 0.45)
-INTERIOR = T.M("paint", lin("231E1B"), 0.05, 0.0, 0.1)
-BRASS = T.M("steel", lin("B08D3C"), 0.2, 0.0, 0.2)
-SHUTTER = T.M("steel", lin("6C7073"), 0.45, 0.35, 0.55)
-BURNT = T.M("burnt", lin("2B2A29"), 0.8, 0.5, 0.8)
-POT = T.M("concrete", lin("B0643E"), 0.35, 0.0, 0.55)
-CANVAS = {"red": T.M("cloth", lin("8E1F1F"), 0.3, 0.0, 0.5), "green": T.M("cloth", lin("1E4A32"), 0.3, 0.0, 0.5)}
-SHOPS = {"red": (lin("6E1F1F"), "BOULANGERIE"), "green": (lin("1F4A35"), "PHARMACIE"),
-         "navy": (lin("1E2A44"), "LIBRAIRIE"), "black": (lin("161616"), "CAFE  TABAC")}
-GOLD = lin("C9A24A")
+ASHLAR = T.M("ashlar", T.lin("D8C9AC"), 0.3, 0.0, 0.3)
+RUSTIC = T.M("rustic", T.lin("D3C3A5"), 0.35, 0.0, 0.5)
+MOULD = T.M("stone", T.lin("DDD0B5"), 0.3, 0.0, 0.4)
+PLINTH = T.M("stone", T.lin("8F8A80"), 0.45, 0.0, 0.8)
+ZINC = T.M("stone", T.lin("6F7C86"), 0.15, 0.0, 0.45)
+SEAM = T.M("stone", T.lin("A7B0B5"), 0.15, 0.0, 0.35)
+IRON = T.M("paint", T.lin("1E2420"), 0.35, 0.25, 0.4)
+FRAME = T.M("paint", T.lin("E2DCCD"), 0.3, 0.05, 0.45)
+DOOR = T.M("paint", T.lin("1F3A2E"), 0.3, 0.05, 0.45)
+INTERIOR = T.M("paint", T.lin("231E1B"), 0.05, 0.0, 0.1)
+BRASS = T.M("steel", T.lin("B08D3C"), 0.2, 0.0, 0.2)
+SHUTTER = T.M("steel", T.lin("6C7073"), 0.45, 0.35, 0.55)
+BURNT = T.M("burnt", T.lin("2B2A29"), 0.8, 0.5, 0.8)
+POT = T.M("concrete", T.lin("B0643E"), 0.35, 0.0, 0.55)
+CANVAS = {"red": T.M("cloth", T.lin("8E1F1F"), 0.3, 0.0, 0.5), "green": T.M("cloth", T.lin("1E4A32"), 0.3, 0.0, 0.5)}
+SHOPS = {"red": (T.lin("6E1F1F"), "BOULANGERIE"), "green": (T.lin("1F4A35"), "PHARMACIE"),
+         "navy": (T.lin("1E2A44"), "LIBRAIRIE"), "black": (T.lin("161616"), "CAFE  TABAC")}
+GOLD = T.lin("C9A24A")
 GLASS = T.glass((0.025, 0.035, 0.045))
 RAIL = bpy.data.materials.new("rail")
 
@@ -320,7 +315,7 @@ def awning(color):
     def stripes(P, N, ox=off[0]):
         return (np.mod(P[:, 0] - ox + 1.12, 0.32) < 0.16).astype(np.float32)
     if color == "red":
-        regions.append((stripes, lin("D9D2C2"), ("cloth",)))
+        regions.append((stripes, T.lin("D9D2C2"), ("cloth",)))
 
 
 for c in ("red", "green", "navy", "black"):

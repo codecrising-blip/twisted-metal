@@ -19,7 +19,6 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import tmlib as T
 import clown_head
-import numpy as np
 from mathutils import Matrix, Vector
 
 T.reset()
@@ -33,33 +32,22 @@ rubber = T.M("rubber", (0.016, 0.016, 0.016), dirt=0.7)
 soot = T.M("burnt", (0.05, 0.04, 0.03), rust=0.5)
 warhead = T.M("paint", (0.32, 0.045, 0.03), wear=0.65, rust=0.45, dirt=0.5)
 chrome = T.M("steel", (0.3, 0.3, 0.28), wear=0.25, rust=0.25, dirt=0.45)
-bronze = T.M("steel", (0.2, 0.1, 0.035), wear=0.5, rust=0.75, dirt=0.5)
 decals = []
 regions = []
 markers = []
-
-
-def aim(d):
-    q = Vector(d).normalized().to_track_quat("Z", "Y").to_euler()
-    return (math.degrees(q.x), math.degrees(q.y), math.degrees(q.z))
-
-
-def spike(base, d, length, r, mat=bronze, n=8):
-    d = Vector(d).normalized()
-    return T.cyl(r, length, loc=tuple(Vector(base) + d * length / 2), rot=aim(d), mat=mat, n=n, r2=r * 0.06)
 
 
 def limb(a, b, w, d, mat, bevel=0.03):
     """A box from a to b (any direction), w across (x), d thick."""
     a, b = Vector(a), Vector(b)
     v = b - a
-    return T.box((w, d, v.length), loc=tuple((a + b) / 2), rot=aim(v), mat=mat, bevel=bevel)
+    return T.box((w, d, v.length), loc=tuple((a + b) / 2), rot=T.aim(v), mat=mat, bevel=bevel)
 
 
 def rod(a, b, r, mat, n=10):
     a, b = Vector(a), Vector(b)
     v = b - a
-    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=aim(v), mat=mat, n=n)
+    return T.cyl(r, v.length, loc=tuple((a + b) / 2), rot=T.aim(v), mat=mat, n=n)
 
 
 def wheel(c, r, w, parts):
@@ -85,7 +73,7 @@ def piston(a, b, parts, r=0.045):
     m = a.lerp(b, 0.55)
     parts.append(rod(a, m, r, dark))
     parts.append(rod(m - (b - a).normalized() * 0.06, b, r * 0.5, chrome, 8))
-    parts.append(T.cyl(r * 1.15, 0.04, loc=tuple(m), rot=aim(b - a), mat=bare, n=10))
+    parts.append(T.cyl(r * 1.15, 0.04, loc=tuple(m), rot=T.aim(b - a), mat=bare, n=10))
     for e in (a, b):
         parts.append(T.sphere(r * 1.15, loc=tuple(e), mat=bare, n=8))
 
@@ -112,39 +100,8 @@ def trim(c, w, h, axis, parts, t=0.035, studs=True):
             rivets(c + v * e * h / 2 - u * w * 0.45 + out, c + v * e * h / 2 + u * w * 0.45 + out, max(3, int(w / 0.12)), parts)
 
 
-def stacks(c, h, parts, gap=0.36):
-    """Two blackened exhaust stacks with clamps, Sweet Tooth's truck's."""
-    for sx in (1, -1):
-        b = Vector(c) + V((sx * gap / 2, 0, 0))
-        parts.append(rod(b, b + V((0, 0, h)), 0.055, bare, 12))
-        parts.append(T.cyl(0.072, 0.14, loc=tuple(b + V((0, 0, h - 0.02))), mat=soot, n=12, r2=0.085))
-        for z in (0.18, 0.55):
-            parts.append(T.cyl(0.068, 0.035, loc=tuple(b + V((0, 0, h * z))), mat=dark, n=10))
-
-
 def hose(points, parts, r=0.028):
     parts.append(T.tube([tuple(p) for p in points], r, mat=rubber, n=7))
-
-
-def fist(c, sx, parts, s=1.0, down=(0, 0.25, -1)):
-    """A clawed steel hand: palm, knuckle guard, three two-jointed fingers with hooked claws, a thumb."""
-    c = Vector(c)
-    parts.append(T.box((0.27 * s, 0.3 * s, 0.24 * s), loc=tuple(c), mat=armor, bevel=0.03 * s))
-    parts.append(T.box((0.3 * s, 0.09 * s, 0.1 * s), loc=tuple(c + V((0, 0.13, 0.08)) * s), mat=bare, bevel=0.012))
-    rivets(c + V((-0.11, 0.18, 0.08)) * s, c + V((0.11, 0.18, 0.08)) * s, 4, parts, 0.014)
-    for f in range(3):
-        x = (f - 1) * 0.085
-        k1 = c + V((x, 0.13, -0.08)) * s
-        k2 = k1 + V((0, 0.09, -0.07)) * s
-        tip = k2 + V((0, 0.0, -0.12)) * s
-        parts.append(limb(k1, k2, 0.07 * s, 0.075 * s, armor, 0.01))
-        parts.append(limb(k2, tip, 0.064 * s, 0.068 * s, armor, 0.01))
-        parts.append(T.sphere(0.04 * s, loc=tuple(k2), mat=bare, n=8))
-        parts.append(spike(tip, (0, -0.35, -1), 0.13 * s, 0.03 * s, bare, 6))
-    t1 = c + V((-sx * 0.14, 0.06, -0.02)) * s
-    t2 = t1 + V((-sx * 0.04, 0.12, -0.1)) * s
-    parts.append(limb(t1, t2, 0.07 * s, 0.07 * s, armor, 0.01))
-    parts.append(spike(t2, (sx * 0.3, 0.4, -1), 0.1 * s, 0.026 * s, bare, 6))
 
 
 def elbow(c, parts, r=0.11):
@@ -156,31 +113,9 @@ def stencil(text, c, n, size, seed=0, opacity=0.55):
     decals.append(T.Decal(T.stencil(text, color=(0.32, 0.05, 0.04)), tuple(c), tuple(n), (0, 0, 1), size, depth=0.1, kinds=("paint",), opacity=opacity))
 
 
-def tubes(c, cols, rows, pitch, facing, parts, tag):
-    """A grid of launch tubes on a face centred at c looking along `facing` (+Y or up)."""
-    f = Vector(facing).normalized()
-    side = V((1, 0, 0))
-    up = f.cross(side).normalized() if abs(f.x) < 0.9 else V((0, 0, 1))
-    if up.z < 0:
-        up = -up
-    k = 0
-    for row in range(rows):
-        for col in range(cols):
-            p = Vector(c) + side * (col - (cols - 1) / 2) * pitch + up * (row - (rows - 1) / 2) * pitch
-            parts.append(T.cyl(pitch * 0.42, 0.1, loc=tuple(p), rot=aim(f), mat=dark, n=8))
-            parts.append(T.cyl(pitch * 0.3, 0.09, loc=tuple(p + f * 0.06), rot=aim(f), mat=warhead, n=8, r2=pitch * 0.05))
-            k += 1
-    fw, fh = cols * pitch + 0.05, rows * pitch + 0.05
-    for e in (1, -1):  # a steel frame round the pod's face
-        parts.append(T.box((fw + 0.05, 0.05, 0.05), loc=tuple(Vector(c) + up * e * fh / 2 - f * 0.01), mat=armor, bevel=0.008))
-        parts.append(rod(Vector(c) + side * e * fw / 2 + up * fh / 2 - f * 0.01, Vector(c) + side * e * fw / 2 - up * fh / 2 - f * 0.01, 0.025, armor, 6))
-    return k
-
-
 def dots(c, n, size, seed, opacity=0.55):
     """TMB's faded rust-red polka dots on the cream paint: few, soft, never black."""
     decals.append(T.Decal(T.dots_image((0.34, 0.12, 0.06), n=7, seed=seed, size=(256, 256), r=(14, 22)), tuple(c), tuple(n), (0, 0, 1) if abs(n[2]) < 0.9 else (0, 1, 0), size, depth=0.12, kinds=("paint",), opacity=opacity))
-
 
 
 H = 1.8                     # TMB's robot measured at 1.8 m; the whole model is scaled by S at the end
@@ -341,13 +276,13 @@ up.append(limb(el, wr, 0.18, 0.19, armor))
 up.append(T.box((0.17, 0.2, 0.15), loc=(-0.66, 0.16, 0.99), mat=armor, bevel=0.025))                  # the hand
 cdir = V((0, 0.98, 0.21)).normalized()
 cb = V((-0.51, 0.2, 1.0))
-up.append(T.cyl(0.05, 0.42, loc=tuple(cb + cdir * 0.21), rot=aim(cdir), mat=dark, n=6, bevel=0.006))     # hex barrel
-up.append(T.cyl(0.058, 0.08, loc=tuple(cb + cdir * 0.4), rot=aim(cdir), mat=bare, n=6))                   # muzzle collar
-up.append(T.cyl(0.03, 0.02, loc=tuple(cb + cdir * 0.44), rot=aim(cdir), mat=soot, n=8))
+up.append(T.cyl(0.05, 0.42, loc=tuple(cb + cdir * 0.21), rot=T.aim(cdir), mat=dark, n=6, bevel=0.006))     # hex barrel
+up.append(T.cyl(0.058, 0.08, loc=tuple(cb + cdir * 0.4), rot=T.aim(cdir), mat=bare, n=6))                   # muzzle collar
+up.append(T.cyl(0.03, 0.02, loc=tuple(cb + cdir * 0.44), rot=T.aim(cdir), mat=soot, n=8))
 up.append(T.box((0.12, 0.16, 0.12), loc=tuple(cb + cdir * 0.02), mat=armor, bevel=0.015))               # breech
 up.append(T.box((0.03, 0.07, 0.05), loc=tuple(cb + cdir * 0.12 + V((0, 0, 0.07))), mat=bare))           # sight
 for k in range(3):
-    up.append(T.cyl(0.056, 0.02, loc=tuple(cb + cdir * (0.12 + k * 0.09)), rot=aim(cdir), mat=bare, n=6))  # barrel bands
+    up.append(T.cyl(0.056, 0.02, loc=tuple(cb + cdir * (0.12 + k * 0.09)), rot=T.aim(cdir), mat=bare, n=6))  # barrel bands
 piston(V((-0.42, -0.2, 1.0)), V((-0.6, 0.05, 0.96)), up, 0.03)
 for name, pos in tube_marks.items():
     markers.append(T.marker(name, tuple(pos)))

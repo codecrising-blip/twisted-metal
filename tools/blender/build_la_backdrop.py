@@ -27,11 +27,6 @@ SUN_EL, SUN_AZ = 17.0, 242.0   # low in the west-south-west (matches the game's 
 HAZE = (0.34, 0.2, 0.12)
 
 
-def link(ob):
-    scene.collection.objects.link(ob)
-    return ob
-
-
 def hazed(name, build):
     """A material that fades into the smoke haze with distance: build(nt) -> a BSDF output socket."""
     m = bpy.data.materials.new(name)
@@ -131,7 +126,7 @@ wn.links.new(warm.outputs[2], mixc.inputs[6])
 wn.links.new(smoke_col.outputs[0], mixc.inputs[7])
 # everything sinks into a brown-orange murk toward the horizon
 hz_f = wn.nodes.new("ShaderNodeMath")
-hz_f.operation = "SMOOTHSTEP" if False else "MULTIPLY"
+hz_f.operation = "MULTIPLY"
 low = wn.nodes.new("ShaderNodeMapRange")
 low.inputs["From Min"].default_value = -0.02
 low.inputs["From Max"].default_value = 0.22
@@ -153,7 +148,7 @@ sun_d = bpy.data.lights.new("sun", "SUN")
 sun_d.energy = 3.4
 sun_d.color = (1.0, 0.45, 0.22)
 sun_d.angle = math.radians(3.0)
-sun = link(bpy.data.objects.new("sun", sun_d))
+sun = T.link(bpy.data.objects.new("sun", sun_d))
 az, el = math.radians(SUN_AZ), math.radians(SUN_EL)
 to_sun = Vector((math.sin(az) * math.cos(el), math.cos(az) * math.cos(el), math.sin(el)))
 sun.rotation_euler = to_sun.to_track_quat("Z", "Y").to_euler()
@@ -175,7 +170,7 @@ bmesh.ops.create_grid(bm, x_segments=2, y_segments=2, size=9000.0)
 me = bpy.data.meshes.new("ground")
 bm.to_mesh(me)
 bm.free()
-g = link(bpy.data.objects.new("ground", me))
+g = T.link(bpy.data.objects.new("ground", me))
 g.location = (0, 0, -6.0)
 me.materials.append(hazed("ground", ground_mat))
 
@@ -205,7 +200,7 @@ bm.to_mesh(me)
 bm.free()
 for p in me.polygons:
     p.use_smooth = True
-hills = link(bpy.data.objects.new("hills", me))
+T.link(bpy.data.objects.new("hills", me))
 
 
 def hill_mat(nt):
@@ -307,7 +302,7 @@ def plume(x, y, z0, height, r0, r1, lean, density=0.012, glow=0.5):
     bm.to_mesh(me)
     bm.free()
     me.materials.append(smoke_mat(density, glow))
-    return link(bpy.data.objects.new("plume", me))
+    return T.link(bpy.data.objects.new("plume", me))
 
 
 def fire(x, y, z, size):
@@ -322,7 +317,7 @@ def fire(x, y, z, size):
     bm.to_mesh(me)
     bm.free()
     me.materials.append(fire_mat)
-    ob = link(bpy.data.objects.new("fire", me))
+    ob = T.link(bpy.data.objects.new("fire", me))
     ob.location = (x, y, z)
     return ob
 
@@ -391,7 +386,7 @@ def building(x, y, w, d, h, yaw, broken):
     bm.to_mesh(me)
     bm.free()
     me.materials.append(bmat)
-    ob = link(bpy.data.objects.new("b", me))
+    ob = T.link(bpy.data.objects.new("b", me))
     ob.location = (x, y, -6.0)
     ob.rotation_euler = Euler((0, 0, yaw))
     return ob
@@ -462,7 +457,7 @@ bm.free()
 for p in me.polygons:
     p.use_smooth = True
 me.materials.append(hazed("blimp", blimp_mat))
-bl = link(bpy.data.objects.new("blimp", me))
+bl = T.link(bpy.data.objects.new("blimp", me))
 bl.location = (math.sin(math.radians(74)) * 1000.0, math.cos(math.radians(74)) * 1000.0, 430.0)
 bl.rotation_euler = Euler((0, 0, math.radians(35)))
 for k in range(3):   # its red running lights
@@ -476,7 +471,7 @@ try:
 except AttributeError:
     cd.cycles.panorama_type = "EQUIRECTANGULAR"
 cd.clip_end = 30000.0
-cam = link(bpy.data.objects.new("cam", cd))
+cam = T.link(bpy.data.objects.new("cam", cd))
 cam.location = (0, 0, 9.0)
 cam.rotation_euler = Euler((math.radians(90), 0, 0))   # looking north
 scene.camera = cam

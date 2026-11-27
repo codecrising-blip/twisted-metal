@@ -20,7 +20,6 @@ func _run() -> void:
 				e.controller = null
 				e.global_position = Vector3(0, 60, 0)
 				e.freeze = true
-		var o_brain: AIDriver = outlaw.controller
 		var ri: int = [1, 0, 2, 3][trial % 4]
 		var rp: Dictionary = LosAngelesArena.ramp_list()[ri]
 		var rtop: Vector3 = rp.top

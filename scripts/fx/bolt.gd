@@ -78,22 +78,6 @@ func strand(pts: Array[Vector3], w0: float, w1: float, alpha := 1.0) -> void:
 	_ribbon(pts, w0, w1, core)
 
 
-## A lightning strike from a to b with branches. strength 0..1 thickens it.
-func zap(a: Vector3, b: Vector3, strength: float, branches := 3, alpha := 1.0) -> Array[Vector3]:
-	var pts := jagged(a, b, 4, 0.2 + 0.08 * strength)
-	var w0 := 0.07 + 0.07 * strength
-	strand(pts, w0, w0 * 0.35, alpha)
-	for k in branches:
-		var i := randi_range(2, pts.size() - 4)
-		var start := pts[i]
-		var along := (pts[i + 1] - pts[i]).normalized()
-		var off := (along + Vector3(randf_range(-1, 1), randf_range(-0.6, 0.8), randf_range(-1, 1))).normalized()
-		var end := start + off * randf_range(0.8, 2.4) * (0.7 + strength)
-		var t := float(i) / pts.size()
-		strand(jagged(start, end, 2, 0.3), lerpf(w0, w0 * 0.35, t) * 0.6, 0.005, alpha * 0.8)
-	return pts
-
-
 ## A camera-facing ribbon through the points (vertex colours, additive).
 func _ribbon(pts: Array[Vector3], w0: float, w1: float, col: Color) -> void:
 	if pts.size() < 2:
