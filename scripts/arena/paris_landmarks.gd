@@ -34,6 +34,8 @@ static func build(arena: ParisArena) -> void:
 	if not ModelLib.has(TOWER_FILE) or not ModelLib.has(MON_FILE) or not ModelLib.has(BLD_FILE):
 		push_warning("ParisLandmarks: models missing (run tools/blender/build_paris_landmarks.py)")
 		return
+	for f: String in [MON_FILE, BLD_FILE]: # round 31 (owner: "too white"): stone monuments toned like the blocks
+		ModelLib.atlas(f).albedo_color = ParisBlocks.FACADE_TINT
 	var t := ParisArena.TOWER
 	_put(arena, TOWER_FILE, "eiffel", Vector3(t.x, 0, t.y), 0.0)
 	for sx: float in [-1.0, 1.0]:

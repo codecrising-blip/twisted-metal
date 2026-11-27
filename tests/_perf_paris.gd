@@ -14,6 +14,7 @@ func _run() -> void:
 	cam.target = null
 	var spots := {
 		"etoile": [Vector3(-150, 6, -110), Vector3(-150, 4, -168)],
+		"owner_arc": [Vector3(-62, 4, -105), Vector3(-150, 6, -125)], # round 31: the owner's 1.6M-triangle view
 		"quarter_street": [Vector3(-118, 3, -10), Vector3(-150, 8, -40)],
 		"roofs": [Vector3(-120, 16, -60), Vector3(-60, 13, -80)],
 		"seine_bridge": [Vector3(-30, 9, 8), Vector3(10, -2, 50)],

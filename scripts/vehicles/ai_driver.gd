@@ -318,7 +318,10 @@ func _plan(v: Vehicle, delta: float) -> Dictionary:
 		_ramp_goal = {}
 		return {"goal": t.global_position, "throttle": 1.0, "turbo": d > 30.0}
 	var mid_climb: bool = not _ramp_goal.is_empty() and _ramp_goal.get("climbing", false) and v.global_position.y < (_ramp_goal.top as Vector3).y - 0.6
-	if _level(v.global_position) != _level(t.global_position) or mid_climb: # another level: by a ramp (and finish the climb)
+	# Round 31: on a stage with path finding, a far target out of sight is reached along the path too (Paris's
+	# blocks: driving straight at it ran into a wall).
+	var far_blind: bool = arena != null and arena.has_method("nav_point") and d > 30.0 and not _sees(v, t.global_position)
+	if _level(v.global_position) != _level(t.global_position) or mid_climb or far_blind: # another level: by a ramp (and finish the climb)
 		mode = "chase"
 		return {"goal": _via_ramp(v, t.global_position + Vector3.UP * (5.0 if mid_climb else 0.0)), "throttle": 1.0, "turbo": d > 40.0}
 	_ramp_goal = {}
@@ -568,16 +571,32 @@ func _scavenge(v: Vehicle) -> Pickup:
 
 ## Something up on a roof or deck: drive to the foot of the nearest ramp, then up it.
 func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
+	# Round 31: a stage with path finding (Paris) answers where to drive; ramps, quays and bridges are in it.
+	if arena and arena.has_method("nav_point"):
+		_ramp_goal = {}
+		var p: Vector3 = arena.nav_point(self, v.global_position, goal)
+		if p != Vector3.INF:
+			return p
 	var here := _level(v.global_position)
 	var there := _level(goal)
 	var climbing_now: bool = not _ramp_goal.is_empty() and _ramp_goal.get("climbing", false)
+	# Round 31 (owner: the AI went up a ramp, kept circling its top and drove off the roof): a ramp is done once
+	# the car stands on its top's level; the next leg is planned from there.
+	if climbing_now and here == _rlevel(_ramp_goal, "top") and v.global_position.y > (_ramp_goal.top as Vector3).y - 0.8:
+		_ramp_goal = {}
+		climbing_now = false
 	if arena == null or arena.ramps.is_empty() or (here == there and not climbing_now):
 		_ramp_goal = {}
 		return goal
+	var nxt := _next_level(here, there)
 	if goal.y < v.global_position.y and not climbing_now:
 		_ramp_goal = {}
 		# Going down: drive off the edge, unless this level is fenced in (the cage deck): down its ramp.
-		if "FENCED_LEVELS" in arena and here in arena.FENCED_LEVELS:
+		if _fenced(here):
+			# Round 31: the nearest ramp down to the next level on the way (Paris: street -> river quays).
+			var down := _ramp_between(v, nxt if nxt != "" else there, here, goal)
+			if not down.is_empty():
+				return _down_ramp(v, down)
 			for r: Dictionary in arena.ramps:
 				if _level(r.top) == here:
 					var near_top := Vector2(v.global_position.x - r.top.x, v.global_position.z - r.top.z).length() < 8.0
@@ -596,8 +615,17 @@ func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
 		var best: Dictionary = {}
 		var best_any := INF
 		var any: Dictionary = {}
+		# Round 31: up the first ramp of the chain to the goal's level (three terraces = three ramps), or, when
+		# that chain starts by going down (hill top -> street -> Trocadero), down that ramp first.
+		if nxt != "" and nxt != there and _ramp_between(v, here, nxt, goal).is_empty():
+			var first_down := _ramp_between(v, nxt, here, goal)
+			if not first_down.is_empty():
+				return _down_ramp(v, first_down)
 		for r: Dictionary in arena.ramps:
-			if _level(r.top) != there:
+			if nxt != "":
+				if _rlevel(r, "top") != nxt or _rlevel(r, "foot") != here:
+					continue
+			elif _rlevel(r, "top") != there:
 				continue
 			var d: float = v.global_position.distance_to(r.foot) + (r.top as Vector3).distance_to(goal)
 			if d < best_any:
@@ -642,6 +670,81 @@ func _via_ramp(v: Vehicle, goal: Vector3) -> Vector3:
 			# Beside the ramp (its side is a wall): go out round the foot first.
 			return foot + axis * 10.0 + side * signf(lateral) * minf(absf(lateral), half_w)
 	return top + axis * maxf(s - RAMP_LOOK, 0.0)
+
+
+## Nothing solid between the car and p at bonnet height (round 31, for Paris's path finding).
+func _sees(v: Vehicle, p: Vector3) -> bool:
+	var q := PhysicsRayQueryParameters3D.create(v.global_position + Vector3.UP * 1.2, p + Vector3.UP * 1.2, WORLD_MASK)
+	q.exclude = [v.get_rid()]
+	var hit := v.get_world_3d().direct_space_state.intersect_ray(q)
+	return hit.is_empty() or hit.collider is Breakable or hit.collider is Vehicle
+
+
+## Left only by a ramp (the cage deck in LA; Paris: the street over the river, the roofs). Prefixes count: "roof"
+## covers every roof block's level ("roof12").
+func _fenced(level: String) -> bool:
+	if not "FENCED_LEVELS" in arena:
+		return false
+	for f: String in arena.FENCED_LEVELS:
+		if level == f or level.begins_with(f):
+			return true
+	return false
+
+
+## A ramp end's level, worked out once (ramps never move; Paris's roof levels cost a polygon search).
+func _rlevel(r: Dictionary, end: String) -> String:
+	var key := "_lv_" + end
+	if not r.has(key):
+		r[key] = _level(r[end])
+	return r[key]
+
+
+## Round 31 (owner: AI stuck at the Trocadero stairs, in the river, at closed paths): the level after `here` on
+## the shortest chain of ramps to `there` (each ramp joins its foot's level and its top's level, both ways).
+## "" when no chain of ramps reaches it.
+func _next_level(here: String, there: String) -> String:
+	if here == there or arena == null:
+		return there
+	var prev := {here: ""}
+	var queue: Array[String] = [here]
+	while not queue.is_empty():
+		var at: String = queue.pop_front()
+		for r: Dictionary in arena.ramps:
+			var a := _rlevel(r, "foot")
+			var b := _rlevel(r, "top")
+			if a == b:
+				continue
+			var to := b if a == at else (a if b == at else "")
+			if to == "" or prev.has(to):
+				continue
+			prev[to] = at
+			if to == there:
+				var step := to
+				while prev[step] != here:
+					step = prev[step]
+				return step
+			queue.append(to)
+	return ""
+
+
+## The ramp from level `low` (its foot) up to level `high` (its top), nearest by the whole trip. {} if none.
+func _ramp_between(v: Vehicle, low: String, high: String, goal: Vector3) -> Dictionary:
+	var best: Dictionary = {}
+	var best_d := INF
+	for r: Dictionary in arena.ramps:
+		if _rlevel(r, "foot") != low or _rlevel(r, "top") != high:
+			continue
+		var d: float = v.global_position.distance_to(r.top) + (r.foot as Vector3).distance_to(goal)
+		if d < best_d:
+			best_d = d
+			best = r
+	return best
+
+
+## Down a ramp: to its top, then along it to its foot.
+func _down_ramp(v: Vehicle, r: Dictionary) -> Vector3:
+	var near_top := Vector2(v.global_position.x - r.top.x, v.global_position.z - r.top.z).length() < 8.0
+	return r.foot if near_top or v.global_position.y < (r.top as Vector3).y - 1.0 else r.top
 
 
 ## Which level a point is on (the stage says: road, battle, roof, deck); by height bands otherwise.

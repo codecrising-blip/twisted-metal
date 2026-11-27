@@ -35,6 +35,10 @@ var kind := ""
 var size_hint := Vector3(2.0, 2.0, 0.3) # rough extent of the visible part, for where the debris comes from
 var topple_height := 5.0 # how tall it is when it falls over (where it lands)
 var fall_mass := 220.0 # kg of the piece that falls (TOPPLE)
+## Round 31 (owner: "trees spawn suddenly on my face as I ram into them"): a big crown swatted by a car went
+## flying ahead along the car's path at up to 19 m/s, so it filled the chase camera. Big trees set this: a car
+## knocks them over to the side of its path, slowly, the crown falling away from the road ahead.
+var swat_aside := false
 var stump_radius := 0.0 # > 0: a short broken stump stays where it stood
 ## Set by weapon_hit(): where the shot or blast came from, and whether it sets wood on fire.
 var hit_from := Vector3.INF
@@ -183,8 +187,12 @@ func _topple(by: Vehicle) -> void:
 		if cv.length() > 3.0:
 			var fwd := cv.normalized()
 			var side := off - fwd * off.dot(fwd) # which side of the car's path it stood on
-			dir = fwd * 0.8 + (side.normalized() if side.length() > 0.05 else Vector3(-fwd.z, 0, fwd.x)) * 0.6
+			var aside := side.normalized() if side.length() > 0.05 else Vector3(-fwd.z, 0, fwd.x)
+			dir = fwd * 0.8 + aside * 0.6
 			speed = clampf(cv.length(), 8.0, 42.0)
+			if swat_aside:
+				dir = fwd * 0.3 + aside
+				speed = clampf(cv.length() * 0.45, 6.0, 12.0)
 		else:
 			dir = off
 	dir.y = 0.0

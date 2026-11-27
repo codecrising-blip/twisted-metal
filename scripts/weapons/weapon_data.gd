@@ -232,15 +232,15 @@ const DEFS := {
 	# ---- Round 28 (owner: "build Thumper, Darkside and Brimstone with their secondaries"), design 01 ch 9-11.
 	# Thumper (Bruce): Megafire, reworked in round 29 (owner): a glowing sheet of fire across the whole width of his
 	# nose, halfway between a beam and a flame (TM4's Super Thumper). A bar of "tabs" (8) instead of charges: one
-	# tab burns in tab_time s (0.7: 5.6 s for the full bar), one tab comes back in tab_refill s (4.6; it was 4 until
-	# the owner asked for a 15% slower recharge after round 30), only while the fire is off. Lighting it needs a FULL
+	# tab burns in tab_time s (0.7: 5.6 s for the full bar), one tab comes back in tab_refill s (7.5, owner round 31;
+	# it was 4, then 4.6), only while the fire is off. Lighting it needs a FULL
 	# tab and burns at least one tab (a tap still costs 0.7 s); holding on drains the bar; letting go keeps what is
 	# left of the tab. dps: the whole bar on Outlaw (296) = ~80% with the burning.
 	# The fire is a box ahead of the grille: half_w at the nose widening by spread a metre, range m long.
 	"megafire": {
 		"label": "Megafire", "kind": "flame", "handler": "flame", "color": Color(1.0, 0.5, 0.12), "special": true,
 		"range": 16.0, "half_w": 1.2, "spread": 0.12, "height": 2.6, "dps": 43.0, "burn": 2.0,
-		"tabs": 8, "tab_time": 0.7, "tab_refill": 4.6, "cooldown": 0.0, "sound_db": 2.5,
+		"tabs": 8, "tab_time": 0.7, "tab_refill": 7.5, "cooldown": 0.0, "sound_db": 2.5,
 	},
 	# Thumper's secondary (round 29, owner; replaces the Drive-By): Earthquake Slam. A sonic boom out from under the
 	# car: a blue wave along the ground to "radius" m. Every car it reaches is thrown away from him (push, falling off
@@ -267,6 +267,8 @@ const DEFS := {
 		"throw_speed": 46.0, "range": 45.0, "wall_damage": 25.0, "wall_radius": 5.0,
 		"run_speed": 26.0, "run_mult": 0.6, "run_time": 2.0, "fuse": 2.0, "damage": 40.0, "shake_damage": 10.0,
 		"shake_wall": 15.0, "hp": 5.0, "pop_damage": 12.0, "pop_radius": 3.0, "push": 6.0, "shake": 0.5,
+		# round 31 (owner): a strong punch into the windshield punch_at s into the fuse, before he blows
+		"punch_at": 1.6, "punch_wind": 0.3, "punch_damage": 15.0, "punch_slow": 5.0,
 		"cooldown": 1.0, "recharge": 17.0, "sound_db": 2.0,
 	},
 	# Brimstone's secondary: Hellfire Sermon (design 10, one charge). The church bell tolls; for "time" s whoever
@@ -284,12 +286,15 @@ const DEFS := {
 		"horn": 0.0, "time": 1.5, "speed_mult": 1.9, # round 30 (owner): off at once, half the run "accel_mult": 8.0, "kick": 14.0, "steer": 0.25, "damage": 30.0, "wall_bonus": 15.0, "pin": 1.5,
 		"brush_mult": 1.5, "brush_cap": 25.0, "shake": 0.8, "cooldown": 1.0, "recharge": 15.0, "sound_db": 2.0,
 	},
-	# Darkside's secondary: Ash Cloud (design 11, one charge). His stacks pour out ash for "time" s; the cloud
-	# hangs "linger" s, "width" m wide. Cars inside lose drain energy a second and can't start energy moves;
-	# Darkside gets half of what they lose. The only weapon that steals energy.
+	# Darkside's secondary: Ash Cloud (design 11, one charge). Round 31 (owner): it BURSTS out round him, a black
+	# wall racing out to "burst_r" m in "burst_time" s; every opponent it reaches loses "burst_drain" of a full energy
+	# bar at once (60), then "drain" a second (10) while it stays in the cloud (the burst zone hangs where it burst,
+	# and his stacks keep pouring a trail "width" m wide for "time" s that hangs "linger" s). Darkside gets ALL of
+	# it (was half). Cars inside can't start energy moves. The only weapon that steals energy.
 	"ash_cloud": {
 		"label": "Ash Cloud", "kind": "ash", "handler": "ash", "color": Color(0.25, 0.24, 0.23),
-		"time": 6.0, "linger": 4.5, "width": 12.0, "drain": 15.0, "sound_db": 2.0,
+		"time": 6.0, "linger": 4.5, "width": 12.0, "drain": 10.0, "burst_r": 13.0, "burst_time": 0.3,
+		"burst_drain": 60.0, "gain": 1.0, "sound_db": 2.0,
 	},
 	# Spectre: ghost missile that flies through walls.
 	"ghost_missile": {
@@ -305,8 +310,9 @@ const DEFS := {
 const PICKUP_WEAPONS := ["homing", "homing", "homing", "fire", "fire", "fire", "power", "power",
 	"napalm", "napalm", "remote", "remote", "zoomy", "zoomy", "sat"]
 
-## Secondary weapons (design 1.6): paid in charges of the car's special, Sweet Bot two, the rest one.
-const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1, "boomerang": 1, "rim_shot": 1, "reaper_sweep": 2, "tyre_dash": 1,
+## Secondary weapons (design 1.6): paid in charges of the car's special, Sweet Bot two, the rest one (Soul Harvest
+## was two until round 31, owner).
+const SECONDARY_COST := {"sweet_bot": 2, "wheel_clamp": 1, "boomerang": 1, "rim_shot": 1, "reaper_sweep": 1, "tyre_dash": 1,
 	"hellfire_sermon": 1, "ash_cloud": 1} # Thumper's Earthquake Slam is paid in Megafire tabs ("tabs")
 const BOT_HEALTH := 59.0 # owner, round 16: a power missile and a fire missile (45 + 14) take it down
 const BOT_MISSILES := 20

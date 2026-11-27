@@ -2,7 +2,7 @@
 rendered with Cycles as one equirectangular panorama and shown as the sky in the game (costs no frames).
     /tmp/bpy3.13/bin/python tools/blender/build_paris_backdrop.py [width] [samples]
 Writes assets/backdrops/paris_city.jpg (u = 0 looks north, growing east, as Godot reads it).
-What is in it: 4 pm under a clear sky with warm haze low down (the stage's own light, design 32 section 5);
+Round 31: rendered from 55 m up. What is in it: 4 pm under a clear sky with warm haze low down (the stage's own light, design 32 section 5);
 Haussmann blocks to the horizon (cream stone, blue-grey zinc mansards, chimneys); the Seine running on west and
 east; La Defense's towers and the Grande Arche to the west-north-west; columns of war smoke over the city with
 fires at their feet. Blender space: +Y north, +X east, +Z up (Godot z = -Blender y)."""
@@ -208,7 +208,7 @@ for gx in np.arange(-R, R, step):
     for gy in np.arange(-R, R, step):
         x = gx + rng.uniform(-6, 6)
         y = gy + rng.uniform(-6, 6)
-        if abs(x) < HX + 30 and abs(y) < HZ + 30:
+        if abs(x) < HX + 30 and abs(y) < HZ + 30:  # the stage and its ring of block shells (ParisArena._outer_ring)
             continue
         if math.hypot(x, y) > R:
             continue
@@ -359,7 +359,8 @@ except AttributeError:
     cd.cycles.panorama_type = "EQUIRECTANGULAR"
 cd.clip_end = 30000.0
 cam = link(bpy.data.objects.new("cam", cd))
-cam.location = (0, 0, 14.0)
+cam.location = (0, 0, 55.0)  # round 31 (owner: a void past the map's edge): over the rooftops (was 14), so
+# what lies below the horizon, seen over the edge walls from roofs and terraces, is blocks and streets
 cam.rotation_euler = Euler((math.radians(90), 0, 0))   # looking north
 scene.camera = cam
 scene.render.resolution_x, scene.render.resolution_y = W, W // 2

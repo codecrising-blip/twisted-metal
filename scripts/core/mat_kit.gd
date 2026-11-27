@@ -125,6 +125,30 @@ static func _blob(albedo: Image, rough: Image, height: Image, cx: int, cy: int, 
 
 
 ## Bare or dark steel (frames, armor plates, guns).
+## Chain-link fence (round 31, Paris's edge fence; same weave as LA's fence): alpha-scissor diamonds, UVs in metres.
+static var _chain: StandardMaterial3D
+
+static func chainlink() -> StandardMaterial3D:
+	if _chain:
+		return _chain
+	var size := 64
+	var img := Image.create(size, size, false, Image.FORMAT_RGBA8)
+	for y in size:
+		for x in size:
+			var on := (x + y) % 16 < 2 or (x - y + 64) % 16 < 2
+			img.set_pixel(x, y, Color(0.42, 0.43, 0.42, 1.0) if on else Color(0, 0, 0, 0))
+	img.generate_mipmaps()
+	_chain = StandardMaterial3D.new()
+	_chain.albedo_texture = ImageTexture.create_from_image(img)
+	_chain.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+	_chain.alpha_scissor_threshold = 0.5
+	_chain.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_chain.metallic = 0.5
+	_chain.roughness = 0.5
+	_chain.uv1_scale = Vector3.ONE * 0.5
+	return _chain
+
+
 static func steel(base := Color(0.22, 0.22, 0.23), rust := 0.25, tile := 1.5) -> StandardMaterial3D:
 	var key := "steel_%s_%.2f_%.2f" % [base.to_html(), rust, tile]
 	if _cache.has(key):

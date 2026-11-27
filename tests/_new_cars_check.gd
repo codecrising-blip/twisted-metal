@@ -54,8 +54,8 @@ func _run() -> void:
 		v.auto_target = false
 	await _frames(10)
 
-	# ---- Thumper (round 29): Megafire = a bar of 8 tabs, 0.7 s a tab, a full tab to light it, 4.6 s to refill one
-	# (round 30 follow-up: 15% slower, owner).
+	# ---- Thumper (round 29): Megafire = a bar of 8 tabs, 0.7 s a tab, a full tab to light it, 7.5 s to refill one
+	# (owner, round 31; was 4, then 4.6).
 	_put(th, 0, 40, 0)
 	_put(dummy, 0, 32, 0)
 	await _frames(10)
@@ -98,8 +98,8 @@ func _run() -> void:
 	await _frames(5)
 	_check(not th.flaming, "no ignition without a full tab")
 	th.in_fire_weapon = false
-	await _frames(278)
-	_check(th.fuel > 1.55 and th.fuel < 1.68, "a tab refills in 4.6 s (%.2f)" % th.fuel)
+	await _frames(450)
+	_check(th.fuel > 1.55 and th.fuel < 1.66, "a tab refills in 7.5 s (%.2f)" % th.fuel)
 	# Earthquake Slam (round 29): costs 2 tabs, throws a car beside him away and rolls it.
 	_put(th, 0, 40, 0)
 	_put(dummy, 5, 40, 0)
@@ -183,8 +183,10 @@ func _run() -> void:
 	ds.ammo["darkside_slam"] = 2
 	ds.energy = 20.0
 	ds.energy_move("secondary")
-	await _frames(90)
-	_check(dummy.energy < 90.0, "Ash Cloud drains a car behind him (%.1f)" % dummy.energy)
+	await _frames(24)
+	_check(dummy.energy <= 41.0 and ds.energy >= 75.0, "Ash Cloud bursts: 60 energy taken at once and given to him (%.1f, his %.1f)" % [dummy.energy, ds.energy])
+	await _frames(66)
+	_check(dummy.energy < 32.0, "then 10 a second while it stays in the cloud (%.1f)" % dummy.energy)
 	dummy.want_move = "shield"
 	var before := dummy.shield_time
 	dummy.energy_move("shield")

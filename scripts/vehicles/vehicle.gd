@@ -29,7 +29,7 @@ const TURBO_LAUNCH := 2.4
 const TURBO_LAUNCH_TIME := 0.6
 const TURBO_KICK_COST := 6.0 # of 100: tapping turbo again and again is no free speed
 const TURBO_KICK_REST := 0.35 # seconds off turbo before the next shove
-const TURBO_PUTS_OUT_FIRE := 0.5 # seconds of turbo blow out the flames
+const TURBO_PUTS_OUT_FIRE := 0.05 # seconds of turbo blow out the flames (round 31, owner: at once; was 0.5)
 const ENERGY_REGEN := 2.5
 const ENERGY_PAUSE := 1.5 # no regen for this long after spending energy
 const JUMP_COST := 25.0
@@ -250,6 +250,7 @@ var _slam_pinned_once := false
 var _slam_brushed := {}
 var _slam_fx: Node3D
 var pinned_by: Vehicle # a slamming Darkside has this car on its nose (it is carried, not driven)
+var _hull: ConvexPolygonShape3D # the body's collision shape (round 31: the pinned car is swept with it)
 var ash_time := 0.0 # inside an ash cloud: no energy moves
 var ash_cover := 0.0 # round 29: Darkside pouring his ash: nobody can see or lock him
 var _bed_sinner: Node3D
@@ -346,6 +347,7 @@ func setup(id: String, player: bool) -> void:
 			pts.append(Vector3(sx * hw, bottom, sz * (hl - cut)))
 	hull.points = pts
 	shape.shape = hull
+	_hull = hull
 	add_child(shape)
 
 	_visual = Node3D.new()
@@ -600,8 +602,16 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 			var host := pinned_by
 			var fwd := host.flat_forward()
 			var reach := float(host.stats.get("size", Vector3(2, 2, 5)).z) * 0.5 + float(stats.get("size", Vector3(2, 2, 5)).z) * 0.35 + 0.4
-			state.transform = Transform3D(xf.basis, host.global_position + fwd * reach + Vector3.UP * 0.35)
-			state.linear_velocity = host.linear_velocity
+			var goal := host.global_position + fwd * reach + Vector3.UP * 0.35
+			# Round 31 (owner: Thumper was carried into a wall and swallowed by it, falling out of the world): the
+			# carry is a move, not a teleport. The body is swept to its next place; a wall in the way stops it
+			# there and the slam crushes it against that wall.
+			var wall := _pin_sweep(state, xf, goal)
+			if wall >= 0.0:
+				goal = xf.origin + (goal - xf.origin) * wall
+				host.call_deferred("_pin_crash", goal + fwd * float(stats.get("size", Vector3(2, 2, 5)).z) * 0.5)
+			state.transform = Transform3D(xf.basis, goal)
+			state.linear_velocity = host.linear_velocity if wall < 0.0 else Vector3.ZERO
 			state.angular_velocity = Vector3.ZERO
 			_prev_velocity = state.linear_velocity
 			return
@@ -2164,12 +2174,22 @@ func launch(id: String, lock: Vehicle) -> void:
 		from = straight_from(from)
 		dir = level_forward()
 	var homing := float(WeaponData.get_def(id).get("homing", 0.0)) > 0.0
+	if homing and not _grounded:
+		dir = flat_forward() # round 31 (owner): in a jump the body's pitch is no aim; leave level
 	if is_instance_valid(lock) and not lock.is_dead:
 		var to_t := lock.aim_point() - from
 		# Start roughly toward the target so homing doesn't have to U-turn. Round 12 (owner): only
 		# homing weapons; straight ones (power) leave along the nose, or they looked half-homing.
-		if homing and to_t.length() > 0.5 and dir.angle_to(to_t.normalized()) < deg_to_rad(60):
-			dir = dir.lerp(to_t.normalized(), 0.6).normalized()
+		if homing and to_t.length() > 0.5:
+			var flat_d := Vector3(dir.x, 0.0, dir.z).normalized()
+			var flat_t := Vector3(to_t.x, 0.0, to_t.z)
+			if flat_t.length() > 0.5 and flat_d.angle_to(flat_t.normalized()) < deg_to_rad(60):
+				# Round 31 (owner: "tracking goes wrong when I fire in a jump"): sideways 0.6 of the way as
+				# before, but straight at the target's height, so a shot from the air (or at a car below
+				# or above) starts inside its seeker and keeps the lock.
+				var side := flat_d.lerp(flat_t.normalized(), 0.6).normalized()
+				var climb := to_t.y / flat_t.length()
+				dir = (side + Vector3.UP * climb).normalized()
 	else:
 		lock = null
 	Projectile.spawn(get_parent(), id, from, dir, self, lock)
@@ -2399,20 +2419,26 @@ func _slam_hit(other: Vehicle, n: Vector3, at: Vector3) -> void:
 
 
 ## Pinned and driven into a wall: wall_bonus on top, the car is let go there.
-func _pin_wall_check() -> void:
+func _pin_wall_check(forced := Vector3.INF) -> void:
 	var o := _slam_pin
 	var fwd := flat_forward()
-	var reach := float(o.stats.get("size", Vector3(2, 2, 5)).z) * 0.5 + 1.2
-	var from := o.global_position + Vector3.UP * 1.0
-	var q := PhysicsRayQueryParameters3D.create(from, from + fwd * reach, 1)
-	q.exclude = [get_rid(), o.get_rid()]
-	var hit := get_world_3d().direct_space_state.intersect_ray(q)
-	if hit.is_empty() or (hit.normal as Vector3).y > 0.6:
-		return
+	var at := forced
+	if forced == Vector3.INF:
+		# rays at three heights (round 31: one ray at 1 m missed low walls and parapets), reaching a step ahead
+		var reach := float(o.stats.get("size", Vector3(2, 2, 5)).z) * 0.5 + 1.2 + linear_velocity.length() / 30.0
+		for h: float in [0.5, 1.0, 1.8]:
+			var from := o.global_position + Vector3.UP * h
+			var q := PhysicsRayQueryParameters3D.create(from, from + fwd * reach, 1)
+			q.exclude = [get_rid(), o.get_rid()]
+			var hit := get_world_3d().direct_space_state.intersect_ray(q)
+			if not hit.is_empty() and (hit.normal as Vector3).y <= 0.6:
+				at = hit.position
+				break
+		if at == Vector3.INF:
+			return
 	var bonus := float(_slam.get("wall_bonus", 15.0)) * WeaponData.DAMAGE_SCALE
 	o.take_damage(bonus, self)
 	o.hit_react(-fwd, bonus)
-	var at: Vector3 = hit.position
 	FxKit.crash_burst(get_parent(), at, -fwd, 1.0)
 	GameFeel.play("explosion_big", at, get_parent(), -2.0, 0.7, true)
 	GameFeel.shake(at, 1.0, 50.0)
@@ -2423,6 +2449,44 @@ func _pin_wall_check() -> void:
 	_release_pin(true)
 	_end_slam()
 	linear_velocity = Vector3(0.0, linear_velocity.y, 0.0) # stopped dead by the wall
+	# Round 31: his nose overlapped the pinned car while he carried it; back off that much, or the solver pushing
+	# the two apart could shove the crushed car through the wall behind it.
+	global_position -= fwd * 0.9
+	o.linear_velocity = Vector3(0.0, minf(o.linear_velocity.y, 0.0), 0.0)
+
+
+## Round 31: the pinned car's own shape swept from where it is to goal. Returns the safe fraction of the move
+## when something on the world layer that is not ground (a wall, a parapet, a building, a pier) is in the
+## way, else -1. Ground under the box (ramps, kerbs) never stops it: the carry lifts it 0.35 m anyway.
+func _pin_sweep(state: PhysicsDirectBodyState3D, xf: Transform3D, goal: Vector3) -> float:
+	if _hull == null:
+		return -1.0
+	var motion := goal - xf.origin
+	if motion.length() < 0.001:
+		return -1.0
+	var q := PhysicsShapeQueryParameters3D.new()
+	q.shape = _hull
+	q.transform = xf
+	q.motion = motion
+	q.collision_mask = 1
+	q.exclude = [get_rid(), pinned_by.get_rid()]
+	var space := state.get_space_state()
+	var r := space.cast_motion(q)
+	if r.is_empty() or r[0] >= 1.0:
+		return -1.0
+	q.transform = Transform3D(xf.basis, xf.origin + motion * r[1])
+	q.motion = Vector3.ZERO
+	var info := space.get_rest_info(q)
+	if not info.is_empty() and (info.normal as Vector3).y > 0.6:
+		return -1.0 # only ground: carry on
+	return maxf(0.0, r[0] - 0.02)
+
+
+## The pinned car met a wall on its way (round 31): the wall crush, at once.
+func _pin_crash(at: Vector3) -> void:
+	if not is_instance_valid(_slam_pin):
+		return
+	_pin_wall_check(at)
 
 
 func _release_pin(at_wall: bool) -> void:

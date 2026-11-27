@@ -1494,8 +1494,8 @@ func _run() -> void:
 	var s_hp := ol20.health
 	var gr_hp := gr.health
 	gr.energy_move("secondary")
-	_check(int(gr.ammo["reaper_skull"]) == 1 and main.get_children().any(func(n: Node): return n is ReaperSweep),
-		"Grimm swings the scythe for two special charges")
+	_check(int(gr.ammo["reaper_skull"]) == 2 and main.get_children().any(func(n: Node): return n is ReaperSweep),
+		"Grimm swings the scythe for one special charge (round 31; was two)")
 	for i in 90:
 		await physics_frame
 	var took := s_hp - ol20.health

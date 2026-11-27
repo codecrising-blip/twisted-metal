@@ -25,8 +25,13 @@ const GROUND_KINDS := ["g_shop_red", "g_shop_green", "g_shop_navy", "g_shop_blac
 static var _shell_mats := {}
 
 
+## Round 31 (owner: "too bright and white"): the baked facades are toned down in the game (kit and far shells alike).
+const FACADE_TINT := Color(0.84, 0.82, 0.78)
+
 static func build(arena: ParisArena, blocks: Array[Dictionary]) -> void:
 	var use_kit := ModelLib.has(KIT)
+	if use_kit:
+		ModelLib.atlas(KIT).albedo_color = FACADE_TINT
 	var deck := ParisArena.zinc_roof()
 	var zinc := deck
 	var body := arena.buildings_body()
@@ -125,6 +130,44 @@ static func _add(near: Dictionary, node: String, xf: Transform3D) -> void:
 
 ## The far shell of one facade: wall painted with the kit's own facade (rendered in Blender by
 ## render_haussmann_far.py, three bays wide), cornice ledge, mansard slope.
+## Round 31 (owner: past the edge "a void", "fill it with something real"): a block's plain shell (painted facade,
+## cornice, mansard, flat zinc top) outside the map's edge walls. Its walls go into sts[low|tall], its stone and zinc
+## into mb; ring_commit() makes them a handful of meshes for the whole ring.
+static func ring_block(arena: ParisArena, poly: PackedVector2Array, low: bool, mb: MeshBuilder, sts: Dictionary) -> void:
+	if Geometry2D.is_polygon_clockwise(poly):
+		poly.reverse()
+	var h := ParisArena.ROOF_Y if low else ParisArena.TALL_Y
+	var run := RUN_LOW if low else RUN_TALL
+	var cornice_y := G_H + F_H * _floors(low).size()
+	var key := "low" if low else "tall"
+	_shell_mat(low)
+	if not sts.has(key):
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		sts[key] = st
+	for i in poly.size():
+		var a := poly[i]
+		var c := poly[(i + 1) % poly.size()]
+		var d := (c - a).normalized()
+		_shell_edge(mb, sts[key], a, c, Vector3(d.y, 0, -d.x), cornice_y, h, run, low, Vector3.ZERO)
+	for inner: PackedVector2Array in Geometry2D.offset_polygon(poly, -run, Geometry2D.JOIN_MITER):
+		if not Geometry2D.is_polygon_clockwise(inner):
+			arena.poly_face(ParisArena.zinc_roof(), inner, h, false)
+
+
+static func ring_commit(arena: Node3D, mb: MeshBuilder, sts: Dictionary) -> void:
+	var holder := Node3D.new()
+	holder.name = "OuterRing"
+	arena.add_child(holder)
+	for key: String in sts:
+		var mi := MeshInstance3D.new()
+		mi.mesh = (sts[key] as SurfaceTool).commit()
+		mi.material_override = _shell_mats[key]
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		holder.add_child(mi)
+	mb.commit(holder, false)
+
+
 static func _shell_edge(mb: MeshBuilder, wall_st: SurfaceTool, a: Vector2, c: Vector2, out: Vector3, cornice_y: float, h: float, run: float, low: bool, origin: Vector3) -> void:
 	_shell_mat(low)
 	var A := Vector3(a.x, 0, a.y) - origin
@@ -163,6 +206,7 @@ static func _shell_mat(low: bool) -> StandardMaterial3D:
 		var m := StandardMaterial3D.new()
 		var path := "res://assets/models/haussmann_far_%s.png" % key
 		m.albedo_texture = load(path) if ResourceLoader.exists(path) else _facade_texture(low)
+		m.albedo_color = FACADE_TINT
 		m.roughness = 0.9
 		m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
 		_shell_mats[key] = m
@@ -223,8 +267,10 @@ static func _commit(arena: Node3D, near: Dictionary, shell: MeshBuilder, wall_st
 		mi.material_override = mat
 		mi.visibility_range_end = NEAR
 		mi.visibility_range_end_margin = MARGIN
-		if mat == ModelLib.glass():
-			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		# Round 31 (owner: 1.6-1.8M triangles at the Arc on HIGH): the kit's detail cast the sun's shadow too, so
+		# every balcony was drawn three times (the view and two shadow splits: 2/3 of the frame's triangles).
+		# Now the block's plain shell casts its shadow (below) and the detail only shows.
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		holder.add_child(mi)
 	var walls := MeshInstance3D.new()
 	walls.mesh = wall_st.commit()
@@ -234,6 +280,13 @@ static func _commit(arena: Node3D, near: Dictionary, shell: MeshBuilder, wall_st
 		if use_kit:
 			mi.visibility_range_begin = NEAR
 			mi.visibility_range_begin_margin = MARGIN
+			var caster := MeshInstance3D.new() # the shell's shadow where the kit is shown
+			caster.mesh = mi.mesh
+			caster.material_override = mi.material_override
+			caster.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+			caster.visibility_range_end = NEAR
+			caster.visibility_range_end_margin = MARGIN
+			holder.add_child(caster)
 
 
 ## Facades on the map's edge face the backdrop: nobody sees them, so they are not built.

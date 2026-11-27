@@ -85,7 +85,7 @@ static func _charged_salvo(v: Vehicle, id: String, def: Dictionary) -> void:
 	var lock := v.target if is_instance_valid(v.target) and not v.target.is_dead else null
 	# Round 30 (owner): all at once, side by side across the nose (the six slots), not one after another.
 	var slots: Array = v.model.get_meta("slots", []) if v.model else []
-	var fwd := v.aim_forward()
+	var fwd := v.aim_forward() if v.is_on_floor() else v.flat_forward() # round 31: level when fired in a jump
 	var order := [2, 3, 1, 4, 0, 5] # middle out, so a short charge fires from the centre
 	for i in count:
 		var at := v.launch_point() + v.global_basis.x * (float(i) - (count - 1) * 0.5) * 0.45

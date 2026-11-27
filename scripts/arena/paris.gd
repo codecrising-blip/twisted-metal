@@ -40,11 +40,11 @@ const BRIDGES := [
 ]
 
 # Palette (design 32 section 5)
-const C_STONE := Color("D8C9AC")
+const C_STONE := Color("C9B898") # round 31 (owner: "too bright and white"): was D8C9AC
 const C_QUAY := Color("C4B597")
 const C_ASPHALT := Color("3A3B3E")
 const C_COBBLE := Color("6B6458")
-const C_SIDEWALK := Color("B9AE98")
+const C_SIDEWALK := Color("A89D88") # round 31: was B9AE98
 const C_GRAVEL := Color("CDBA8E")
 const C_LAWN := Color("6F8F48")
 const C_WATER := Color("4E6B6A")
@@ -103,6 +103,7 @@ func build() -> void:
 	_environment()
 	_river()
 	_bridges()
+	_quay_ramps()
 	_layout_roads()
 	_draw_roads()
 	_parks()
@@ -124,7 +125,7 @@ func _materials() -> void:
 	_m.sidewalk = MatKit.pavers(C_SIDEWALK.darkened(0.18), 2.0, 21)
 	_m.asphalt = MatKit.pavement("asphalt", C_ASPHALT, 16.0, 22)
 	_m.cobble = MatKit.pavers(C_COBBLE, 1.2, 23)
-	_m.plaza = MatKit.pavers(Color("BDB09A"), 6.0, 24)
+	_m.plaza = MatKit.pavers(Color("A39782"), 6.0, 24) # round 31: was BDB09A (the white squares)
 	_m.gravel = MatKit.pavement("concrete", C_GRAVEL, 10.0, 25)
 	_m.lawn = MatKit.grass(C_LAWN, 12.0, 26)
 	_m.quay = ashlar(C_QUAY, 27)
@@ -226,7 +227,37 @@ void fragment() {
 
 # ---------------------------------------------------------------- environment
 
+## Round 31 (owner: Paris "too bright and white"): the light, by mood. "toned" (default) = the 4 pm sun, less
+## glare; "haze" = war smoke browning the sky; "overcast" = grey, soft. `-- mood:<name>` picks one for a run.
+static var mood := "toned"
+const MOODS := {
+	"bright": {"exposure": 0.98, "sun": 1.45, "sun_col": Color("FFF1DC"), "amb": Color(0.6, 0.64, 0.72), "amb_e": 0.75,
+		"fog": Color(0.8, 0.76, 0.68), "fog_d": 0.0011, "sat": 0.95, "con": 1.08, "sky": Color(1, 1, 1), "haze": Color(0, 0, 0), "haze_a": 0.0},
+	"toned": {"exposure": 0.86, "sun": 1.3, "sun_col": Color("FFE9CC"), "amb": Color(0.55, 0.57, 0.62), "amb_e": 0.7,
+		"fog": Color(0.7, 0.66, 0.6), "fog_d": 0.0016, "sat": 0.9, "con": 1.12, "sky": Color(0.9, 0.88, 0.85), "haze": Color(0.72, 0.64, 0.54), "haze_a": 0.25},
+	"haze": {"exposure": 0.82, "sun": 1.15, "sun_col": Color("FFD2A0"), "amb": Color(0.56, 0.5, 0.44), "amb_e": 0.72,
+		"fog": Color(0.55, 0.47, 0.38), "fog_d": 0.0032, "sat": 0.85, "con": 1.12, "sky": Color(0.78, 0.68, 0.58), "haze": Color(0.5, 0.42, 0.34), "haze_a": 0.6},
+	"overcast": {"exposure": 0.9, "sun": 0.55, "sun_col": Color("E4E8EE"), "amb": Color(0.62, 0.64, 0.68), "amb_e": 1.0,
+		"fog": Color(0.6, 0.62, 0.64), "fog_d": 0.0028, "sat": 0.75, "con": 1.06, "sky": Color(0.72, 0.74, 0.78), "haze": Color(0.62, 0.64, 0.67), "haze_a": 0.55},
+}
+const SKY_SHADER := """
+shader_type sky;
+uniform sampler2D pano : source_color, filter_linear_mipmap;
+uniform vec3 tint = vec3(1.0);
+uniform vec3 haze = vec3(0.0);
+uniform float haze_amt = 0.0;
+void sky() {
+	vec3 c = texture(pano, SKY_COORDS).rgb * tint;
+	float low = 1.0 - clamp(EYEDIR.y * 2.5, 0.0, 1.0);
+	COLOR = mix(c, haze, haze_amt * low * low);
+}
+"""
+
 func _environment() -> void:
+	for a: String in OS.get_cmdline_user_args():
+		if a.begins_with("mood:") and MOODS.has(a.substr(5)):
+			mood = a.substr(5)
+	var md: Dictionary = MOODS[mood]
 	var env := Environment.new()
 	env.background_mode = Environment.BG_SKY
 	var sky := Sky.new()
@@ -241,35 +272,43 @@ func _environment() -> void:
 	# Round 30 (owner: "the map has no background from there"): the city beyond the edge walls, one pre-rendered
 	# panorama (tools/blender/build_paris_backdrop.py). The procedural sky above stays as the fallback.
 	if ResourceLoader.exists(BACKDROP):
-		var pano := PanoramaSkyMaterial.new()
-		pano.panorama = load(BACKDROP)
+		var sh := Shader.new()
+		sh.code = SKY_SHADER
+		var pano := ShaderMaterial.new()
+		pano.shader = sh
+		pano.set_shader_parameter("pano", load(BACKDROP))
+		var t: Color = md.sky
+		var hz: Color = md.haze
+		pano.set_shader_parameter("tint", Vector3(t.r, t.g, t.b))
+		pano.set_shader_parameter("haze", Vector3(hz.r, hz.g, hz.b))
+		pano.set_shader_parameter("haze_amt", md.haze_a)
 		sky.sky_material = pano
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.6, 0.64, 0.72) # blue sky fill in the shadows
-	env.ambient_light_energy = 0.75
+	env.ambient_light_color = md.amb # sky fill in the shadows
+	env.ambient_light_energy = md.amb_e
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES
-	env.tonemap_exposure = 0.98
+	env.tonemap_exposure = md.exposure
 	env.glow_enabled = true
 	env.glow_intensity = 0.3
 	env.glow_bloom = 0.02
 	env.glow_hdr_threshold = 1.5
 	env.fog_enabled = true
-	env.fog_light_color = Color(0.8, 0.76, 0.68)
-	env.fog_density = 0.0011
+	env.fog_light_color = md.fog
+	env.fog_density = md.fog_d
 	env.fog_sky_affect = 0.0
 	if RenderingServer.get_rendering_device() != null:
 		env.ssao_enabled = true
 	env.adjustment_enabled = true
-	env.adjustment_saturation = 0.95
-	env.adjustment_contrast = 1.08
+	env.adjustment_saturation = md.sat
+	env.adjustment_contrast = md.con
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
-	sun.light_color = Color("FFF1DC")
-	sun.light_energy = 1.45
+	sun.light_color = md.sun_col
+	sun.light_energy = md.sun
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 180.0
 	sun.rotation_degrees = Vector3(-35, -45, 0) # 4 pm: 35 degrees up in the south-west, shining north-east
@@ -310,8 +349,13 @@ static func island_half(x: float) -> float:
 	return 22.0 * smoothstep(168.0, 192.0, x) * (1.0 - smoothstep(248.0, 266.0, x))
 
 
+## Round 31 (owner: the channels round the Ile de la Cite were "so narrow", cars hit the walls and the AI stayed
+## stuck there all match): each channel is widened by ISLAND_WIDEN of the island's half width (15 -> ~23 m of
+## water), the banks and their blocks give way, the island keeps its size.
+const ISLAND_WIDEN := 0.35
+
 static func water_half(x: float) -> float:
-	return WATER_HALF + island_half(x)
+	return WATER_HALF + island_half(x) * (1.0 + ISLAND_WIDEN)
 
 
 ## Lower quay width. Round 30 (owner: fallen into the water by Notre-Dame there was no way out): the lower
@@ -544,17 +588,19 @@ func _bridge_span(bx: float, w: float, z0: float, z1: float, hump: float) -> voi
 	var x1 := xb + 0.5
 	var ih := island_half(bx)
 	for side: float in [-1.0, 1.0]:
+		# Round 31: only the bank's pier (slim); the deck rests on the island's own wall on the island side (that
+		# pier stood 3.4 m out into the channel and closed the passage under the bridge).
 		_pier(x0, x1, top, func(x: float) -> float: return river_z(x) + side * (water_half(x) - 0.1), -side, z0, z1)
-		if ih > 3.0:
-			_pier(x0, x1, top, func(x: float) -> float: return river_z(x) + side * (island_half(x) + 0.1), side, z0, z1)
 	if ih < 3.0:
-		_pier(x0, x1, top, func(x: float) -> float: return river_z(x) - 1.7, 1.0, z0, z1)
+		_pier(x0, x1, top, func(x: float) -> float: return river_z(x) - PIER_T * 0.5, 1.0, z0, z1)
 
 
 ## A bridge pier from under the riverbed up to `top`: one face on `edge(x)` (world z), 3.4 m thick toward `dir`
 ## (+1 = south), laid in 1 m steps from x0 to x1; only if its middle is under the span z0..z1.
+const PIER_T := 1.8 # round 31: pier thickness out from its edge (3.4 before)
+
 func _pier(x0: float, x1: float, top: float, edge: Callable, dir: float, z0: float, z1: float) -> void:
-	var mid := float(edge.call((x0 + x1) * 0.5)) + dir * 1.7
+	var mid := float(edge.call((x0 + x1) * 0.5)) + dir * PIER_T * 0.5
 	if mid <= z0 or mid >= z1:
 		return
 	var n := maxi(1, ceili(x1 - x0))
@@ -566,7 +612,7 @@ func _pier(x0: float, x1: float, top: float, edge: Callable, dir: float, z0: flo
 		var x := lerpf(x0, x1, float(k) / n)
 		var z := float(edge.call(x))
 		a.append(Vector3(x, 0, z))
-		b.append(Vector3(x, 0, z + dir * 3.4))
+		b.append(Vector3(x, 0, z + dir * PIER_T))
 	for k in n:
 		face(_m.quay, [a[k] + lo, a[k + 1] + lo, a[k + 1] + hi, a[k] + hi], Vector3(0, 0, -dir), true, COL_WALL)
 		face(_m.quay, [b[k] + lo, b[k + 1] + lo, b[k + 1] + hi, b[k] + hi], Vector3(0, 0, dir), true, COL_WALL)
@@ -736,7 +782,10 @@ func _lawn_rect(x0: float, z0: float, x1: float, z1: float) -> void:
 
 
 ## A raised plateau: drivable top, stone retaining walls with a coping, colliders.
+var _plateaus: Array = [] # [poly, h] of every raised terrace (round 31: the edge fence stands over them)
+
 func _plateau(poly: PackedVector2Array, h: float, top_mat: Material) -> void:
+	_plateaus.append([poly, h])
 	poly_face(top_mat, poly, h, false, COL_GROUND)
 	var ccw := not Geometry2D.is_polygon_clockwise(poly)
 	for i in poly.size():
@@ -1028,7 +1077,7 @@ func _rooftops() -> void:
 		_viaduct(c[0], c[1], ROOF_Y, ROOF_Y, 8.0, steel)
 		var a: Vector2 = c[0]
 		var b: Vector2 = c[1]
-		ramps.append({"foot": Vector3(a.x, ROOF_Y, a.y), "top": Vector3(b.x, ROOF_Y, b.y), "w": 8.0})
+		ramps.append({"foot": Vector3(b.x, ROOF_Y, b.y), "top": Vector3(a.x, ROOF_Y, a.y), "w": 8.0}) # both ways (round 31)
 	poly_face(_m.lawn, _rect(-2, -108, 38, -96), 0.06)
 	poly_face(_m.lawn, _rect(-2, -64, 38, -56), 0.06)
 
@@ -1061,7 +1110,7 @@ func _viaduct(a: Vector2, b: Vector2, y0: float, y1: float, w: float, steel: Mat
 				mid + lv * s + Vector3(0, 0.6, 0)), 0.0)
 		face(steel, [pa + lv, pb + lv, pb - lv, pa - lv], Vector3.UP, false, COL_GROUND)
 		for s: float in [-1.0, 1.0]:
-			face(steel, [pa + lv * s, pb + lv * s, pb + lv * s + Vector3(0, 1.4, 0), pa + lv * s + Vector3(0, 1.4, 0)], lv * s, false, COL_WALL)
+			face(steel, [pa + lv * s, pb + lv * s, pb + lv * s + Vector3(0, 1.4, 0), pa + lv * s + Vector3(0, 1.4, 0)], lv * s, false, COL_WALL2)
 			# A sloped link's sides are skirted down to where it starts (round 30: cars drove in under it
 			# from the side on the terrace and wedged where the gap closed).
 			if absf(y1 - y0) > 0.5:
@@ -1148,6 +1197,7 @@ func _tree_body(mesh: Mesh, mmi: MultiMeshInstance3D, index: int, xf: Transform3
 	b.size_hint = Vector3(1.2, 8.0, 1.2)
 	b.topple_height = 9.0
 	b.fall_mass = 420.0
+	b.swat_aside = true # round 31: a rammed crown falls beside the road, not into the camera
 	b.stump_radius = 0.26
 	b.debris_color = Color(0.5, 0.47, 0.38)
 	var rot := xf.basis.orthonormalized()
@@ -1286,6 +1336,7 @@ func _boundary() -> void:
 			[Vector3(-HX - 1, 10, 0), Vector3(2, 40, 2 * HZ + 4)], [Vector3(HX + 1, 10, 0), Vector3(2, 40, 2 * HZ + 4)]]:
 		solid(s[1], Transform3D(Basis(), s[0]))
 	_edge_walls()
+	_outer_ring()
 	var mb := MeshBuilder.new()
 	var concrete := MatKit.paint(Color(0.58, 0.56, 0.52), 0.35, 0.05, 0.5, 2.0, 0.2, 31)
 	var steel := MatKit.steel(Color(0.28, 0.24, 0.2), 0.6)
@@ -1306,6 +1357,54 @@ func _boundary() -> void:
 			# Round 30 (owner: cars drove through the barricades at the map's edges): solid.
 			solid(Vector3(w, 3.8, 1.8), Transform3D(Basis(Vector3.UP, yaw), Vector3(p.x, 1.9, p.y) + Vector3(along.y, 0, -along.x) * 0.3))
 	batch_builder(mb, true, 0.4)
+
+
+## Round 31 (owner: "fill the void at the end of the map with something real"): the city goes on past the edge
+## walls: a street, then a row of Haussmann block shells (the far kit's painted facades, 4 draw calls for all),
+## with gaps where a barricaded road or the Seine leaves the map. Nothing to drive on, no collision.
+func _outer_ring() -> void:
+	var gaps: Array = [] # [side, centre along the side, half width]
+	for r: Dictionary in roads:
+		var pts: PackedVector2Array = r.pts
+		for end: Vector2 in [pts[0], pts[pts.size() - 1]]:
+			var w: float = r.w * 0.5 + SIDEWALK + 2.0
+			if absf(end.y) >= HZ - 1.0:
+				gaps.append([signf(end.y) * 2.0, end.x, w])
+			elif absf(end.x) >= HX - 1.0:
+				gaps.append([signf(end.x), end.y, w])
+	for ex: float in [-HX, HX]:
+		gaps.append([signf(ex), river_z(ex), corridor_half(ex) + 2.0])
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 31
+	var mb := MeshBuilder.new()
+	var sts := {}
+	# side: -1/+1 = west/east (x = -+HX, running along z), -2/+2 = north/south (z = -+HZ, running along x)
+	for side: float in [-2.0, 2.0, -1.0, 1.0]:
+		var along_x := absf(side) > 1.5
+		var half := HX if along_x else HZ
+		var reach := 40.0 if along_x else 8.0 # the north and south rows turn the corners
+		var t := -half - reach
+		while t < half + reach:
+			var w := rng.randf_range(34.0, 52.0)
+			var t0 := t
+			var t1 := t + w
+			t = t1 + rng.randf_range(10.0, 14.0)
+			var clear := true
+			for g: Array in gaps:
+				if float(g[0]) == side and t1 > float(g[1]) - float(g[2]) and t0 < float(g[1]) + float(g[2]):
+					clear = false
+			if not clear:
+				continue
+			var s := signf(side)
+			var near := (HZ if along_x else HX) + 11.0
+			var far := near + rng.randf_range(20.0, 28.0)
+			var poly: PackedVector2Array
+			if along_x:
+				poly = PackedVector2Array([Vector2(t0, s * near), Vector2(t1, s * near), Vector2(t1, s * far), Vector2(t0, s * far)])
+			else:
+				poly = PackedVector2Array([Vector2(s * near, t0), Vector2(s * far, t0), Vector2(s * far, t1), Vector2(s * near, t1)])
+			ParisBlocks.ring_block(self, poly, rng.randf() < 0.45, mb, sts)
+	ParisBlocks.ring_commit(self, mb, sts)
 
 
 ## Round the map: a stone wall with a cast-iron railing (like the parks' fences), and the river closed
@@ -1338,9 +1437,12 @@ func _edge_walls() -> void:
 				q0 + Vector3(0, h, 0) + inward * 0.5], Vector3.UP, true)
 			face(_m.stone, [q0 + Vector3(0, h - 0.3, 0) + inward * 0.5, q1 + Vector3(0, h - 0.3, 0) + inward * 0.5,
 				q1 + Vector3(0, h, 0) + inward * 0.5, q0 + Vector3(0, h, 0) + inward * 0.5], inward, true)
-			if rail:
+			if rail and _edge_top(p0, p1, inward) <= 0.0:
 				face(rail, [q0 + Vector3(0, h, 0) + inward * 0.25, q1 + Vector3(0, h, 0) + inward * 0.25,
 					q1 + Vector3(0, h + 1.2, 0) + inward * 0.25, q0 + Vector3(0, h + 1.2, 0) + inward * 0.25], inward, true)
+			_edge_fence(p0, p1, inward, h)
+	if _fence_mb:
+		batch_builder(_fence_mb, true, 0.4)
 	# the river's two ends: walls across the trench from the water up to the street
 	for ex: float in [-HX, HX]:
 		var zc := river_z(ex)
@@ -1348,6 +1450,67 @@ func _edge_walls() -> void:
 		var inward := Vector3(-signf(ex), 0, 0)
 		face(_m.quay, [Vector3(ex, BED_Y - 0.3, zc - o), Vector3(ex, BED_Y - 0.3, zc + o), Vector3(ex, 0, zc + o), Vector3(ex, 0, zc - o)],
 			inward, true, COL_WALL)
+
+
+## Round 31 (owner: on a roof at the west edge he saw the end of the map and hit "a wall of air"): a real
+## security fence on the edge wall all round, steel posts every 5 m, chain link, an outrigger with barbed
+## wire, always FENCE_OVER m above the highest place a car can stand beside it (a 6 m jump never clears it).
+## Where a terrace or a drivable roof meets the edge, the stone wall first rises to its height.
+const FENCE_OVER := 7.5
+var _fence_mb: MeshBuilder
+var _chain: StandardMaterial3D
+
+func _edge_fence(a: Vector2, b: Vector2, inward: Vector3, wall_h: float) -> void:
+	if _chain == null:
+		_chain = MatKit.chainlink()
+		_fence_mb = MeshBuilder.new()
+	var top := _edge_top(a, b, inward)
+	var q0 := Vector3(a.x, 0, a.y)
+	var q1 := Vector3(b.x, 0, b.y)
+	var base := wall_h
+	if top > 0.0: # the wall goes up to the terrace / roof, then a coping
+		base = top + 1.1
+		face(_m.quay, [q0 + Vector3(0, wall_h, 0), q1 + Vector3(0, wall_h, 0), q1 + Vector3(0, base, 0), q0 + Vector3(0, base, 0)], inward, true, COL_WALL)
+		face(_m.stone, [q0 + Vector3(0, base, 0), q1 + Vector3(0, base, 0), q1 + Vector3(0, base, 0) + inward * 0.5,
+			q0 + Vector3(0, base, 0) + inward * 0.5], Vector3.UP, true)
+	var tip := top + FENCE_OVER
+	var f0 := q0 + inward * 0.2
+	var f1 := q1 + inward * 0.2
+	face(_chain, [f0 + Vector3(0, base, 0), f1 + Vector3(0, base, 0), f1 + Vector3(0, tip, 0), f0 + Vector3(0, tip, 0)], inward, false, COL_WALL)
+	var steel := _m.get("fence_steel") as Material
+	if steel == null:
+		steel = MatKit.steel(Color(0.2, 0.2, 0.19), 0.7)
+		_m["fence_steel"] = steel
+	var along := (q1 - q0)
+	var n := maxi(1, int(along.length() / 5.0))
+	var yaw := atan2(-along.z, along.x)
+	for k in n + 1:
+		var p := f0 + along * (float(k) / n)
+		_fence_mb.box(steel, Vector3(0.16, tip - base, 0.16), Transform3D(Basis(), p + Vector3(0, (base + tip) * 0.5, 0)), 0.0)
+		# the outrigger leans in over the stage and carries the barbed wire
+		_fence_mb.box(steel, Vector3(0.1, 1.3, 0.1), Transform3D(Basis(along.normalized(), -0.6), p + Vector3(0, tip + 0.5, 0) + inward * 0.35), 0.0)
+	for w: float in [0.25, 0.6]:
+		var y := tip + 0.3 + w * 1.2
+		_fence_mb.box(steel, Vector3(along.length(), 0.05, 0.05), Transform3D(Basis(Vector3.UP, yaw), (f0 + f1) * 0.5 + Vector3(0, y, 0) + inward * w), 0.0)
+	_fence_mb.box(steel, Vector3(along.length(), 0.12, 0.12), Transform3D(Basis(Vector3.UP, yaw), (f0 + f1) * 0.5 + Vector3(0, tip, 0)), 0.0)
+
+
+## The highest place a car can stand within 4 m of this stretch of the edge: drivable roofs, terraces (0 = street).
+func _edge_top(a: Vector2, b: Vector2, inward: Vector3) -> float:
+	var top := 0.0
+	var inn := Vector2(inward.x, inward.z)
+	var n := maxi(2, int(a.distance_to(b) / 2.0))
+	for k in n + 1:
+		var p := a.lerp(b, float(k) / n)
+		for d: float in [1.0, 3.5]:
+			var q := p + inn * d
+			for bl: Dictionary in blocks:
+				if bl.roof and Geometry2D.is_point_in_polygon(q, bl.poly):
+					top = maxf(top, float(bl.h))
+			for pl: Array in _plateaus:
+				if Geometry2D.is_point_in_polygon(q, pl[0]):
+					top = maxf(top, float(pl[1]))
+	return top
 
 
 # ---------------------------------------------------------------- gameplay points
@@ -1391,17 +1554,65 @@ func ground(x: float, z: float, lift := 0.0) -> Vector3:
 	return Vector3(x, lift, z)
 
 
+## Round 31 (owner: the AI got stuck at the Trocadero "stairs" and in the river): every terrace is a level of
+## its own (they were one "troca" and one "hill", so the AI drove straight at the next terrace's wall).
 func level_of(p: Vector3) -> String:
 	if p.y < -2.0:
 		return "quay"
-	if p.y > ROOF_Y - 2.0 and p.x > -215.0 and p.x < -35.0 and p.z < 20.0:
-		return "roof"
 	if p.y > 1.5:
-		if p.x < -200.0:
-			return "troca"
 		if Vector2(p.x, p.z).distance_to(MONT) < 90.0:
-			return "hill"
+			return "hill1" if p.y < 10.5 else "hill2"
+		if p.y > ROOF_Y - 2.0:
+			return _roof_level(Vector2(p.x, p.z)) # the rooftop circuit (the Champs ramp's top was "street")
+		if p.x < -200.0:
+			return "troca1" if p.y < 3.75 else ("troca2" if p.y < 6.5 else "troca3")
 	return "street"
+
+
+## Round 31: every drivable roof block is a level of its own ("roof<i>", the steel crossings join them), or the AI
+## drove straight across the gap between two roofs and fell into the street.
+func _roof_level(q: Vector2) -> String:
+	var best := -1
+	var best_d := 6.0
+	for i in blocks.size():
+		var b: Dictionary = blocks[i]
+		if not b.roof:
+			continue
+		var poly: PackedVector2Array = b.poly
+		if Geometry2D.is_point_in_polygon(q, poly):
+			return "roof%d" % i
+		for k in poly.size():
+			var c := Geometry2D.get_closest_point_to_segment(q, poly[k], poly[(k + 1) % poly.size()])
+			if c.distance_to(q) < best_d:
+				best_d = c.distance_to(q)
+				best = i
+	return "roof%d" % best if best >= 0 else "roof"
+
+
+## Round 31: the AI's path finding (ParisNav, built on the first request).
+var nav: ParisNav
+
+func nav_point(asker: Object, from: Vector3, to: Vector3) -> Vector3:
+	if nav == null:
+		nav = ParisNav.new(self)
+	return nav.next_point(asker, from, to)
+
+
+## Levels the AI leaves only by a ramp (round 31): the street has parapets over the river, the roofs have
+## parapets all round. (Terraces have open edges: it drives off them.)
+const FENCED_LEVELS := ["street", "roof"]
+
+
+## Round 31: the lower quays' ramps up to the street, for the AI (they are part of the trench, so they were
+## never on the ramp list: an AI in the river had no way out). foot = on the quay, top = at the street.
+func _quay_ramps() -> void:
+	for side: float in [-1.0, 1.0]:
+		for pair: Array in [[-222.0, -262.0], [100.0, 144.0], [172.0, 144.0], [252.0, 274.0]]:
+			var xf: float = pair[0]
+			var xt: float = pair[1]
+			var zf := river_z(xf) + side * (water_half(xf) + quay_w(xf) * 0.5)
+			var zt := river_z(xt) + side * (water_half(xt) + quay_w(xt) * 0.5)
+			ramps.append({"foot": Vector3(xf, quay_y(xf), zf), "top": Vector3(xt, quay_y(xt), zt), "w": quay_w(xf)})
 
 
 func water_material() -> Material:

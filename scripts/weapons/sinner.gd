@@ -37,6 +37,7 @@ var _scan := 0.0
 var _done := false
 var _victim_floor := true
 var _from := Vector3.ZERO # where he was thrown from (the range counts from here)
+var _punched := false # round 31 (owner): one big punch into the windshield before he blows
 
 
 static func start(v: Vehicle, d: Dictionary) -> Sinner:
@@ -134,6 +135,7 @@ func _body() -> Node3D:
 	chain.torus(iron, 0.2, 0.025, Transform3D(Basis(), Vector3(0, 0.05, 0)), 14, 5)
 	chain.commit(hips, false)
 	m.set_meta("fuse", chest)
+	m.set_meta("skel", sk)
 	return m
 
 
@@ -174,8 +176,9 @@ func _fly(delta: float) -> void:
 	velocity = Vector3(flat.x, velocity.y - FLY_GRAVITY * delta, flat.z)
 	if flat.length() > 1.0:
 		global_basis = Basis.looking_at(flat, Vector3.UP)
+	var before := global_position
 	move_and_slide()
-	if _touch_car():
+	if _touch_car() or _sweep_car(before, global_position):
 		return
 	for i in get_slide_collision_count():
 		var n := get_slide_collision(i).get_normal()
@@ -219,6 +222,54 @@ func _touch_car() -> bool:
 		if absf(local.x) < size.x * 0.5 + 0.6 and absf(local.z) < size.z * 0.5 + 0.6 and local.y > -0.5 and local.y < size.y + 1.0:
 			_grab(o)
 			return true
+	return false
+
+
+## Round 31 (owner: "it flies over the cars close to me; it must connect as long as he is in its horizontal
+## path"): the step he just flew, seen from above, against every car's box (0.7 m wider). Height only has to be
+## somewhere between under the car and 4 m over its roof: a car he passes over is a car he lands on.
+func _sweep_car(a: Vector3, b: Vector3) -> bool:
+	var best: Vehicle = null
+	var best_t := 2.0
+	for node in get_tree().get_nodes_in_group("vehicles"):
+		var o := node as Vehicle
+		if o == owner_car or o.is_dead:
+			continue
+		var inv := o.global_transform.affine_inverse()
+		var la := inv * a
+		var lb := inv * b
+		var size: Vector3 = o.stats.get("size", Vector3(2.2, 1.8, 5.0))
+		var half := Vector2(size.x * 0.5 + 0.7, size.z * 0.5 + 0.7)
+		var p0 := Vector2(la.x, la.z)
+		var d := Vector2(lb.x, lb.z) - p0
+		var t0 := 0.0
+		var t1 := 1.0
+		var miss := false
+		for k in 2:
+			var lo := -half[k]
+			var hi := half[k]
+			if absf(d[k]) < 1e-5:
+				if p0[k] < lo or p0[k] > hi:
+					miss = true
+					break
+			else:
+				var ta := (lo - p0[k]) / d[k]
+				var tb := (hi - p0[k]) / d[k]
+				t0 = maxf(t0, minf(ta, tb))
+				t1 = minf(t1, maxf(ta, tb))
+				if t0 > t1:
+					miss = true
+					break
+		if miss:
+			continue
+		var ly := lerpf(la.y, lb.y, t0)
+		if ly > -1.5 and ly < size.y + 4.0 and t0 < best_t:
+			best_t = t0
+			best = o
+	if best:
+		global_position = a.lerp(b, best_t)
+		_grab(best)
+		return true
 	return false
 
 
@@ -279,6 +330,7 @@ func _grab(o: Vehicle) -> void:
 	victim = o
 	_t = 0.0
 	_fuse = 0.0
+	_punched = false
 	collision_mask = 0
 	var hood: Vector2 = o.stats.get("hood", Vector2(1.2, -1.4))
 	_offset = Vector3(0.0, hood.x + 0.05, hood.y)
@@ -307,6 +359,7 @@ func _cling(delta: float) -> void:
 	if o.slide_degrees() > 150.0:
 		_shake_off()
 		return
+	_punch_step(o)
 	if _fuse >= float(def.get("fuse", 2.0)):
 		var dmg := float(def.get("damage", 40.0)) * WeaponData.DAMAGE_SCALE
 		o.take_damage(dmg, owner_car)
@@ -315,6 +368,71 @@ func _cling(delta: float) -> void:
 		if o.is_player and GameFeel.camera:
 			GameFeel.camera.add_shake(float(def.get("shake", 0.5)))
 		_blow(0.0, 0.0, o)
+
+
+## Round 31 (owner): before he blows he winds up and PUNCHES the windshield: the body leans back and pulls
+## the right fist back (punch_wind s), then snaps forward, arm straight out; the punch lands punch_at s into the
+## fuse: punch_damage, glass, sparks, the car jolts and its nose is driven down, a shake for its driver.
+func _punch_step(o: Vehicle) -> void:
+	var land := float(def.get("punch_at", 1.6))
+	var wind := float(def.get("punch_wind", 0.3))
+	var k := 0.0 # 0 kneeling, -1 wound back, 1 thrust
+	if _fuse < land:
+		k = -sin(clampf((_fuse - (land - wind)) / wind, 0.0, 1.0) * PI * 0.5)
+	else:
+		k = lerpf(-1.0, 1.0, clampf((_fuse - land) / 0.06, 0.0, 1.0)) # the snap: 0.06 s
+	if _fuse > land - wind:
+		if _anim.is_playing():
+			_anim.pause()
+		# wound: he rears up off the hood and leans back; the punch: he slams forward and down onto the glass
+		_model.rotation.x = 0.55 * maxf(0.0, -k) - 0.7 * maxf(0.0, k)
+		_model.position = Vector3(0.0, 0.45 * maxf(0.0, -k) + 0.1 * maxf(0.0, k), -0.6 * maxf(0.0, k) + 0.2 * maxf(0.0, -k))
+		_arm(k)
+	if _punched or _fuse < land:
+		return
+	_punched = true
+	var world := get_parent()
+	var fist := global_position + Vector3.UP * 1.1 - global_basis.z * 0.9
+	var dmg := float(def.get("punch_damage", 15.0)) * WeaponData.DAMAGE_SCALE
+	o.take_damage(dmg, owner_car)
+	o.hit_react(o.global_basis.z, dmg * 2.0)
+	o.push(-o.flat_forward() * float(def.get("punch_slow", 5.0)) + Vector3.DOWN * 3.0)
+	o.angular_velocity += o.global_basis.x * -1.6 # the nose is driven down
+	FxKit.crash_burst(world, fist, o.global_basis.y, 0.7)
+	for i in 3:
+		FxKit.spark(world, fist + Vector3(randf_range(-0.3, 0.3), randf_range(-0.1, 0.2), randf_range(-0.3, 0.3)), o.global_basis.z)
+	GameFeel.play("ram_impact", fist, world, 2.0, 1.25, true)
+	GameFeel.play("glass_shatter_1", fist, world, -2.0, 1.1, true)
+	if o.is_player and GameFeel.camera:
+		GameFeel.camera.add_shake(0.55)
+	if o.is_player or (is_instance_valid(owner_car) and owner_car.is_player):
+		GameFeel.hitstop(get_tree(), 0.07, 0.05)
+
+
+## The right arm: wound back (k = -1, elbow behind him, fist at the shoulder) .. thrust straight at the
+## windshield (k = 1). Bones are aimed in skeleton space (their +Y runs along the bone) from the kneel pose.
+func _arm(k: float) -> void:
+	var sk: Skeleton3D = _model.get_meta("skel")
+	var ua := sk.find_bone("upper_arm.R")
+	var fa := sk.find_bone("forearm.R")
+	if ua < 0 or fa < 0:
+		return
+	var fwd := Vector3(-0.08, 0.22, -1.0).normalized() # model space: he faces -Z
+	var back_u := Vector3(0.35, -0.45, 0.85).normalized()
+	var back_f := Vector3(-0.1, 0.75, -0.6).normalized()
+	var u_dir := back_u.slerp(fwd, (k + 1.0) * 0.5)
+	var f_dir := back_f.slerp(fwd, (k + 1.0) * 0.5)
+	for pair in [[ua, u_dir], [fa, f_dir]]:
+		var b: int = pair[0]
+		var want: Vector3 = pair[1]
+		var g := sk.get_bone_global_pose(b)
+		var cur := g.basis.y.normalized()
+		if cur.cross(want).length() < 1e-4 and cur.dot(want) > 0.0:
+			continue
+		var turned := Basis(Quaternion(cur, want)) * g.basis
+		var parent := sk.get_bone_parent(b)
+		var pg := sk.get_bone_global_pose(parent) if parent >= 0 else Transform3D()
+		sk.set_bone_pose_rotation(b, (pg.basis.inverse() * turned).get_rotation_quaternion())
 
 
 func _on_wall(car: Vehicle, impact: float) -> void:
@@ -336,6 +454,8 @@ func _shake_off() -> void:
 			o.notice.emit(o, "SHOOK HIM OFF")
 	victim = null
 	collision_mask = 1
+	_model.rotation.x = 0.0
+	_model.position = Vector3.ZERO
 	_anim.play(_run_clip(), 0.2)
 	_anim.speed_scale = 1.2
 

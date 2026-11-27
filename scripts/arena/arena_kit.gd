@@ -76,13 +76,20 @@ func flush_batch() -> void:
 
 ## Hand-laid faces (quads or triangles, any corner order), merged per material like the batch.
 ## outward = the side the face is seen from (winding and normal follow it); UVs in metres by box
-## projection, like MeshBuilder. collide: COL_NONE, COL_GROUND (drivable, group "ground"), COL_WALL.
+## projection, like MeshBuilder. collide: COL_NONE, COL_GROUND (drivable, group "ground"), COL_WALL, COL_WALL2.
+## Round 31 (owner: flips felt "rough, as if something invisible comes out of the ground", a car hanging over a
+## corner shook like crazy): ground and walls are solid from their outward side only again. Two-sided faces
+## (round 30) let a body that sank a little into a face be pushed out through its back, and at ledges the wall
+## below pushed the overhanging car both ways in turn. Only COL_WALL2 (a thin sheet hit from both sides, like a
+## rooftop bridge's railing) stays two-sided.
 const COL_NONE := 0
 const COL_GROUND := 1
 const COL_WALL := 2
+const COL_WALL2 := 3
 var _sheets := {} # "material id|shadows" -> {st, mat, shadows}
 var col_ground := PackedVector3Array()
 var col_wall := PackedVector3Array()
+var col_wall2 := PackedVector3Array()
 
 
 func face(mat: Material, pts: Array, outward: Vector3, shadows := true, collide := COL_NONE) -> void:
@@ -120,6 +127,8 @@ func face(mat: Material, pts: Array, outward: Vector3, shadows := true, collide 
 			col_ground.append_array([a, b, c])
 		elif collide == COL_WALL:
 			col_wall.append_array([a, b, c])
+		elif collide == COL_WALL2:
+			col_wall2.append_array([a, b, c])
 
 
 ## A flat 2D polygon (x, z) at height y, facing up.
@@ -166,7 +175,7 @@ func flush_sheets() -> void:
 
 ## The collected collision faces as two bodies: drivable ("Ground", group ground) and walls.
 func flush_collision() -> void:
-	for pair: Array in [[col_ground, "Ground", true], [col_wall, "Walls", false]]:
+	for pair: Array in [[col_ground, "Ground", true, false], [col_wall, "Walls", false, false], [col_wall2, "ThinWalls", false, true]]:
 		var faces: PackedVector3Array = pair[0]
 		if faces.is_empty():
 			continue
@@ -179,14 +188,13 @@ func flush_collision() -> void:
 		add_child(body)
 		var shape := ConcavePolygonShape3D.new()
 		shape.set_faces(faces)
-		# Round 30: both sides solid. One-sided faces let a car through a wall or a ramp from behind
-		# (Paris: under the Montmartre ramp, out through the rooftop bridges' side walls).
-		shape.backface_collision = true
+		shape.backface_collision = pair[3]
 		var cs := CollisionShape3D.new()
 		cs.shape = shape
 		body.add_child(cs)
 	col_ground = PackedVector3Array()
 	col_wall = PackedVector3Array()
+	col_wall2 = PackedVector3Array()
 
 
 func _solids() -> StaticBody3D:

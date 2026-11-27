@@ -373,7 +373,12 @@ func _physics_process(delta: float) -> void:
 			var to_t := target.aim_point() - global_position
 			var desired := to_t.normalized()
 			var angle := direction.angle_to(desired)
-			if def.has("seek") and rad_to_deg(angle) > float(def["seek"]):
+			# Round 31: the seeker's edge is judged across the ground only. Height is not a way to dodge (a
+			# missile fired in a jump, or at a car on a ramp below, lost its lock at once and flew off).
+			var flat_dir := Vector2(direction.x, direction.z)
+			var flat_to := Vector2(desired.x, desired.z)
+			var side_angle := absf(flat_dir.angle_to(flat_to)) if flat_dir.length() > 0.05 and flat_to.length() > 0.05 else 0.0
+			if def.has("seek") and rad_to_deg(side_angle) > float(def["seek"]):
 				target = null # round 12: off the seeker's edge, the lock is gone; straight on from here
 			elif angle > 0.001:
 				var rate := homing
