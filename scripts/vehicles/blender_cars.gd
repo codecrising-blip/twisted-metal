@@ -6,7 +6,7 @@ class_name BlenderCars
 ## markers m_wheel_fr/fl/rr/rl, m_gun_*, m_spin_*, m_launcher, m_exh_*, m_top, m_head, m_cone.
 ## Built by tools/blender/build_<id>.py.
 
-const EXHAUST_DIR := {"sweet_tooth": Vector3.UP, "darkside": Vector3.UP, "brimstone": Vector3.UP}
+const EXHAUST_DIR := {"sweet_tooth": Vector3.UP, "darkside": Vector3.UP}
 const SHADOW := {"sweet_tooth": Vector2(3.2, 7.4), "outlaw": Vector2(2.7, 5.6), "mr_grimm": Vector2(2.4, 3.6),
 	"thumper": Vector2(2.8, 6.6), "brimstone": Vector2(2.7, 6.0), "darkside": Vector2(3.6, 8.6)}
 ## How far the body rolls in turns (radians). Grimm's bike has a sidecar bolted on: it barely leans.

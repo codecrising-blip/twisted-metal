@@ -33,6 +33,8 @@ static var menu_mode := "" # "story" | "deathmatch"
 static var menu_cars: Array = []
 static var menu_foes: Array = [] # round 25: the opponents picked on the driver screen ([] = the usual field)
 static var stage := "los_angeles" # Paris (stage 2): the stage the front end picked; `-- paris` on the command line
+## Round 30: the front end opens on the tour's match card (map + the opponents' cars) for `stage`, not the menu.
+static var tour_card := false
 const FRONT_END := "res://scenes/front_end.tscn"
 const LA_ENEMIES := 4 # owner, session 3: LA has 4 enemies
 
@@ -114,7 +116,9 @@ func _ready() -> void:
 	GameFeel.hud = hud
 	hud.bind(player, camera)
 	hud.restart_requested.connect(_restart)
-	hud.menu_requested.connect(_to_menu)
+	hud.menu_requested.connect(func() -> void:
+		tour_card = false
+		_to_menu())
 	hud.driver_requested.connect(_pick_driver)
 	hud.music_requested.connect(_cycle_music)
 	hud.drivers.assign(picks.map(func(id: String): return String(Roster.get_car(id).get("name", id))))
@@ -322,7 +326,7 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 			state = "lost"
 			hud.game_over = true
 			hud.set_lives(0)
-			hud.show_message("GAME OVER", "ENTER / CREATE restart     BACKSPACE / TRIANGLE main menu")
+			hud.show_message("GAME OVER", "PRESS OPTIONS TO RESTART          PRESS SHARE FOR THE MAIN MENU")
 			return
 		# Round 12 (owner): no countdown and no text; the camera stays on the wreck for the 6 s.
 		hud.set_lives(lives - 1)
@@ -336,10 +340,27 @@ func _on_destroyed(v: Vehicle, killer: Vehicle) -> void:
 		_respawn_timer = -1.0
 		hud.set_countdown(-1)
 		hud.show_banner("CONGRATULATIONS\n%s" % String(arena.get("next_line") if arena.get("next_line") else "").to_upper(), 5.0)
+		var go_on := "PRESS OPTIONS FOR THE NEXT STAGE" if menu_mode == "story" and next_stage() != "" else "PRESS OPTIONS TO RESTART"
+		hud.show_message("VICTORY", go_on + "          PRESS SHARE FOR THE MAIN MENU")
 
 
 func _restart() -> void:
+	if state == "won" and menu_mode == "story" and next_stage() != "": # round 30: on to the tour's next stage
+		stage = next_stage()
+		tour_card = true
+		_to_menu()
+		return
 	get_tree().reload_current_scene()
+
+
+## The tour's next playable stage after this one (story order; "" when the rest isn't built yet).
+static func next_stage() -> String:
+	var order: Array = FrontEnd.STAGES.map(func(s: Dictionary) -> String: return String(s.id))
+	var i := order.find(stage)
+	if i < 0 or i + 1 >= order.size():
+		return ""
+	var nxt: Dictionary = FrontEnd.STAGES[i + 1]
+	return String(nxt.id) if nxt.get("open", false) else ""
 
 
 func _to_menu() -> void:

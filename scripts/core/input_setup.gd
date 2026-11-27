@@ -34,6 +34,10 @@ const KEYS := {
 	"pause": [KEY_ESCAPE],
 	"restart": [KEY_ENTER],
 	"main_menu": [KEY_BACKSPACE], # round 24: pause menu -> back to the front end
+	# Round 30 (owner): the end-of-match screen: OPTIONS restarts (or goes on to the next stage of the tour),
+	# SHARE (Create) goes back to the main menu. Triangle does nothing there any more.
+	"end_restart": [KEY_ENTER],
+	"end_menu": [KEY_BACKSPACE],
 	# Round 25: the front end's own actions (Godot's ui_accept / ui_cancel have no pad buttons, so the pad did nothing).
 	"menu_up": [KEY_UP, KEY_W],
 	"menu_down": [KEY_DOWN, KEY_S],
@@ -97,7 +101,9 @@ const PAD_BUTTONS := {
 	"dir_right": [JOY_BUTTON_DPAD_RIGHT],
 	"pause": [JOY_BUTTON_START, JOY_BUTTON_TOUCHPAD],
 	"restart": [JOY_BUTTON_BACK], # only read while paused or after the match
-	"main_menu": [JOY_BUTTON_Y], # Triangle, only read while paused or after the match (round 24)
+	"main_menu": [JOY_BUTTON_Y], # Triangle, only read while paused (round 24; round 30: not after the match)
+	"end_restart": [JOY_BUTTON_START], # Options, after the match
+	"end_menu": [JOY_BUTTON_BACK], # Share / Create, after the match
 	"menu_up": [JOY_BUTTON_DPAD_UP],
 	"menu_down": [JOY_BUTTON_DPAD_DOWN],
 	"menu_left": [JOY_BUTTON_DPAD_LEFT],

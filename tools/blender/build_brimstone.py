@@ -13,8 +13,8 @@
     /tmp/bpy3.13/bin/python tools/blender/build_brimstone.py
     /tmp/bpy3.13/bin/python tools/blender/build_brimstone.py --shape a.png
 Round 29 (owner's two design sheets, docs/reference/owner_sheets/brimstone_*.webp): iron cross and door crosses,
-chain-wrapped spiked ram bar, two rotary guns on the bed firing over the cab plus one on the left side, incense
-stacks, a brazier of holy fire, cross-spoked wheels, painted scripture and crosses, lit stained glass (its own
+chain-wrapped spiked ram bar, two rotary guns on the bed firing over the cab plus one on the left side,
+cross-spoked wheels, painted scripture and crosses, lit stained glass (its own
 picture, ModelLib slot "stained"), and the sinner huddled in a caged well on a launch plate (node bed_plate).
 Blender space: +Y forward, +Z up. Nodes: body, wheel_f, wheel_r, bed_sinner, bed_plate; markers m_wheel_*, m_gun_l/r,
 m_launcher, m_top, m_head, m_exh_l/r, m_meta_sinner, m_meta_bell."""
@@ -209,19 +209,11 @@ for sx in (1, -1):
     markers.append(T.marker("m_gun_" + ("r" if sx > 0 else "l"), (x, y0 + 1.2, 1.66)))
 gatling((-HW - 0.12, y_(1.2), 1.0), 0.95, gun, body)                    # the one bolted to the bed's left side
 body.append(T.box((0.12, 0.3, 0.24), loc=(-HW - 0.03, y_(1.2), 0.96), mat=iron, bevel=0.01))
-# incense stacks: three iron pipes up each rear corner of the bed, smoking
+# Round 30 (owner): no incense stacks and no brazier on the bed, only the chained sinner. The exhaust is
+# a pair of plain tailpipes under the rear bumper.
 for sx in (1, -1):
-    for k in range(3):
-        px, py = sx * (0.82 - k * 0.09), y_(0.26 + (k % 2) * 0.06)
-        h = 0.62 + k * 0.08
-        body.append(T.cyl(0.035, h, loc=(px, py, BED_Z + h / 2), mat=iron, n=10))
-        body.append(T.cyl(0.045, 0.04, loc=(px, py, BED_Z + h), mat=iron, n=10))
-    markers.append(T.marker("m_exh_" + ("r" if sx > 0 else "l"), (sx * 0.73, y_(0.29), BED_Z + 0.82)))
-# the brazier of holy fire at the front of the bed
-body.append(T.cyl(0.05, 0.3, loc=(0, y_(1.82), BED_Z + 0.15), mat=iron, n=10))
-body.append(T.lathe([(0.08, 0.0), (0.2, 0.06), (0.24, 0.2), (0.22, 0.22), (0.18, 0.08), (0.06, 0.02)], loc=(0, y_(1.82), BED_Z + 0.3), mat=iron, n=16))
-body.append(T.cyl(0.19, 0.03, loc=(0, y_(1.82), BED_Z + 0.47), mat=coal, n=14))
-markers.append(T.marker("m_brazier", (0, y_(1.82), BED_Z + 0.5)))
+    body.append(T.cyl(0.05, 0.3, loc=(sx * 0.58, y_(0.12), 0.32), rot=(90, 0, 0), mat=iron, n=10))
+    markers.append(T.marker("m_exh_" + ("r" if sx > 0 else "l"), (sx * 0.58, y_(0.0), 0.32)))
 
 # ---------------------------------------------------------------- the sinner's well (owner's second sheet)
 # A pit sunk into the bed behind a ring of spiked iron bars; the sinner huddles in it, chained, on the floor plate

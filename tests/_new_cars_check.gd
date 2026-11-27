@@ -141,7 +141,7 @@ func _run() -> void:
 				clung = true
 		if dummy.health < h0 - 20.0:
 			break
-	_check(clung, "the sinner runs to the car and clings to it")
+	_check(clung, "the sinner is hurled onto the car and clings to it")
 	_check(dummy.health < h0 - 30.0, "and blows on it (%.1f -> %.1f)" % [h0, dummy.health])
 	br.ammo["sinner_bomber"] = 2
 	br.energy_move("secondary")

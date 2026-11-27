@@ -180,7 +180,11 @@ const DEFS := {
 		"speed": 52.0, "damage": 8.0, "homing": 1.1, "seek": 25.0, "life": 2.8, "push": 1.5,
 		"trail": Color(0.4, 1.0, 0.1), "trail_len": 0.35, "trail_w": 0.39, "model_scale": 0.52, "glow": 2.5,
 		"squish": 0.03, "wobble": 0.2, "shake": 0.15,
-		"charge_time": 2.4, "salvo_max": 6, "salvo_gap": 0.09, "red_after": 2.0, "red_total": 70.0,
+		# Round 30 (owner): six load in 1.3 s, then 1 s of beeps, then a 0.2 s red window (let go in it: 70);
+		# held past it the salvo backfires: no shot, locked 3 s (Sweet Tooth's meltdown). All six leave at once
+		# from the six slots across the nose.
+		"charge_time": 1.3, "salvo_max": 6, "red_after": 1.0, "red_window": 0.2, "red_total": 70.0,
+		"meltdown_after": 1.2, "meltdown_lock": 3.0,
 		"red_color": Color(0.9, 0.0, 0.06), "red_speed": 70.0, "cooldown": 1.0, "recharge": 16.0, "sound_db": 3.5,
 	},
 	# Roadkill's secondary (round 21; was his special in round 20): Boomerang Blast (design 01). A blade of
@@ -251,13 +255,16 @@ const DEFS := {
 		"range": 8.0, "cone": 25.0, "damage": 12.0, "burn": 4.0, "time": 0.7,
 	},
 	# Brimstone (Jedediah): Sinner Bomber (design 10, stronger than Black's). A sinner with dynamite on his back
-	# is thrown "throw" m ahead, lands and RUNS at the lock (run_speed m/s, x the speed scale) for up to run_time
-	# s, sliding along walls and cutting corners. On contact he clings to the hood or roof; after "fuse" s: damage
+	# is hurled flat at the lock (round 30, see Sinner); landed short he rolls and runs for run_time s. On
+	# contact he clings to the hood or roof; after "fuse" s: damage
 	# and a small throw. Shake him off (jump, a wall hit over shake_wall m/s, a 150-degree handbrake slide): he
 	# drops and blows behind for shake_damage. He can be shot (hp) or run out of time: pop_damage in pop_radius.
 	"sinner_bomber": {
 		"label": "Sinner Bomber", "kind": "sinner", "handler": "sinner", "color": Color(1.0, 0.6, 0.25), "special": true,
-		"throw": 10.0, "run_speed": 26.0, "run_time": 6.0, "fuse": 2.0, "damage": 40.0, "shake_damage": 10.0,
+		# round 30 (owner): hurled flat out to "range" m; a wall blows him at once; landed he rolls and runs at
+		# run_mult of his old sprint and blows after run_time s
+		"throw_speed": 46.0, "range": 45.0, "wall_damage": 25.0, "wall_radius": 5.0,
+		"run_speed": 26.0, "run_mult": 0.6, "run_time": 2.0, "fuse": 2.0, "damage": 40.0, "shake_damage": 10.0,
 		"shake_wall": 15.0, "hp": 5.0, "pop_damage": 12.0, "pop_radius": 3.0, "push": 6.0, "shake": 0.5,
 		"cooldown": 1.0, "recharge": 17.0, "sound_db": 2.0,
 	},
@@ -273,7 +280,7 @@ const DEFS := {
 	# if he drives it into a wall. Cars he brushes aside take their ram damage x brush_mult (up to brush_cap).
 	"darkside_slam": {
 		"label": "Darkside Slam", "kind": "slam", "handler": "slam", "color": Color(0.85, 0.08, 0.06), "special": true,
-		"horn": 0.3, "time": 3.0, "speed_mult": 1.9, "accel_mult": 8.0, "kick": 14.0, "steer": 0.25, "damage": 30.0, "wall_bonus": 15.0, "pin": 1.5,
+		"horn": 0.0, "time": 1.5, "speed_mult": 1.9, # round 30 (owner): off at once, half the run "accel_mult": 8.0, "kick": 14.0, "steer": 0.25, "damage": 30.0, "wall_bonus": 15.0, "pin": 1.5,
 		"brush_mult": 1.5, "brush_cap": 25.0, "shake": 0.8, "cooldown": 1.0, "recharge": 15.0, "sound_db": 2.0,
 	},
 	# Darkside's secondary: Ash Cloud (design 11, one charge). His stacks pour out ash for "time" s; the cloud

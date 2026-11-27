@@ -31,6 +31,9 @@ const STAGES := [
 	{"id": "rome", "name": "ROME", "sub": "", "lat": 41.9, "lon": 12.5},
 	{"id": "amazonia", "name": "AMAZONIA", "sub": "VS MINION", "lat": -3.4, "lon": -62.2},
 ]
+## Enemies on each stage (owner, session 3: LA 4 rising to 9; design doc 05).
+const STAGE_ENEMIES := {"los_angeles": 4, "paris": 5, "chernobyl": 4, "egypt": 6, "tokyo": 6, "london": 5, "antarctica": 7,
+	"hong_kong": 7, "new_york": 6, "athens": 8, "rome": 9, "amazonia": 8}
 const FIRE := Color(1.0, 0.45, 0.1)
 const BONE := Color(0.93, 0.9, 0.84)
 const DIM := Color(0.55, 0.52, 0.48)
@@ -89,6 +92,16 @@ func _ready() -> void:
 	_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_flash)
 	_start_music()
+	var main_script: GDScript = load("res://scripts/main.gd")
+	if main_script.tour_card: # round 30: back from a won stage of the tour: straight to the next match card
+		main_script.tour_card = false
+		_mode = "story"
+		_players = maxi(1, main_script.menu_cars.size())
+		_cars.assign(main_script.menu_cars)
+		_stage = maxi(0, STAGES.map(func(st: Dictionary) -> String: return String(st.id)).find(main_script.stage))
+		_random_foes()
+		_show_matchcards()
+		return
 	_show_main()
 
 
@@ -323,7 +336,15 @@ func _read_input() -> void:
 				_show_players()
 			elif ok:
 				_sound("menu_select")
-				_show_stage()
+				if _mode == "story": # round 30 (owner): the tournament always starts in Los Angeles
+					_stage = 0
+					_cars.clear()
+					_foes.clear()
+					_picking = 0
+					_picking_foes = false
+					_show_cars()
+				else:
+					_show_stage()
 			elif back:
 				_show_main()
 		"stage":
@@ -344,6 +365,12 @@ func _read_input() -> void:
 					_shake(6.0)
 			elif back:
 				_show_players()
+		"cards":
+			if ok or done:
+				_sound("menu_select")
+				_show_loading()
+			elif back and _mode == "deathmatch":
+				_show_cars()
 		"cars":
 			if left or right:
 				_car_i = posmod(_car_i + (1 if right else -1), line_up().size())
@@ -353,7 +380,7 @@ func _read_input() -> void:
 				_pick_car()
 			elif done and _picking_foes:
 				_sound("menu_select")
-				_show_loading() # fight now: the opponents picked so far (none = the usual field)
+				_show_matchcards() # fight now: the opponents picked so far (none = the usual field)
 			elif back:
 				if _picking_foes and not _foes.is_empty():
 					_foes.pop_back()
@@ -367,6 +394,8 @@ func _read_input() -> void:
 					_picking -= 1
 					_cars.pop_back()
 					_show_cars()
+				elif _mode == "story":
+					_show_players()
 				else:
 					_show_stage()
 
@@ -749,7 +778,8 @@ func _show_car() -> void:
 	_portrait.modulate = Color.WHITE
 	for c in _stand.get_children():
 		c.queue_free()
-	_soon.visible = soon
+	_soon.text = "TAKEN" if taken(id) else "COMING SOON"
+	_soon.visible = soon or taken(id) # round 30: a car already in this match can't be picked again
 	if not soon:
 		var model := VehicleModels.build(id)
 		var s: Vector3 = stats.get("size", Vector3(2.2, 1.8, 5.0))
@@ -817,9 +847,11 @@ func _foe_strip(vs: Vector2) -> void:
 ## or the match.
 func _pick_car() -> void:
 	var id: String = line_up()[_car_i]
-	if is_soon(id): # not built yet: a refusal, the stand's sign flashes
+	if is_soon(id) or taken(id): # not built yet, or already in this match (round 30): a refusal
 		_sound("not_available")
 		_shake(6.0)
+		_soon.text = "TAKEN" if taken(id) else "COMING SOON"
+		_soon.visible = true
 		_soon.add_theme_color_override("font_color", FIRE)
 		create_tween().tween_callback(_soon_dim).set_delay(0.35)
 		return
@@ -844,16 +876,200 @@ func _pick_car() -> void:
 	if not _picking_foes and _cars.size() < _players:
 		_picking += 1
 		_show_cars()
+	elif _mode == "story": # round 30: the tournament's opponents are drawn at random
+		_random_foes()
+		_show_matchcards()
 	elif not _picking_foes or _foes.size() < foe_slots(_players):
 		_picking_foes = true
 		_show_cars()
 	else:
-		_show_loading()
+		_show_matchcards()
 
 
 func _soon_dim() -> void:
 	if is_instance_valid(_soon):
 		_soon.add_theme_color_override("font_color", DIM)
+
+
+## Round 30 (owner): a car can be in a match once: picked by a player or as an opponent, it is taken.
+func taken(id: String) -> bool:
+	return _cars.has(id) or _foes.has(id)
+
+
+## The tournament's opponents: drawn at random from the cars nobody picked, the stage's field less the other
+## human players.
+func _random_foes() -> void:
+	_foes.clear()
+	var pool: Array = CARS.filter(func(id: String) -> bool: return not _cars.has(id))
+	pool.shuffle()
+	var want := maxi(1, int(STAGE_ENEMIES.get(String(STAGES[_stage].id), 4)) - (_players - 1))
+	for id: String in pool:
+		if _foes.size() >= want:
+			break
+		_foes.append(id)
+
+
+# ------------------------------------------------------------------ the match card (round 30)
+
+## Before every match (owner): the map closes in on the stage and the opponents' cars come up one by one in
+## a row of cards, each turning on its own stand under a hard light. Cars only: no drivers, no names.
+func _show_matchcards() -> void:
+	_clear()
+	_screen = "cards"
+	var s: Dictionary = STAGES[_stage]
+	var vs := _view()
+	_title(s.name, "TOURNAMENT  -  STAGE %d" % (_stage + 1) if _mode == "story" else "DEATHMATCH")
+	# the world map, closing in on the stage's pin
+	var view := Control.new()
+	view.clip_contents = true
+	view.position = Vector2(60, 150)
+	view.size = Vector2(vs.x - 120, vs.y * 0.34)
+	_root.add_child(view)
+	var map := TextureRect.new()
+	map.texture = load(WORLD_MAP)
+	map.size = Vector2(2048, 1024)
+	view.add_child(map)
+	var p := map_point(s.lat, s.lon, 2048, 1024)
+	var pin := ReferenceRect.new()
+	pin.editor_only = false
+	pin.border_color = FIRE
+	pin.border_width = 3.0
+	pin.size = Vector2(34, 34)
+	pin.position = p - Vector2(17, 17)
+	pin.pivot_offset = Vector2(17, 17)
+	map.add_child(pin)
+	var dot := ColorRect.new()
+	dot.color = FIRE
+	dot.size = Vector2(12, 12)
+	dot.position = p - Vector2(6, 6)
+	map.add_child(dot)
+	var zoom := 2.4
+	map.scale = Vector2(0.9, 0.9)
+	map.position = view.size * 0.5 - p * 0.9
+	var tw := create_tween().set_parallel(true).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(map, "scale", Vector2(zoom, zoom), 1.4)
+	tw.tween_property(map, "position", view.size * 0.5 - p * zoom, 1.4)
+	var pulse := create_tween().set_loops()
+	pulse.tween_property(pin, "scale", Vector2(1.6, 1.6), 0.5)
+	pulse.tween_property(pin, "scale", Vector2.ONE, 0.5)
+	var frame := ReferenceRect.new()
+	frame.editor_only = false
+	frame.border_color = Color(1.0, 0.45, 0.1, 0.6)
+	frame.border_width = 2.0
+	frame.position = view.position - Vector2(3, 3)
+	frame.size = view.size + Vector2(6, 6)
+	_root.add_child(frame)
+	var vs_l := _label(_root, "VS", 64, FIRE, HORIZONTAL_ALIGNMENT_CENTER)
+	_wide(vs_l, vs.y * 0.36 + 136, 70)
+	# the cards
+	var foes: Array = _cars.slice(1) + _foes
+	if foes.is_empty():
+		var l := _label(_root, "THE USUAL FIELD", 40, DIM, HORIZONTAL_ALIGNMENT_CENTER)
+		_wide(l, vs.y * 0.62, 60)
+	var n := foes.size()
+	var cw := minf(260.0, (vs.x - 160.0) / maxf(n, 1) - 20.0)
+	var ch := cw * 0.85
+	var x0 := (vs.x - (cw + 20.0) * n + 20.0) * 0.5
+	for i in n:
+		var card := _match_card(String(foes[i]), Vector2(cw, ch), i)
+		card.position = Vector2(x0 + i * (cw + 20.0), vs.y * 0.36 + 216)
+		_root.add_child(card)
+		card.modulate.a = 0.0
+		var target_y := card.position.y
+		card.position.y += 60.0
+		var t := create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		t.tween_interval(0.6 + i * 0.3)
+		t.tween_callback(func() -> void:
+			_sound("menu_select", -8.0)
+			_flash_screen(0.25, 0.15, FIRE))
+		t.tween_property(card, "position:y", target_y, 0.35)
+		t.parallel().tween_property(card, "modulate:a", 1.0, 0.2)
+	_hint("CROSS / OPTIONS fight" + ("     CIRCLE back" if _mode == "deathmatch" else ""))
+	var auto := get_tree().create_timer(2.6 + n * 0.3 + 3.0)
+	auto.timeout.connect(func() -> void:
+		if _screen == "cards" and not _busy:
+			_show_loading())
+
+
+## One opponent's card: a dark frame with a fire-coloured edge and the car turning on a stand inside it, seen low
+## from the front three-quarter (its own little 3D world).
+func _match_card(id: String, size: Vector2, index: int) -> Control:
+	var card := Control.new()
+	card.size = size
+	var bg := ColorRect.new()
+	bg.color = Color(0.05, 0.03, 0.02, 0.85)
+	bg.size = size
+	card.add_child(bg)
+	var holder := SubViewportContainer.new()
+	holder.stretch = true
+	holder.position = Vector2(4, 4)
+	holder.size = size - Vector2(8, 8)
+	card.add_child(holder)
+	var vp := SubViewport.new()
+	vp.own_world_3d = true
+	vp.transparent_bg = true
+	vp.msaa_3d = Viewport.MSAA_2X
+	holder.add_child(vp)
+	var env := WorldEnvironment.new()
+	var e := Environment.new()
+	e.background_mode = Environment.BG_CLEAR_COLOR
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+	e.ambient_light_color = Color(0.5, 0.42, 0.38)
+	e.ambient_light_energy = 0.6
+	e.tonemap_mode = Environment.TONE_MAPPER_ACES
+	env.environment = e
+	vp.add_child(env)
+	var key := DirectionalLight3D.new()
+	key.rotation_degrees = Vector3(-30, -40 + index * 13, 0)
+	key.light_energy = 1.5
+	key.light_color = Color(1.0, 0.92, 0.85)
+	vp.add_child(key)
+	var rim := OmniLight3D.new()
+	rim.light_color = Color(1.0, 0.4, 0.1)
+	rim.light_energy = 4.0
+	rim.omni_range = 10.0
+	rim.position = Vector3(-2.5, 1.5, -3.5)
+	vp.add_child(rim)
+	var cam := Camera3D.new()
+	cam.fov = 34.0
+	vp.add_child(cam)
+	cam.look_at_from_position(Vector3(5.2, 1.9, 8.6), Vector3(0, 0.35, 0)) # front three-quarter, a little above
+	var disc := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 2.6
+	cm.bottom_radius = 2.7
+	cm.height = 0.12
+	disc.mesh = cm
+	disc.position = Vector3(0, -0.06, 0)
+	disc.material_override = MeshKit.mat(Color(0.22, 0.2, 0.19), 0.5, 0.6)
+	vp.add_child(disc)
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 2.62
+	tm.outer_radius = 2.7
+	ring.mesh = tm
+	var rm := StandardMaterial3D.new()
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.albedo_color = Color(0.9, 0.32, 0.06)
+	ring.material_override = rm
+	vp.add_child(ring)
+	var stand := Node3D.new()
+	vp.add_child(stand)
+	var model := VehicleModels.build(id)
+	var st: Dictionary = Roster.get_car(id)
+	var sz: Vector3 = st.get("size", Vector3(2.2, 1.8, 5.0))
+	model.scale = Vector3.ONE * clampf(4.2 / maxf(sz.z, sz.x * 1.4), 0.5, 1.2)
+	stand.add_child(model)
+	stand.rotation.y = PI + 0.5
+	var spin := stand.create_tween().set_loops()
+	spin.tween_property(stand, "rotation:y", PI + 0.5 + TAU, 9.0).from(PI + 0.5)
+	var edge := ReferenceRect.new()
+	edge.editor_only = false
+	edge.border_color = FIRE
+	edge.border_width = 3.0
+	edge.size = size
+	card.add_child(edge)
+	return card
 
 
 # ------------------------------------------------------------------ to the match

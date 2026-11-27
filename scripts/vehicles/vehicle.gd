@@ -235,7 +235,8 @@ var fuel_tank := 0.0 # tabs in a full bar
 var flaming := false
 var _flame: FlameJet
 var _flame_min := 0.0 # round 29: a lit Megafire burns at least one tab, held or not
-var _flame_denied := false # the "needs a full tab" notice once per press
+var _flame_denied := false
+var _flame_press := false # the fire button went down while the Megafire was selected (round 30) # the "needs a full tab" notice once per press
 var sermon_time := 0.0 # Hellfire Sermon: whoever hurts this car takes a share back and burns
 var _sermon_def: Dictionary = {}
 var _sermon_fx: Node3D
@@ -1719,8 +1720,15 @@ func _meltdown(id: String) -> void:
 	var lock := float(d.get("meltdown_lock", 3.0))
 	_weapon_cooldowns[id] = lock
 	_locked[id] = lock
-	notice.emit(self, "%s MELTDOWN" % String(d.get("label", id)).to_upper())
 	var at := launch_point()
+	if d.has("salvo_max"): # round 30: Roadkill's six held past the red window blow up in their slots
+		notice.emit(self, "BACKFIRE")
+		FxKit.explosion(get_parent(), at + flat_forward() * 0.6, 0.6, Color(1.0, 0.35, 0.1), true)
+		linear_velocity -= flat_forward() * 3.0
+		if is_player:
+			GameFeel.shake(at, 0.5)
+	else:
+		notice.emit(self, "%s MELTDOWN" % String(d.get("label", id)).to_upper())
 	GameFeel.play("taser_fizzle", at, self, 0.0, 0.8)
 	FxKit.puff(get_parent(), at, 0.7)
 	for k in 3:
@@ -1776,6 +1784,13 @@ func _charge_sound(delta: float) -> void:
 			_charge_hum = GameFeel.loop("barrage_charge", self, -3.0, 12.0)
 			if _charge_hum:
 				_charge_hum.play()
+		# Round 30: 1 s of beeps, quicker and higher, from the full load to the red window.
+		var full := charge_full(charging_id)
+		var warn := float(WeaponData.get_def(charging_id).get("red_after", 1.0))
+		var beeps := 8
+		while _charge_beeps < beeps and _charge_hold >= full + warn * pow(float(_charge_beeps) / beeps, 0.8):
+			GameFeel.play("charge_up", launch_point(), self, -4.0 + _charge_beeps * 0.6, 1.2 + 0.12 * _charge_beeps)
+			_charge_beeps += 1
 		return
 	var full := charge_full(charging_id)
 	var start := CHARGE_SILENT
@@ -2218,7 +2233,13 @@ func find_target() -> Vehicle:
 ## keeps what is left. Frozen, flipped or shielded: out.
 func _flame_step(delta: float) -> void:
 	var on_special := selected_weapon() == special_id
-	var want := on_special and (in_fire_weapon or want_fire_weapon)
+	# Round 30 (owner): only a press made with the Megafire selected lights it. A fire button still held
+	# from another weapon (the list jumping to the Megafire when that weapon ran out) does nothing.
+	if on_special and want_fire_weapon:
+		_flame_press = true
+	if not in_fire_weapon and not want_fire_weapon:
+		_flame_press = false
+	var want := on_special and (in_fire_weapon or want_fire_weapon) and (_flame_press or not is_player)
 	if on_special:
 		want_fire_weapon = false # the flame is held, never "fired"
 	var d := WeaponData.get_def(special_id)
@@ -2307,23 +2328,29 @@ func start_slam(d: Dictionary) -> void:
 	if is_instance_valid(_slam_fx):
 		_slam_fx.queue_free()
 	_slam_fx = DarksideSlamFx.start(self)
+	if _slam_horn <= 0.0: # round 30 (owner): no wind-up, it tears off the moment it is fired
+		_slam_launch()
+
+
+func _slam_launch() -> void:
+	slam_time = float(_slam.get("time", 3.0))
+	speed = maxf(speed, float(stats.max_speed) * 1.2) # it tears off (round 29: harder, like TMB's)
+	linear_velocity += flat_forward() * float(_slam.get("kick", 14.0))
+	GameFeel.play("ram_impact", global_position + Vector3.UP, self, -6.0, 0.6)
+	GameFeel.play("turbo", global_position + Vector3.UP, self, 0.0, 0.7)
+	if is_player: # round 29 (owner, TMB clips): the view pulls wide, blurs inward and shakes as it goes
+		ZoomBurst.play(get_tree(), 0.85)
+		if GameFeel.camera:
+			GameFeel.camera.add_shake(0.9)
+			if GameFeel.camera.has_method("kick_fov"):
+				GameFeel.camera.kick_fov(24.0)
 
 
 func _slam_tick(delta: float) -> void:
 	if _slam_horn > 0.0:
 		_slam_horn -= delta
 		if _slam_horn <= 0.0:
-			slam_time = float(_slam.get("time", 3.0))
-			speed = maxf(speed, float(stats.max_speed) * 1.2) # it tears off (round 29: harder, like TMB's)
-			linear_velocity += flat_forward() * float(_slam.get("kick", 14.0))
-			GameFeel.play("ram_impact", global_position + Vector3.UP, self, -6.0, 0.6)
-			GameFeel.play("turbo", global_position + Vector3.UP, self, 0.0, 0.7)
-			if is_player: # round 29 (owner, TMB clips): the view pulls wide, blurs inward and shakes as it goes
-				ZoomBurst.play(get_tree(), 0.85)
-				if GameFeel.camera:
-					GameFeel.camera.add_shake(0.9)
-					if GameFeel.camera.has_method("kick_fov"):
-						GameFeel.camera.kick_fov(24.0)
+			_slam_launch()
 		return
 	if slam_time <= 0.0:
 		return

@@ -102,7 +102,7 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 | Outlaw — Jamie Roberts (a woman) | TM2 Outlaw 2 (`TM2Outlaw2Render`) | TM2 (`TM2JamieRobertsPSX`) |
 | Axel | TM2 (round 20; NOT Super Axel) | TM2 (story: later, its own arc) |
 | Mr. Grimm | TM2 (bike + weapon sidecar, TM2 helmet) | Head-On: grim reaper coat + scythe |
-| Shadow — Raven | TM2 (exact TM2 design: purple hearse, black roof) | Black (Raven) |
+| Shadow — Mortimer (round 30; was Raven) | TM2 (exact TM2 design: purple hearse, black roof); owner's sheet `docs/reference/owner_sheets/shadow_sheet.webp` | Mortimer (owner's portrait sheet) |
 | Mr. Slam — Simon Whittlebone | Head-On | Head-On, but alive (not a ghost) |
 | Hammerhead — Mike and Stu | TM2 | TM2 |
 | Thumper — Bruce | TM3 | TM2 |
@@ -110,9 +110,9 @@ xvfb-run -a -s "-screen 0 1600x900x24" $G --rendering-method gl_compatibility --
 | Darkside — Mr. Ash | Black (reference image) | — |
 | Yellow Jacket — Charlie Kane Jr. | Black (reference image) | — |
 | Crimson Fury — Agent Shepherd | TM 2012 (PS3) | Head-On |
-| Spectre — Ken | TM2 | TM2 |
+| Spectre — Edward Vame (round 30; was Ken) | TM2; owner's sheet `specter_sheet.webp` (its "Lance Wilder" label is void) | Edward Vame (owner's portrait sheet) |
 | Twister — Amanda Watts | Head-On look (reference image) | TM2 |
-| Orbital — Alan Vame (owner's name) | TM4 | TM4 |
+| Orbital — driver's name to be chosen (round 30: Edward Vame moved to Spectre) | TM4 | TM4 |
 | Warthog | TM2 | Colonel Hall, Head-On (confirmed) |
 | Junkyard Dog | Black | Billy Ray Stillwell, Black (confirmed) |
 
@@ -833,6 +833,25 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   under), Arc de Triomphe on the Champs line (drive through), obelisk + fountains, Louvre palace round its court +
   glass pyramid, Notre-Dame, Sacre-Coeur, Moulin Rouge (sails turn), Opera, Invalides, Chaillot wings. Not yet: Grand
   Palais hall, tower lift/fall, Mona Lisa passage, metro, gargoyles, backdrop. Paris views 43-92 draws, 106-363k prims.
+- **Round 30, full text `docs/design/35-owner-round-30.md`:** **Paris bugs:** the player spawned inside the obelisk
+  (fell through the ground, respawned forever; `paris_check` now checks spawns are clear); `ArenaKit` collision faces
+  are two-sided (`backface_collision`: cars went in under ramps from behind and out through viaduct side walls);
+  ramps' high ends closed, the Trocadero link skirted; solid plinths with toes (arc, fountains, pyramid: `ParisLandmarks._toe`
+  / `_ring_toe`), tall roofs solid to the roof, Louvre/Opera colliders follow their roofs (`_frustum`), road-end barricades
+  solid, Trocadero terraces reach the blocks round them (slot scan at 5 m), the Seine slows nobody (owner: like the old
+  games). **Paris backdrop** `tools/blender/build_paris_backdrop.py` -> `assets/backdrops/paris_city.jpg` (Haussmann
+  blocks to the horizon, the Seine on, La Defense + Grande Arche WNW, Montparnasse S, war smoke). **Weapons:** Megafire
+  lights only on a press made with it selected (`Vehicle._flame_press`; a held button carried over after another
+  weapon ran out used to fire it); Roadkill: six from the nose slots at once, load 1.3 s, 1 s of beeps, 0.2 s red window
+  (70), later = BACKFIRE (`_meltdown`, locked 3 s); Darkside slam off at once (`horn` 0), `time` 1.5; Sinner hurled flat
+  (`throw_speed` 46 to `range` 45, bends to the lock, clings to a car, blows on a wall), lands -> rolls -> runs at
+  `run_mult` 0.6 for `run_time` 2 s; Brimstone's bed has no stacks or brazier (tailpipes under the bumper). **Darkside
+  model** from the owner's sheet (POLICE plow with teeth and an anchor chain, grille guard, roof quad rocket pods, marker
+  lamps, louvres, fender guns). **Front end:** end screen OPTIONS = restart / next tour stage, SHARE = main menu
+  (`end_restart` / `end_menu`; Triangle does nothing there); no car twice in a match (`FrontEnd.taken`); story = no stage
+  pick, starts in LA, opponents drawn at random (`STAGE_ENEMIES`), the tour goes on stage by stage (`Main.next_stage`,
+  `tour_card`); deathmatch picks the stage; before every match the match card (`_show_matchcards`: the map closing in,
+  the opponents' cars turning on stands, no names). Brimstone's pictures = the owner's new PREACHER sheet (bible gone).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**

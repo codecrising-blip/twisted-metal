@@ -1426,9 +1426,9 @@ func _run() -> void:
 	var c_hp := ol20.health
 	rk.auto_target = false
 	rk.target = ol20
-	rk.released_hold = 2.5
+	rk.released_hold = 1.6 # all six loaded, not yet red (round 30 timings)
 	Specials.fire(rk, "charged_missiles")
-	for i in 100: # physics steps: the six stream out 0.09 s apart and fly 23 m
+	for i in 100: # physics steps: the six leave together and fly 23 m
 		await physics_frame
 	var six := c_hp - ol20.health
 	_check(six > 39.0 and six < 49.0, "a full charge sends six missiles at 8 (%.1f)" % six)
@@ -1436,12 +1436,12 @@ func _run() -> void:
 	_place(ol20, 40, 3, 0)
 	await _frames(3)
 	c_hp = ol20.health
-	rk.released_hold = 4.6
+	rk.released_hold = 2.4 # inside the 0.2 s red window (round 30: 1.3 load + 1 s of beeps)
 	Specials.fire(rk, "charged_missiles")
 	for i in 100:
 		await physics_frame
 	var red := c_hp - ol20.health
-	_check(red > 58.0 and red < 71.0, "held 2 s more, the six are red and hit for 70 (%.1f)" % red)
+	_check(red > 58.0 and red < 71.0, "let go in the red window, the six are red and hit for 70 (%.1f)" % red)
 
 	_place(ax, -40, -20, 0)
 	_place(ol20, -33, -20, 0)

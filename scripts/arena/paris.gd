@@ -52,6 +52,8 @@ const C_CURB := Color("8C877E")
 const C_ZINC := Color("6F7C86")
 const C_GOLD := Color("C9A54A")
 
+const BACKDROP := "res://assets/backdrops/paris_city.jpg"
+
 var title := "PARIS"
 var music := "paris"
 var subtitle := "City of Lights Out"
@@ -236,6 +238,12 @@ func _environment() -> void:
 	sm.ground_bottom_color = Color(0.3, 0.28, 0.25)
 	sm.sun_angle_max = 10.0
 	sky.sky_material = sm
+	# Round 30 (owner: "the map has no background from there"): the city beyond the edge walls, one pre-rendered
+	# panorama (tools/blender/build_paris_backdrop.py). The procedural sky above stays as the fallback.
+	if ResourceLoader.exists(BACKDROP):
+		var pano := PanoramaSkyMaterial.new()
+		pano.panorama = load(BACKDROP)
+		sky.sky_material = pano
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.6, 0.64, 0.72) # blue sky fill in the shadows

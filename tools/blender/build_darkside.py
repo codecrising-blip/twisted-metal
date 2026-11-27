@@ -1,4 +1,6 @@
-"""Darkside (round 28): Mr. Ash's semi tractor, TM Black (owner's roster table: vehicle from Black).
+"""Darkside (round 28; round 30 from the owner's design sheet: welded POLICE plow with teeth and an anchor
+chain, tubular grille guard, twin quad rocket pods and marker lamps on the roof, armoured louvres over the
+glass, a roll-cage hoop, rotary guns on the front fenders, more rust). Mr. Ash's semi tractor, TM Black (owner's roster table: vehicle from Black).
   Shape: the TMB mesh in docs/reference/3d_models/twisted-metal-black.zip, ortho views measured at 7.6 m long
   (127 px/m on the scratch sheet): a long-nosed conventional tractor with a flat-topped sleeper cab (roof 2.26 m),
   two tall stacks with perforated heat shields at the cab's back corners, fuel tanks / steps under the cab, a long
@@ -26,8 +28,8 @@ from mathutils import Matrix, Vector
 T.reset()
 V = Vector
 random.seed(7)
-paint = T.M("paint", (0.034, 0.037, 0.047), wear=0.15, rust=0.12, dirt=0.3, rough=0.5, name="ds_paint")
-plow = T.M("paint", (0.013, 0.013, 0.014), wear=0.3, rust=0.2, dirt=0.3, rough=0.5, name="ds_plow")
+paint = T.M("paint", (0.034, 0.037, 0.047), wear=0.18, rust=0.22, dirt=0.3, rough=0.5, name="ds_paint")
+plow = T.M("steel", (0.05, 0.048, 0.045), wear=0.35, rust=0.45, dirt=0.4, rough=0.55, name="ds_plow")
 chrome = T.M("chrome", (0.42, 0.43, 0.44), wear=0.0, rust=0.3, dirt=0.3)
 shield = T.M("steel", (0.3, 0.3, 0.3), wear=0.2, rust=0.25, dirt=0.3, rough=0.45)
 dark = T.M("steel", (0.025, 0.025, 0.027), wear=0.4, rust=0.45, dirt=0.4)
@@ -156,36 +158,74 @@ for k in range(13):  # the grille's vertical bars on a dark back
 body.append(T.box((1.28, 0.02, 0.54), loc=(0, y_(7.125), 1.17), mat=dark))
 body.append(T.box((0.18, 0.02, 0.1), loc=(0, y_(7.14), 1.52), mat=T.M("paint", (0.4, 0.3, 0.12), wear=0.4, rust=0.3, dirt=0.4)))   # badge
 
-# ---------------------------------------------------------------- the ram plate: a crushed police cruiser's front
-PY = y_(7.42)
-body.append(T.box((2.9, 0.42, 0.62), loc=(0, PY, 0.55), mat=plow, bevel=0.08))
-body.append(T.box((2.7, 0.4, 0.14), loc=(0, PY - 0.02, 0.92), rot=(-7, 0, 0), mat=plow, bevel=0.04))   # the cruiser's hood edge
-for k in range(7):  # crumple: dented panels across the face
-    x = (k - 3) * 0.4
-    body.append(T.box((0.36, 0.06, 0.4), loc=(x, PY + 0.2, 0.6 + random.uniform(-0.04, 0.04)), rot=(random.uniform(-8, 8), random.uniform(-6, 6), random.uniform(-10, 10)), mat=plow, bevel=0.02))
-body.append(T.box((1.0, 0.08, 0.3), loc=(0, PY + 0.23, 0.62), rot=(0, 0, 3), mat=chrome, bevel=0.015))   # its crushed grille
-for k in range(6):
-    body.append(T.box((0.9, 0.012, 0.02), loc=(0, PY + 0.275, 0.52 + k * 0.04), rot=(0, 0, 3), mat=dark))
+# ---------------------------------------------------------------- the ram plow (round 30, owner's sheet)
+# A massive welded steel plow with POLICE on both halves, a row of teeth along its foot, an anchor chain
+# slung across it, and a tubular grille guard rising from it in front of the grille and the lamps.
+PY = y_(7.46)
+body.append(T.box((2.9, 0.22, 0.86), loc=(0, PY, 0.66), rot=(-10, 0, 0), mat=plow, bevel=0.03))
+body.append(T.box((2.96, 0.3, 0.1), loc=(0, PY - 0.04, 1.1), mat=plow, bevel=0.02))          # its top lip
+body.append(T.box((2.9, 0.12, 0.14), loc=(0, PY + 0.06, 0.26), mat=plow, bevel=0.02))        # its foot
+for sx in (1, -1):  # side wings angled back
+    body.append(T.box((0.12, 0.5, 0.8), loc=(sx * 1.5, PY - 0.18, 0.66), rot=(-10, 0, sx * 28), mat=plow, bevel=0.02))
+    decals.append(T.Decal(T.stencil("POLICE", color=(0.82, 0.8, 0.76), bridges=False), (sx * 0.78, PY + 0.14, 0.72), (0, 1, 0), (0, 0, 1), (0.62, 0.15)))
+for k in range(9):  # teeth along the foot, pointing forward and down
+    x = (k - 4) * 0.34
+    body.append(T.cyl(0.07, 0.36, loc=(x, PY + 0.26, 0.2), rot=(-110, 0, 0), mat=plow, n=6, r2=0.005))
+for k in range(12):  # weld beads / rivets across the blade
+    body.append(T.sphere(0.025, loc=((k - 5.5) * 0.24, PY + 0.12, 1.0), mat=dark, n=6))
+# anchor chain slung across the plow's face, hooked at the corners
+K.chain(body, (-1.2, PY + 0.14, 1.0), (1.2, PY + 0.14, 1.0), chain_m, sag=0.38)
+# the grille guard: posts, rails and the lamp cages
+for x in (-0.9, -0.3, 0.3, 0.9):
+    body.append(K.rod(V((x, PY - 0.06, 1.1)), V((x, y_(7.24), 1.68)), 0.045, dark, n=8))
+for z in (1.3, 1.62):
+    body.append(K.rod(V((-0.95, y_(7.27), z)), V((0.95, y_(7.27), z)), 0.042, dark, n=8))
 for sx in (1, -1):
-    for lx in (0.72, 0.98):
-        body.append(T.box((0.2, 0.04, 0.14), loc=(sx * lx, PY + 0.24, 0.66), rot=(0, 0, sx * 4), mat=chrome, bevel=0.01))
-        body.append(T.box((0.16, 0.03, 0.1), loc=(sx * lx, PY + 0.26, 0.66), rot=(0, 0, sx * 4), mat=lamp, bevel=0.008))
-    body.append(T.box((0.06, 0.03, 0.12), loc=(sx * 1.38, PY + 0.2, 0.33), mat=red, bevel=0.005))
-    decals.append(T.Decal(T.stencil("POLICE", color=(0.85, 0.85, 0.82), bridges=False), (sx * 1.45, PY - 0.04, 0.58), (sx, 0, 0), (0, 0, 1), (0.27, 0.075)))
-body.append(T.box((2.8, 0.14, 0.16), loc=(0, PY + 0.26, 0.3), mat=chrome, bevel=0.04))     # its bumper
-for sx in (1, -1):  # the ram plate's brackets back to the frame
-    body.append(T.box((0.18, 0.5, 0.2), loc=(sx * 0.5, y_(7.1), 0.62), mat=dark, bevel=0.01))
+    body.append(K.rod(V((sx * 1.3, PY - 0.06, 1.1)), V((sx * 1.3, y_(7.2), 1.28)), 0.04, dark, n=8))
+    body.append(K.rod(V((sx * 0.95, y_(7.24), 1.28)), V((sx * 1.3, y_(7.2), 1.28)), 0.04, dark, n=8))
+    body.append(T.box((0.18, 0.06, 0.12), loc=(sx * 1.32, PY + 0.02, 0.98), mat=red, bevel=0.01))      # red lamps on the plow's top
+    body.append(T.box((0.12, 0.05, 0.1), loc=(sx * 1.12, PY + 0.04, 0.98), mat=amber, bevel=0.01))
+for sx in (1, -1):  # the plow's brackets back to the frame
+    body.append(T.box((0.18, 0.5, 0.2), loc=(sx * 0.5, y_(7.15), 0.62), mat=dark, bevel=0.01))
+# chains from the grille's top corners down to the plow
+for sx in (1, -1):
+    K.chain(body, (sx * 0.68, y_(7.12), 1.5), (sx * 1.0, PY - 0.02, 1.12), chain_m, sag=0.12)
 
-# chains from the grille's top corners and the fenders down to the ram plate
+# ---------------------------------------------------------------- the roof: twin quad rocket pods, marker lamps, air horns
 for sx in (1, -1):
-    K.chain(body, (sx * 0.68, y_(7.12), 1.5), (sx * 1.0, PY + 0.05, 0.98), chain_m, sag=0.15)
-    K.chain(body, (sx * 1.15, y_(7.05), 1.18), (sx * 1.36, PY, 0.86), chain_m, sag=0.06)
+    x, y, z = sx * 0.55, y_(4.55), 2.5
+    body.append(T.box((0.62, 0.8, 0.46), loc=(x, y, z), mat=dark, bevel=0.03))
+    body.append(T.box((0.2, 0.3, 0.12), loc=(x, y - 0.1, 2.24), mat=dark, bevel=0.01))           # its pedestal
+    for i in range(2):
+        for j in range(2):
+            px, pz = x + (i - 0.5) * 0.28, z + (j - 0.5) * 0.22
+            body.append(T.cyl(0.085, 0.04, loc=(px, y + 0.41, pz), rot=(-90, 0, 0), mat=chain_m, n=12))
+            body.append(T.sphere(0.065, loc=(px, y + 0.42, pz), mat=red, n=10, scale=(1, 0.5, 1)))
+    body.append(T.box((0.66, 0.06, 0.5), loc=(x, y - 0.41, z), mat=paint, bevel=0.01))           # back plate
+for k in range(5):
+    body.append(T.box((0.1, 0.06, 0.06), loc=((k - 2) * 0.34, y_(5.06), 2.3), mat=amber, bevel=0.01))
+for sx in (1, -1):
+    body.append(T.cyl(0.05, 0.5, loc=(sx * 0.95, y_(4.95), 2.34), rot=(-90, 0, 0), mat=chrome, n=10, r2=0.09))
+
+# ---------------------------------------------------------------- armoured louvres over the glass, a roll cage
+for k in range(6):  # windshield slats (they leave the red slit under the visor)
+    t = 0.12 + k * 0.13
+    p = ws_b.lerp(ws_t, t)
+    body.append(T.box((2.0, 0.09, 0.018), loc=(0, p.y + 0.02, p.z), rot=(-58, 0, 0), mat=dark, bevel=0.004))
+for sx in (1, -1):
+    for k in range(4):  # side window slats
+        body.append(T.box((0.02, 0.8, 0.05), loc=(sx * (HW + 0.03), y_(4.55), 1.84 + k * 0.08), mat=dark, bevel=0.004))
+    body.append(K.rod(V((sx * (HW + 0.06), y_(5.15), 1.0)), V((sx * (HW + 0.06), y_(5.15), 2.2)), 0.03, dark, n=8))
+    body.append(K.rod(V((sx * (HW + 0.06), y_(5.15), 2.2)), V((sx * (HW + 0.06), y_(3.0), 2.24)), 0.03, dark, n=8))
+    body.append(T.cyl(0.13, 0.5, loc=(sx * (HW + 0.12), y_(3.3), 1.35), mat=chrome, n=14))           # a canister on the sleeper side
 
 # ---------------------------------------------------------------- side gatlings beside the hood
-for sx in (1, -1):
-    x, z = sx * 1.3, 1.24
+for sx in (1, -1):  # round 30 (sheet): rotary guns on the front fenders, an ammo drum and belt beside each
+    x, z = sx * 1.12, 1.38
     body.append(T.box((0.24, 0.42, 0.24), loc=(x, y_(5.55), z), mat=gun, bevel=0.02))
-    body.append(T.box((0.08, 0.3, 0.3), loc=(x - sx * 0.14, y_(5.55), z - 0.08), mat=dark, bevel=0.01))   # its mount on the step
+    body.append(T.box((0.2, 0.3, 0.12), loc=(x, y_(5.55), z - 0.17), mat=dark, bevel=0.01))   # its mount on the fender
+    body.append(T.cyl(0.13, 0.22, loc=(x + sx * 0.2, y_(5.45), z - 0.05), rot=(0, 90, 0), mat=chain_m, n=14))
+    K.chain(body, (x + sx * 0.2, y_(5.45), z - 0.18), (x, y_(5.6), z - 0.1), chain_m, sag=0.08)
     for k in range(6):
         a = 2 * math.pi * k / 6
         body.append(K.rod(V((x + math.cos(a) * 0.055, y_(5.75), z + math.sin(a) * 0.055)), V((x + math.cos(a) * 0.055, y_(6.72), z + math.sin(a) * 0.055)), 0.017, gun, n=6))

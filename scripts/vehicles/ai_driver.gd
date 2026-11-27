@@ -844,7 +844,8 @@ func _shoot(v: Vehicle, delta: float) -> void:
 		elif v.special_id == "charged_missiles": # round 21: Roadkill loads some missiles before letting go
 			var full := Vehicle.charge_full("charged_missiles")
 			var roll := randf()
-			_hold = full + 2.1 if roll < 0.25 else (full + 0.1 if roll < 0.8 else full * 0.5)
+			var red_at := full + float(WeaponData.get_def("charged_missiles").get("red_after", 1.0))
+			_hold = red_at + 0.08 if roll < 0.25 else (full + 0.1 if roll < 0.8 else full * 0.5) # red: inside its 0.2 s window
 			v.in_fire_weapon = true
 		return
 	if _weapon_timer <= 0.0:
@@ -924,8 +925,8 @@ func _special_makes_sense(v: Vehicle, dist: float, angle: float) -> bool:
 			return dist < 11.0 or v.clamped_time > 0.0 or _held_by_taser(v)
 		"megafire": # round 29: only inside the fire's reach, and with two tabs at least (one is the ignition)
 			return v.fuel >= 2.0 and dist < 15.0 and angle < 0.3 and _clear_shot(v, v.target)
-		"sinner_bomber": # the sinner runs the rest of the way: anything in reach and roughly ahead
-			return dist > 12.0 and dist < 70.0 and angle < 0.9
+		"sinner_bomber": # round 30: hurled flat at a car ahead within his range
+			return dist > 8.0 and dist < 50.0 and angle < 0.6
 		"darkside_slam": # a long, straight charge at a car dead ahead
 			return dist > 14.0 and dist < 60.0 and angle < 0.14 and _clear_shot(v, v.target)
 	return dist < 60.0 and angle < 0.3

@@ -70,9 +70,10 @@ static func _throw(v: Vehicle, id: String, def: Dictionary) -> void:
 static func _charged_salvo(v: Vehicle, id: String, def: Dictionary) -> void:
 	var hold := v.released_hold
 	var most := int(def.get("salvo_max", 6))
-	var full := float(def.get("charge_time", 2.4))
+	var full := float(def.get("charge_time", 1.3))
 	var count := clampi(1 + int(hold / (full / most)), 1, most)
-	var red := hold >= full + float(def.get("red_after", 2.0))
+	var red_at := full + float(def.get("red_after", 1.0))
+	var red := hold >= red_at and hold <= red_at + float(def.get("red_window", 0.2)) + 0.05
 	var over := {}
 	if red:
 		count = most
@@ -82,19 +83,18 @@ static func _charged_salvo(v: Vehicle, id: String, def: Dictionary) -> void:
 	# Round 24: the owner's barrage sounds: "lock" for a max-damage (crimson) salvo, "fire" for any other.
 	GameFeel.play("barrage_lock" if red else "barrage_fire", v.launch_point(), v, float(def.get("sound_db", 0.0)), 1.0)
 	var lock := v.target if is_instance_valid(v.target) and not v.target.is_dead else null
-	var gap := float(def.get("salvo_gap", 0.09))
+	# Round 30 (owner): all at once, side by side across the nose (the six slots), not one after another.
+	var slots: Array = v.model.get_meta("slots", []) if v.model else []
+	var fwd := v.aim_forward()
+	var order := [2, 3, 1, 4, 0, 5] # middle out, so a short charge fires from the centre
 	for i in count:
-		var one := func() -> void:
-			if not is_instance_valid(v) or v.is_dead or not v.is_inside_tree():
-				return
-			var fan := (float(i) - (count - 1) * 0.5) * 0.06
-			var dir := v.aim_forward().rotated(Vector3.UP, fan) + Vector3.UP * 0.05
-			var aim: Vehicle = lock if is_instance_valid(lock) and not lock.is_dead else null
-			Projectile.spawn(v.get_parent(), id, v.launch_point() + v.global_basis.x * fan * 4.0, dir, v, aim, over)
-		if i == 0:
-			one.call()
-		else:
-			v.get_tree().create_timer(i * gap, false, true).timeout.connect(one)
+		var at := v.launch_point() + v.global_basis.x * (float(i) - (count - 1) * 0.5) * 0.45
+		if slots.size() >= most:
+			at = v.model.global_transform * (slots[order[i]] as Vector3) + fwd * 0.4
+			# just over the nose line: from the slots' own height they hit kickers and curbs right ahead
+			at += v.global_basis.y * maxf(0.0, 1.3 - (at - v.global_position).dot(v.global_basis.y))
+		var aim: Vehicle = lock if is_instance_valid(lock) and not lock.is_dead else null
+		Projectile.spawn(v.get_parent(), id, at, fwd + Vector3.UP * 0.03, v, aim, over)
 
 
 ## Zoomy: ten light missiles in a quick fan, all chasing the same lock.

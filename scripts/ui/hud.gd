@@ -306,10 +306,19 @@ func _handle_input() -> void:
 			_show_pause()
 		else:
 			clear_message()
-	if Input.is_action_just_pressed("restart") and (game_over or get_tree().paused):
+	if game_over: # round 30 (owner): the end screen, OPTIONS on / SHARE to the menu, nothing else
+		if Input.is_action_just_pressed("end_restart"):
+			get_tree().paused = false
+			GameFeel.ui("menu_select", get_tree())
+			restart_requested.emit()
+		elif Input.is_action_just_pressed("end_menu"):
+			GameFeel.ui("menu_select", get_tree())
+			menu_requested.emit()
+		return
+	if Input.is_action_just_pressed("restart") and get_tree().paused:
 		get_tree().paused = false
 		restart_requested.emit()
-	if (game_over or get_tree().paused) and Input.is_action_just_pressed("main_menu"):
+	if get_tree().paused and Input.is_action_just_pressed("main_menu"):
 		GameFeel.ui("menu_select", get_tree())
 		menu_requested.emit()
 		return
