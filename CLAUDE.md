@@ -857,6 +857,34 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   exit), drops again before Pont Neuf (172) and rises at the east end past Petit Pont (252-275); bridge piers follow
   their bank / the island's edge over the bridge's width (`ParisArena._pier`; a block placed by the bridge's centre
   stood out onto the quay where the island widens).
+- **Round 31, full text `docs/design/36-owner-round-31.md`:** Megafire `tab_refill` 7.5; Soul Harvest costs 1 charge;
+  turbo puts burning out after `TURBO_PUTS_OUT_FIRE` 0.05 s. **Ash Cloud** bursts (`AshCloud._burst`: flat ash wall to
+  `burst_r` 13 m in 0.3 s, 60 energy at once, then `drain` 10/s inside, `gain` 1.0 = all of it to Darkside).
+  **Air shots:** homing weapons fired in a jump leave level and aim straight at the target's height; the seeker edge
+  (`seek`) is judged across the ground only (`Projectile`). Could not reproduce the owner's case here (48/48 hits old
+  and new): ask for the spot/weapon if it comes back. **Sinner:** `_sweep_car` (the flown step vs every car box seen
+  from above, up to 4 m over the roof) + a windshield punch (`_punch_step`, `punch_at` 1.6 s, 15, the body rears up and
+  slams, right arm aimed by bone). **Slam:** the pinned car is moved by a shape sweep (`Vehicle._pin_sweep`), a wall in
+  the way crushes it there (`_pin_crash`); rays at 0.5/1/1.8 m. **Paris collision:** ArenaKit faces one-sided again
+  (`COL_WALL2` = two-sided thin sheets: rooftop-bridge railings). Rough-flip / ledge-shake tests showed no difference
+  old vs new here (ask for F3 spots). **Notre-Dame channels:** `ISLAND_WIDEN` 0.35 (~23 m of water), island-side piers
+  gone, bank piers `PIER_T` 1.8. **AI path finding** (`scripts/arena/paris_nav.gd`, `ParisArena.nav_point`): 4 m grid,
+  two layers (bridges), joined when the step is < 1.3 m and `_link` rays at 0.5/1.2 m (past the far cell) are clear;
+  pruned to what the spawn points reach (the city floor under the terraces made a hidden "street"); built on the first
+  AI request (~0.47 s here); path kept while the goal stays (6 s) and followed forward (the furthest visible point within
+  26 m). `AIDriver._via_ramp` asks it first; far targets out of sight use it too (`_sees`). Also: terraces/hill are
+  levels of their own (`troca1-3`, `hill1-2`), every roof block a level (`roof<i>`), river ramps registered
+  (`_quay_ramps`), `_next_level` BFS over ramps, `_fenced` by prefix. Paris AI test (scratch): 5/6 reached (terrace 3 in
+  7 s, was never). **Edge:** `_edge_fence` = chain link (`MatKit.chainlink`) on steel posts + barbed outrigger,
+  `FENCE_OVER` 7.5 m above the highest drivable place within 4 m (`_edge_top`: roof blocks, plateaus); `_outer_ring` =
+  a row of block shells outside the walls (`ParisBlocks.ring_block`/`ring_commit`, 4 draws), gaps for roads and the Seine;
+  backdrop re-rendered from 55 m (2048 wide now). The roof at (-268, 13, -98) stays reachable (owner: future easter
+  egg). **Perf (HIGH):** the kit casts no shadow, the plain shells do (shadow-only copies within NEAR): owner's Arc view
+  1.48M -> 0.77M triangles (`tests/_perf_paris.gd` spot `owner_arc`). **Trees:** `Breakable.swat_aside` (rammed crowns
+  fall beside the road, slowly). **Look:** stone/pavers less white (`C_STONE` C9B898, kit `FACADE_TINT`), moods
+  `ParisArena.MOODS` (bright/toned/haze/overcast, `-- mood:<name>`, default toned) with a tinted panorama sky shader;
+  `docs/screenshots/round31/paris_moods.png` for the owner to pick. Waiting on the owner: mood pick, building variety
+  and enterable/destructible landmarks (options in doc 36).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
