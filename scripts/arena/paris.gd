@@ -13,8 +13,6 @@ const STEP := 2.5 # river sampling along x
 const WATER_Y := -5.45 # round 29 (owner): the Seine is shallow, you drive through it to the other bank
 const BED_Y := -6.0 # the riverbed under it (0.55 m of water: wheels and sills under, the body above)
 const BANK := 2.6 # the cobbled bank from a lower quay down into the water
-const WATER_DRAG := 1.6 # how fast speed above WATER_TOP fades in the water (per second)
-const WATER_TOP := 13.0 # m/s a car keeps wading through the river
 const QUAY_Y := -5.0
 const QUAY_W := 10.0 # lower quay (design 8 m; 10 so Axel's 2.8 m body has room at speed)
 const WATER_HALF := 15.0
@@ -78,8 +76,7 @@ static var _rz := PackedFloat32Array()
 var _splash_t := {} # car -> seconds to its next splash
 
 
-## Round 29 (owner: "make the river accessible to drive on to the other side"): a car in the Seine wades.
-## Speed above WATER_TOP is taken off fast (stronger than any engine or turbo), and water splashes round it.
+## Round 30 (owner): the Seine slows nobody. A car in it only throws water up round it.
 func _physics_process(delta: float) -> void:
 	for node in get_tree().get_nodes_in_group("vehicles"):
 		var v := node as Vehicle
@@ -90,12 +87,7 @@ func _physics_process(delta: float) -> void:
 			_splash_t.erase(v)
 			continue
 		var lv := v.linear_velocity
-		var flat := Vector2(lv.x, lv.z)
-		var sp := flat.length()
-		if sp > WATER_TOP:
-			var ns := move_toward(sp, WATER_TOP, (28.0 + (sp - WATER_TOP) * WATER_DRAG) * delta)
-			flat *= ns / sp
-			v.linear_velocity = Vector3(flat.x, lv.y, flat.y)
+		var sp := Vector2(lv.x, lv.z).length()
 		var t: float = float(_splash_t.get(v, 0.0)) - delta
 		if t <= 0.0:
 			if sp > 2.5:
@@ -765,6 +757,11 @@ func _ramp(foot: Vector2, top: Vector2, y0: float, y1: float, w: float, mat: Mat
 			var e1 := p1 + l * s
 			face(_m.quay, [Vector3(e0.x, minf(y0, y1), e0.y), Vector3(e1.x, minf(y0, y1), e1.y), Vector3(e1.x, h1, e1.y), Vector3(e0.x, h0, e0.y)],
 				Vector3(l.x * s, 0, l.y * s), true, COL_WALL)
+	# The high end closed down to the lower level (round 30: from behind you drove in under the ramp).
+	if absf(y1 - y0) > 0.5:
+		var hi := top if y1 > y0 else foot
+		face(_m.quay, [Vector3(hi.x + l.x, minf(y0, y1), hi.y + l.y), Vector3(hi.x - l.x, minf(y0, y1), hi.y - l.y),
+			Vector3(hi.x - l.x, maxf(y0, y1), hi.y - l.y), Vector3(hi.x + l.x, maxf(y0, y1), hi.y + l.y)], Vector3(d.x, 0, d.y) * signf(y1 - y0), true, COL_WALL)
 	if run_on > 0.0:
 		var q := top + d * run_on
 		face(mat, [Vector3(top.x + l.x, y1, top.y + l.y), Vector3(q.x + l.x, y1, q.y + l.y), Vector3(q.x - l.x, y1, q.y - l.y),
@@ -775,9 +772,9 @@ func _ramp(foot: Vector2, top: Vector2, y0: float, y1: float, w: float, mat: Mat
 func _terraces() -> void:
 	# Trocadero: three terraces up to +8 m below the Palais de Chaillot, ramps either side of the fountains.
 	# (round 29: they reach the west edge wall; a 3 m strip between them and the wall trapped cars)
-	_plateau(_rect(-HX, -88, -208, -62), 8.0, _m.plaza)
-	_plateau(_rect(-HX, -62, -208, -40), 5.0, _m.plaza)
-	_plateau(_rect(-HX, -40, -208, -18), 2.5, _m.plaza)
+	_plateau(_rect(-HX, -92, -204, -62), 8.0, _m.plaza) # to the block behind (round 30: a 4 m gap trapped cars)
+	_plateau(_rect(-HX, -62, -204, -40), 5.0, _m.plaza)
+	_plateau(_rect(-HX, -40, -204, -18), 2.5, _m.plaza) # to the blocks (round 30: 4 m strip)
 	for rx: float in [-258.0, -222.0]:
 		_ramp(Vector2(rx, 4), Vector2(rx, -18), 0.0, 2.5, 10.0, _m.plaza)
 		_ramp(Vector2(rx, -18), Vector2(rx, -40), 2.5, 5.0, 10.0, _m.plaza)
@@ -869,7 +866,7 @@ func _wall_normal(v: Vector2) -> Vector2:
 
 ## Round 29 (owner: tight spaces): a facade that leaves the edge wall at a sharp angle (a road running
 ## out of the map at a slant) makes a wedge of street a car slides into and sticks in. The block is
-## squared off there: filled out along the wall until the facade stands 6 m off it, then straight back.
+## squared off there: filled out along the wall until the facade stands 8 m off it, then straight back.
 func _square_to_wall(b: PackedVector2Array) -> PackedVector2Array:
 	var n := b.size()
 	var out := PackedVector2Array()
@@ -894,7 +891,7 @@ func _square_to_wall(b: PackedVector2Array) -> PackedVector2Array:
 		if rise > 0.94 or rise < 0.05 or f.dot(along - v) > 0.0:
 			out.append(v) # square enough, or the sharp side is inside the block
 			continue
-		var t := minf(6.0 / rise, v.distance_to(facade) * 0.9)
+		var t := minf(8.0 / rise, v.distance_to(facade) * 0.9)
 		var p := v + f * t
 		var foot := p - on * (rise * t)
 		if facade == next:
@@ -997,7 +994,7 @@ func _rooftops() -> void:
 			mb.box(steel, Vector3(1.2, 0.4, 1.2), Transform3D(Basis(), leg + Vector3(0, 0.2, 0)), 0.05)
 			batch_builder(mb, true)
 			solid(Vector3(0.8, top, 0.8), Transform3D(Basis(), leg + Vector3(0, top * 0.5, 0)))
-	_ramp(CHAMPS_RAMP[0], CHAMPS_RAMP[1], 0.0, ROOF_Y, 12.0, _m.quay, 8.0)
+	_ramp(CHAMPS_RAMP[0], CHAMPS_RAMP[1], 0.0, ROOF_Y, 12.0, _m.quay, 3.5) # just over the mansard (round 30)
 	for c: Array in CROSSINGS:
 		_viaduct(c[0], c[1], ROOF_Y, ROOF_Y, 8.0, steel)
 		var a: Vector2 = c[0]
@@ -1036,6 +1033,11 @@ func _viaduct(a: Vector2, b: Vector2, y0: float, y1: float, w: float, steel: Mat
 		face(steel, [pa + lv, pb + lv, pb - lv, pa - lv], Vector3.UP, false, COL_GROUND)
 		for s: float in [-1.0, 1.0]:
 			face(steel, [pa + lv * s, pb + lv * s, pb + lv * s + Vector3(0, 1.4, 0), pa + lv * s + Vector3(0, 1.4, 0)], lv * s, false, COL_WALL)
+			# A sloped link's sides are skirted down to where it starts (round 30: cars drove in under it
+			# from the side on the terrace and wedged where the gap closed).
+			if absf(y1 - y0) > 0.5:
+				var base := minf(y0, y1)
+				face(steel, [Vector3(pa.x, base, pa.z) + lv * s, Vector3(pb.x, base, pb.z) + lv * s, pb + lv * s, pa + lv * s], lv * s, true, COL_WALL)
 	batch_builder(mb, true)
 	if y0 > 1.0 or y1 > 1.0:
 		ramps.append({"foot": Vector3(a.x, y0, a.y), "top": Vector3(b.x, y1, b.y), "w": w})
@@ -1272,6 +1274,8 @@ func _boundary() -> void:
 				var q := p + along * t
 				mb.box(concrete, Vector3(3.0, 1.1, 0.9), Transform3D(Basis(Vector3.UP, yaw), Vector3(q.x, 0.55, q.y)), 0.12)
 			mb.box(steel, Vector3(w, 2.6, 0.12), Transform3D(Basis(Vector3.UP, yaw), Vector3(p.x, 2.4, p.y) + Vector3(along.y, 0, -along.x) * 0.6), 0.02)
+			# Round 30 (owner: cars drove through the barricades at the map's edges): solid.
+			solid(Vector3(w, 3.8, 1.8), Transform3D(Basis(Vector3.UP, yaw), Vector3(p.x, 1.9, p.y) + Vector3(along.y, 0, -along.x) * 0.3))
 	batch_builder(mb, true, 0.4)
 
 
@@ -1324,7 +1328,7 @@ func _at(x: float, z: float, yaw_deg: float, y := 0.3) -> Transform3D:
 
 
 func _points() -> void:
-	for t: Transform3D in [_at(82, -80, 90), _at(-150, -125, 0), _at(-190, 204, 90), _at(0, 120, 180), _at(160, 175, 0),
+	for t: Transform3D in [_at(108, -80, 90), _at(-150, -125, 0), _at(-190, 204, 90), _at(0, 120, 180), _at(160, 175, 0),
 			_at(196, -40, 0), _at(-80, 150, 0)]:
 		spawn_points.append(t)
 		respawn_points.append(t)

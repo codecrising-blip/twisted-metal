@@ -45,7 +45,7 @@ func _in_block(p: Vector3) -> bool:
 
 ## Round 29 (owner: "tight spaces between the buildings I can slide into but cannot move"): street-level
 ## spots a car fits on whose free width across some direction is under SLOT_W = a slot that grabs a car.
-const SLOT_W := 3.8
+const SLOT_W := 5.0 # round 30: a 4 m gap still trapped Axel (2.8 m wide)
 
 
 func _fits(space: PhysicsDirectSpaceState3D, p: Vector3) -> bool:
@@ -102,6 +102,7 @@ func _run() -> void:
 		var y := _ray_y(t.origin.x, t.origin.z, t.origin.y + 2.0)
 		_check(absf(y - (t.origin.y - 0.3)) < 0.6, "spawn %s stands on ground (hit %.2f)" % [t.origin, y])
 		_check(not _in_block(t.origin), "spawn %s outside the buildings" % t.origin)
+		_check(_fits(_arena.get_world_3d().direct_space_state, t.origin - Vector3(0, 0.3, 0)), "spawn %s clear (no landmark on it)" % t.origin)
 	for p: Vector3 in a.weapon_points + a.health_points + a.mega_points + a.turbo_points:
 		var y := _ray_y(p.x, p.z, p.y + 2.0)
 		_check(absf(y - (p.y - 0.6)) < 0.7, "pickup %s on its ground (hit %.2f)" % [p, y])
@@ -169,4 +170,4 @@ func _run() -> void:
 	# Round 29: the landmarks stand (the tower's feet, the arc's piers) and the arc lets cars through.
 	_check(_ray_y(ParisArena.TOWER.x + 21.0, ParisArena.TOWER.y + 21.0) > 10.0, "Eiffel tower foot is solid")
 	var e := ParisArena.ETOILE
-	_check(absf(_ray_y(e.x, e.y, 20.0)) < 0.3, "the Arc de Triomphe's main arch is open to drive through")
+	_check(absf(_ray_y(e.x, e.y, 20.0) - 0.9) < 0.3, "the Arc de Triomphe's main arch is open to drive through (on its plinth)")

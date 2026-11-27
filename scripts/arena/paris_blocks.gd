@@ -87,15 +87,16 @@ static func build(arena: ParisArena, blocks: Array[Dictionary]) -> void:
 		var inner_set := Geometry2D.offset_polygon(poly, -run, Geometry2D.JOIN_MITER)
 		for inner: PackedVector2Array in inner_set:
 			if not Geometry2D.is_polygon_clockwise(inner):
-				arena.poly_face(deck if low else zinc, inner, h, false, ArenaKit.COL_GROUND if low else ArenaKit.COL_NONE)
-		if low: # the mansard slopes are driven on too (off the deck's edge)
-			_slope_collision(arena, poly, inner_set, cornice_y + CORNICE_H, h)
+				arena.poly_face(deck if low else zinc, inner, h, false, ArenaKit.COL_GROUND)
+		# The mansard slopes are solid too (round 30: tall roofs were hollow down to the cornice, a car that
+		# got up there sank into them).
+		var sloped := _slope_collision(arena, poly, inner_set, cornice_y + CORNICE_H, h)
 		_commit(arena, near, shell, wall_st, _shell_mat(low), origin, use_kit)
 		for piece: PackedVector2Array in Geometry2D.decompose_polygon_in_convex(poly):
 			var pts := PackedVector3Array()
 			for v in piece:
 				pts.append(Vector3(v.x, 0.0, v.y))
-				pts.append(Vector3(v.x, cornice_y + 0.3, v.y))
+				pts.append(Vector3(v.x, cornice_y + 0.3 if sloped else h, v.y)) # no slopes: solid to the roof
 			var cs := CollisionShape3D.new()
 			var shape := ConvexPolygonShape3D.new()
 			shape.points = pts
@@ -190,9 +191,9 @@ static func _facade_texture(low: bool) -> ImageTexture:
 	return ImageTexture.create_from_image(img)
 
 
-static func _slope_collision(arena: ParisArena, poly: PackedVector2Array, inner_set: Array[PackedVector2Array], y0: float, y1: float) -> void:
+static func _slope_collision(arena: ParisArena, poly: PackedVector2Array, inner_set: Array[PackedVector2Array], y0: float, y1: float) -> bool:
 	if inner_set.size() != 1 or inner_set[0].size() != poly.size():
-		return
+		return false
 	var inner := inner_set[0]
 	for i in poly.size():
 		var j := (i + 1) % poly.size()
@@ -208,6 +209,7 @@ static func _slope_collision(arena: ParisArena, poly: PackedVector2Array, inner_
 				arena.col_ground.append_array([t0, t2, t1])
 			else:
 				arena.col_ground.append_array([t0, t1, t2])
+	return true
 
 
 static func _commit(arena: Node3D, near: Dictionary, shell: MeshBuilder, wall_st: SurfaceTool, wall_mat: Material, origin: Vector3, use_kit: bool) -> void:

@@ -179,6 +179,9 @@ func flush_collision() -> void:
 		add_child(body)
 		var shape := ConcavePolygonShape3D.new()
 		shape.set_faces(faces)
+		# Round 30: both sides solid. One-sided faces let a car through a wall or a ramp from behind
+		# (Paris: under the Montmartre ramp, out through the rooftop bridges' side walls).
+		shape.backface_collision = true
 		var cs := CollisionShape3D.new()
 		cs.shape = shape
 		body.add_child(cs)
