@@ -54,7 +54,8 @@ func _run() -> void:
 		v.auto_target = false
 	await _frames(10)
 
-	# ---- Thumper (round 29): Megafire = a bar of 8 tabs, 0.7 s a tab, a full tab to light it, 4 s to refill one.
+	# ---- Thumper (round 29): Megafire = a bar of 8 tabs, 0.7 s a tab, a full tab to light it, 4.6 s to refill one
+	# (round 30 follow-up: 15% slower, owner).
 	_put(th, 0, 40, 0)
 	_put(dummy, 0, 32, 0)
 	await _frames(10)
@@ -97,8 +98,8 @@ func _run() -> void:
 	await _frames(5)
 	_check(not th.flaming, "no ignition without a full tab")
 	th.in_fire_weapon = false
-	await _frames(242)
-	_check(th.fuel > 1.55 and th.fuel < 1.68, "a tab refills in 4 s (%.2f)" % th.fuel)
+	await _frames(278)
+	_check(th.fuel > 1.55 and th.fuel < 1.68, "a tab refills in 4.6 s (%.2f)" % th.fuel)
 	# Earthquake Slam (round 29): costs 2 tabs, throws a car beside him away and rolls it.
 	_put(th, 0, 40, 0)
 	_put(dummy, 5, 40, 0)

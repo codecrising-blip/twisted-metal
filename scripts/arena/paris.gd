@@ -314,17 +314,24 @@ static func water_half(x: float) -> float:
 	return WATER_HALF + island_half(x)
 
 
-## Lower quay width: none along the island (the walls go straight down to the water there).
-static func quay_w(x: float) -> float:
-	return QUAY_W * (1.0 - smoothstep(146.0, 166.0, x))
+## Lower quay width. Round 30 (owner: fallen into the water by Notre-Dame there was no way out): the lower
+## quays run on past the island (they used to stop, leaving the island's channels walled in on both sides).
+static func quay_w(_x: float) -> float:
+	return QUAY_W
 
 
-## Lower quay height: down a ramp in the west, up a ramp before the island.
+## Lower quay height: down a ramp in the west; up to the street at x 144 (the old exit) and straight back down
+## before Pont Neuf, along the island at -5 (round 30: a way out of the water by Notre-Dame); up again at the east
+## end, past Petit Pont so the tallest car clears its deck.
 static func quay_y(x: float) -> float:
 	if x < -222.0:
 		return QUAY_Y * smoothstep(-262.0, -222.0, x)
-	if x > 100.0:
+	if x > 100.0 and x < 144.0:
 		return QUAY_Y * (1.0 - smoothstep(100.0, 144.0, x))
+	if x >= 144.0 and x < 172.0:
+		return QUAY_Y * smoothstep(144.0, 172.0, x)
+	if x > 252.0:
+		return QUAY_Y * (1.0 - smoothstep(252.0, 275.0, x))
 	return QUAY_Y
 
 
@@ -529,29 +536,43 @@ func _bridge_span(bx: float, w: float, z0: float, z1: float, hump: float) -> voi
 				Vector3(xi - sx * 0.1, a + 1.2, zs[k])], Vector3(-sx, 1, 0), true)
 		face(_m.stone, [Vector3(xa, ys[k] - depth, zs[k]), Vector3(xb, ys[k] - depth, zs[k]), Vector3(xb, ys[k + 1] - depth, zs[k + 1]),
 			Vector3(xa, ys[k + 1] - depth, zs[k + 1])], Vector3.DOWN, false)
-	# Piers in the water at both water edges and, for wide spans, in the middle.
-	var zc := river_z(bx)
-	var wh := water_half(bx)
+	# Piers in the water at both water edges and, for wide spans, in the middle. Round 30: the lower quays run under
+	# every bridge now, so each pier follows its bank or the island's edge over the bridge's width (a straight block
+	# placed by the bridge's centre stood out onto the quay where the island widens: Pont Neuf, Petit Pont).
+	var top := hump * 0.6 - 1.3
+	var x0 := xa - 0.5
+	var x1 := xb + 0.5
 	var ih := island_half(bx)
-	var piers: Array[float] = []
 	for side: float in [-1.0, 1.0]:
-		var pz := zc + side * (wh - 1.8)
-		if pz > z0 and pz < z1:
-			piers.append(pz)
+		_pier(x0, x1, top, func(x: float) -> float: return river_z(x) + side * (water_half(x) - 0.1), -side, z0, z1)
 		if ih > 3.0:
-			var iz := zc + side * (ih + 1.8)
-			if iz > z0 and iz < z1:
-				piers.append(iz)
-	if ih < 3.0 and zc > z0 and zc < z1:
-		piers.append(zc)
-	for pz: float in piers:
-		var mb := MeshBuilder.new()
-		var top := hump * 0.6 - 1.3
-		var size := Vector3(w + 1.0, top - BED_Y + 0.3, 3.4)
-		var xf := Transform3D(Basis(), Vector3(bx, (top + BED_Y - 0.3) * 0.5, pz))
-		mb.box(_m.quay, size, xf, 0.15)
-		batch_builder(mb)
-		solid(size, xf) # cars wade under the bridges now: the piers are real
+			_pier(x0, x1, top, func(x: float) -> float: return river_z(x) + side * (island_half(x) + 0.1), side, z0, z1)
+	if ih < 3.0:
+		_pier(x0, x1, top, func(x: float) -> float: return river_z(x) - 1.7, 1.0, z0, z1)
+
+
+## A bridge pier from under the riverbed up to `top`: one face on `edge(x)` (world z), 3.4 m thick toward `dir`
+## (+1 = south), laid in 1 m steps from x0 to x1; only if its middle is under the span z0..z1.
+func _pier(x0: float, x1: float, top: float, edge: Callable, dir: float, z0: float, z1: float) -> void:
+	var mid := float(edge.call((x0 + x1) * 0.5)) + dir * 1.7
+	if mid <= z0 or mid >= z1:
+		return
+	var n := maxi(1, ceili(x1 - x0))
+	var lo := Vector3(0, BED_Y - 0.3, 0)
+	var hi := Vector3(0, top, 0)
+	var a: Array[Vector3] = []
+	var b: Array[Vector3] = []
+	for k in n + 1:
+		var x := lerpf(x0, x1, float(k) / n)
+		var z := float(edge.call(x))
+		a.append(Vector3(x, 0, z))
+		b.append(Vector3(x, 0, z + dir * 3.4))
+	for k in n:
+		face(_m.quay, [a[k] + lo, a[k + 1] + lo, a[k + 1] + hi, a[k] + hi], Vector3(0, 0, -dir), true, COL_WALL)
+		face(_m.quay, [b[k] + lo, b[k + 1] + lo, b[k + 1] + hi, b[k] + hi], Vector3(0, 0, dir), true, COL_WALL)
+		face(_m.quay, [a[k] + hi, a[k + 1] + hi, b[k + 1] + hi, b[k] + hi], Vector3.UP, true, COL_GROUND)
+	face(_m.quay, [a[0] + lo, b[0] + lo, b[0] + hi, a[0] + hi], Vector3.LEFT, true, COL_WALL)
+	face(_m.quay, [a[n] + lo, b[n] + lo, b[n] + hi, a[n] + hi], Vector3.RIGHT, true, COL_WALL)
 
 
 # ---------------------------------------------------------------- roads

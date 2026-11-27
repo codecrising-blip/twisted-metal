@@ -232,14 +232,15 @@ const DEFS := {
 	# ---- Round 28 (owner: "build Thumper, Darkside and Brimstone with their secondaries"), design 01 ch 9-11.
 	# Thumper (Bruce): Megafire, reworked in round 29 (owner): a glowing sheet of fire across the whole width of his
 	# nose, halfway between a beam and a flame (TM4's Super Thumper). A bar of "tabs" (8) instead of charges: one
-	# tab burns in tab_time s (0.7: 5.6 s for the full bar), one tab comes back in tab_refill s (4), only while the
-	# fire is off. Lighting it needs a FULL tab and burns at least one tab (a tap still costs 0.7 s); holding on drains
-	# the bar; letting go keeps what is left of the tab. dps: the whole bar on Outlaw (296) = ~80% with the burning.
+	# tab burns in tab_time s (0.7: 5.6 s for the full bar), one tab comes back in tab_refill s (4.6; it was 4 until
+	# the owner asked for a 15% slower recharge after round 30), only while the fire is off. Lighting it needs a FULL
+	# tab and burns at least one tab (a tap still costs 0.7 s); holding on drains the bar; letting go keeps what is
+	# left of the tab. dps: the whole bar on Outlaw (296) = ~80% with the burning.
 	# The fire is a box ahead of the grille: half_w at the nose widening by spread a metre, range m long.
 	"megafire": {
 		"label": "Megafire", "kind": "flame", "handler": "flame", "color": Color(1.0, 0.5, 0.12), "special": true,
 		"range": 16.0, "half_w": 1.2, "spread": 0.12, "height": 2.6, "dps": 43.0, "burn": 2.0,
-		"tabs": 8, "tab_time": 0.7, "tab_refill": 4.0, "cooldown": 0.0, "sound_db": 2.5,
+		"tabs": 8, "tab_time": 0.7, "tab_refill": 4.6, "cooldown": 0.0, "sound_db": 2.5,
 	},
 	# Thumper's secondary (round 29, owner; replaces the Drive-By): Earthquake Slam. A sonic boom out from under the
 	# car: a blue wave along the ground to "radius" m. Every car it reaches is thrown away from him (push, falling off

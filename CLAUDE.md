@@ -852,6 +852,11 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   pick, starts in LA, opponents drawn at random (`STAGE_ENEMIES`), the tour goes on stage by stage (`Main.next_stage`,
   `tour_card`); deathmatch picks the stage; before every match the match card (`_show_matchcards`: the map closing in,
   the opponents' cars turning on stands, no names). Brimstone's pictures = the owner's new PREACHER sheet (bible gone).
+  **Follow-up:** Megafire `tab_refill` 4.6 (15% slower); the lower quays run on along the Ile de la Cite at -5 with
+  cobbled banks (owner: fallen in by Notre-Dame there was no way out): `quay_y` rises to the street at x 144 (the old
+  exit), drops again before Pont Neuf (172) and rises at the east end past Petit Pont (252-275); bridge piers follow
+  their bank / the island's edge over the bridge's width (`ParisArena._pier`; a block placed by the bridge's centre
+  stood out onto the quay where the island widens).
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
