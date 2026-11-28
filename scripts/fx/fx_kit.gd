@@ -598,3 +598,45 @@ static func splash(parent: Node, pos: Vector3, size := 1.0) -> void:
 	var tw := p.create_tween()
 	tw.tween_interval(1.0)
 	tw.tween_callback(p.queue_free)
+
+
+## Round 32: leaves knocked out of a tree's crown, fluttering down and drifting: small shaded flakes in a few
+## greens (a billboard that keeps its scale; the soft blob particles are drawn 1 m wide whatever their scale).
+static func leaves(parent: Node, pos: Vector3, size := 1.0) -> void:
+	if parent == null or not parent.is_inside_tree():
+		return
+	if not _meshes.has("leaf"):
+		var m := StandardMaterial3D.new()
+		m.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		m.billboard_keep_scale = true
+		m.vertex_color_use_as_albedo = true
+		m.roughness = 0.9
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		var q := QuadMesh.new()
+		q.size = Vector2(1.0, 0.7)
+		q.material = m
+		_meshes["leaf"] = q
+	var p := burst(_meshes["leaf"], int(60 * size * GraphicsSettings.particles()) + 8, 3.2, 0.85)
+	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	p.emission_sphere_radius = 2.0 * size
+	p.direction = Vector3.UP
+	p.spread = 180.0
+	p.gravity = Vector3(0, -2.4, 0)
+	p.initial_velocity_min = 1.5
+	p.initial_velocity_max = 5.0
+	p.damping_min = 1.5
+	p.damping_max = 3.0
+	p.angle_min = -180.0
+	p.angle_max = 180.0
+	p.angular_velocity_min = -260.0
+	p.angular_velocity_max = 260.0
+	p.scale_amount_min = 0.14
+	p.scale_amount_max = 0.3
+	p.color_initial_ramp = _ramp([Color("4C6A2A"), Color("6E8B3D"), Color("3D5622"), Color("7A9446")])
+	p.color_ramp = _ramp([Color(1, 1, 1, 1), Color(1, 1, 1, 1), Color(1, 1, 1, 0)])
+	parent.add_child(p)
+	p.global_position = pos
+	p.emitting = true
+	var tw := p.create_tween()
+	tw.tween_interval(3.6)
+	tw.tween_callback(p.queue_free)

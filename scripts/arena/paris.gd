@@ -229,8 +229,8 @@ void fragment() {
 ## Round 32: the owner's pick of four lights (round 31 sheet, panel D): an overcast day. Soft grey light, weak
 ## shadows, muted colour; the panorama (tools/blender/build_paris_backdrop.py) is rendered under the same sky.
 const LOOK := {"exposure": 0.9, "sun": 0.55, "sun_col": Color("E4E8EE"), "amb": Color(0.62, 0.64, 0.68), "amb_e": 1.0,
-	"fog": Color(0.6, 0.62, 0.64), "fog_d": 0.0028, "sat": 0.75, "con": 1.06, "sky": Color(0.72, 0.74, 0.78),
-	"haze": Color(0.62, 0.64, 0.67), "haze_a": 0.55}
+	"fog": Color(0.6, 0.62, 0.64), "fog_d": 0.0028, "sat": 0.75, "con": 1.06, "sky": Color(0.8, 0.82, 0.86),
+	"haze": Color(0.62, 0.64, 0.67), "haze_a": 0.22} # the panorama carries its own haze
 const SKY_SHADER := """
 shader_type sky;
 uniform sampler2D pano : source_color, filter_linear_mipmap;
@@ -1172,7 +1172,9 @@ func _trees() -> void:
 func _tree_body(mesh: Mesh, mmi: MultiMeshInstance3D, index: int, xf: Transform3D) -> void:
 	var b := Breakable.new()
 	b.style = Breakable.Style.TOPPLE
-	b.kind = "palm" # wood: it cracks, and burns when a fire or explosive weapon fells it
+	b.kind = "tree" # wood: it splits, sheds leaves, and burns when a fire or explosive weapon fells it
+	b.hinge = true # round 32: it falls over about its stump instead of being thrown
+	b.crown_radius = 2.6
 	b.size_hint = Vector3(1.2, 8.0, 1.2)
 	b.topple_height = 9.0
 	b.fall_mass = 420.0
@@ -1258,14 +1260,19 @@ func _blocked(p: Vector2) -> bool:
 ## read as toys).
 func _tree_mesh() -> Mesh:
 	var mb := MeshBuilder.new()
-	var bark := MatKit.paint(Color("8E8A72"), 0.6, 0.0, 0.5, 1.2, 0.2, 51)
+	# Round 32 (owner: the trees read as steel rods): plane-tree bark is a patchwork of olive-brown, grey and cream
+	# flakes, rough and matt; the trunk flares at the root and forks into crooked limbs.
+	var bark := MatKit.paint(Color("6F6450"), 0.85, 0.0, 0.85, 0.7, 0.05, 52)
 	var inner := MatKit.flat(Color("2F4220"), 0.95)
 	var leaves := _leaf_material()
-	mb.cylinder(bark, 0.24, 4.2, Transform3D(Basis(), Vector3(0, 2.1, 0)), 8, 0.17)
-	for k in 3:
-		var a := TAU * k / 3.0 + 0.4
-		var limb := Basis(Vector3(cos(a), 0, sin(a)).cross(Vector3.UP).normalized(), 0.38)
-		mb.cylinder(bark, 0.13, 1.8, Transform3D(limb, Vector3(cos(a) * 0.3, 5.0, sin(a) * 0.3)), 6, 0.08)
+	mb.cylinder(bark, 0.42, 0.7, Transform3D(Basis(), Vector3(0, 0.35, 0)), 9, 0.27) # root flare
+	mb.cylinder(bark, 0.27, 4.0, Transform3D(Basis(Vector3(1, 0, 0.4).normalized(), 0.05), Vector3(0, 2.6, 0)), 9, 0.19)
+	for k in 5:
+		var a := TAU * k / 5.0 + 0.4
+		var lean := 0.45 + 0.12 * (k % 3)
+		var limb := Basis(Vector3(cos(a), 0, sin(a)).cross(Vector3.UP).normalized(), lean)
+		var limb_l := 2.2 + 0.3 * (k % 2)
+		mb.cylinder(bark, 0.15, limb_l, Transform3D(limb, Vector3(0, 4.5, 0) + limb * Vector3(0, limb_l * 0.5, 0)), 6, 0.07)
 	var clumps := [Vector3(0, 7.4, 0), Vector3(1.9, 6.6, 0.6), Vector3(-1.7, 6.8, 0.9), Vector3(0.4, 6.5, -2.0),
 		Vector3(-0.4, 8.6, 0.2), Vector3(1.6, 7.9, -1.3)]
 	var radii := [2.6, 2.0, 2.1, 2.0, 1.8, 1.7]

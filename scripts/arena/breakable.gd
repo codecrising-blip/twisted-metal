@@ -29,7 +29,7 @@ var loot := "" # "weapon" | "health" | "" -> one-off pickup where it stood
 var loot_offset := Vector3.ZERO
 var visual: Node3D
 var is_broken := false
-## How it breaks, looks and sounds (juice guide, round 8): "glass", "wood", "palm", "metal", "prop"
+## How it breaks, looks and sounds (juice guide, round 8): "glass", "wood", "palm", "tree", "metal", "prop"
 ## (small street props) or "" (plain debris, no sound).
 var kind := ""
 var size_hint := Vector3(2.0, 2.0, 0.3) # rough extent of the visible part, for where the debris comes from
@@ -40,14 +40,25 @@ var fall_mass := 220.0 # kg of the piece that falls (TOPPLE)
 ## knocks them over to the side of its path, slowly, the crown falling away from the road ahead.
 var swat_aside := false
 var stump_radius := 0.0 # > 0: a short broken stump stays where it stood
+## Round 32 (owner: Paris trees fell "very separate, like steel rods, not wood"): a tree is not thrown, it falls OVER.
+## The trunk splinters just above its stump and swings down about it (gravity speeding it up, pushed a little along
+## by the car), the crown slams into the ground or a wall with a crunch of branches, rebounds twice and lies there.
+var hinge := false
+var crown_radius := 2.4 # where the crown meets the ground first (hinge falls)
+var _pivot: Node3D
+var _axis := Vector3.RIGHT
+var _theta := 0.0
+var _omega := 0.0
+var _slide := Vector3.ZERO
+var _bounces := 0
 ## Set by weapon_hit(): where the shot or blast came from, and whether it sets wood on fire.
 var hit_from := Vector3.INF
 var hit_burns := false
 
-var _fall_body: RigidBody3D
+var _fall_body: Node3D # the falling piece: a RigidBody3D, or a hinge-fall pivot
 var _fall_t := 0.0
 var _fall_landed := false
-var _fall_fires: Array = [] # flames (FoamFire) and smoke on a burning palm
+var _fall_fires: Array = [] # flames (FoamFire) and smoke on a burning palm or tree
 var _fall_sound: AudioStreamPlayer3D
 
 const FALL_GONE := 4.5 # seconds a fallen trunk or pole lies there before it is cleared away
@@ -151,6 +162,9 @@ func break_apart(by: Vehicle) -> void:
 ## explosive or fire weapon burns as it falls and lies there charred. Then it is cleared away.
 ## The falling piece only touches the world (cars drive through it: no lost momentum).
 func _topple(by: Vehicle) -> void:
+	if hinge:
+		_hinge_topple(by)
+		return
 	var world := get_parent()
 	var by_weapon := hit_from != Vector3.INF
 	var body := RigidBody3D.new()
@@ -174,29 +188,9 @@ func _topple(by: Vehicle) -> void:
 	body.add_child(shape)
 	visual.reparent(body, true)
 	_fall_body = body
-	# Which way, how hard.
-	var dir := Vector3(randf_range(-1, 1), 0, randf_range(-1, 1))
-	var speed := 9.0
-	if by_weapon:
-		dir = global_position - hit_from
-	elif is_instance_valid(by):
-		var cv := by.linear_velocity
-		cv.y = 0.0
-		var off := global_position - by.global_position
-		off.y = 0.0
-		if cv.length() > 3.0:
-			var fwd := cv.normalized()
-			var side := off - fwd * off.dot(fwd) # which side of the car's path it stood on
-			var aside := side.normalized() if side.length() > 0.05 else Vector3(-fwd.z, 0, fwd.x)
-			dir = fwd * 0.8 + aside * 0.6
-			speed = clampf(cv.length(), 8.0, 42.0)
-			if swat_aside:
-				dir = fwd * 0.3 + aside
-				speed = clampf(cv.length() * 0.45, 6.0, 12.0)
-		else:
-			dir = off
-	dir.y = 0.0
-	dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
+	var push := _fall_push(by)
+	var dir := push.normalized()
+	var speed := push.length()
 	var tip := Vector3.UP.cross(dir).normalized() # turning about this drops the top along dir
 	if by_weapon:
 		body.linear_velocity = dir * 7.5 + Vector3.UP * 6.0
@@ -226,6 +220,106 @@ func _topple(by: Vehicle) -> void:
 	set_physics_process(true)
 
 
+## Which way it falls and how hard (m/s): away from a blast, or along the car's path (aside for big crowns).
+func _fall_push(by: Vehicle) -> Vector3:
+	var dir := Vector3(randf_range(-1, 1), 0, randf_range(-1, 1))
+	var speed := 9.0
+	if hit_from != Vector3.INF:
+		dir = global_position - hit_from
+	elif is_instance_valid(by):
+		var cv := by.linear_velocity
+		cv.y = 0.0
+		var off := global_position - by.global_position
+		off.y = 0.0
+		if cv.length() > 3.0:
+			var fwd := cv.normalized()
+			var side := off - fwd * off.dot(fwd) # which side of the car's path it stood on
+			var aside := side.normalized() if side.length() > 0.05 else Vector3(-fwd.z, 0, fwd.x)
+			dir = fwd * 0.8 + aside * 0.6
+			speed = clampf(cv.length(), 8.0, 42.0)
+			if swat_aside:
+				dir = fwd * 0.3 + aside
+				speed = clampf(cv.length() * 0.45, 6.0, 12.0)
+		else:
+			dir = off
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.01 else Vector3.FORWARD
+	return dir * speed
+
+
+func _hinge_topple(by: Vehicle) -> void:
+	var world := get_parent()
+	var push := _fall_push(by)
+	var dir := push.normalized()
+	var hard := hit_from != Vector3.INF
+	_axis = Vector3.UP.cross(dir).normalized() # turning about it by +theta drops the top along dir
+	_pivot = Node3D.new()
+	world.add_child(_pivot)
+	_pivot.global_position = global_position + Vector3.UP * 0.45 # it splinters just above the stump
+	visual.reparent(_pivot, true)
+	_fall_body = _pivot
+	_theta = 0.0
+	_bounces = 0
+	_omega = 1.5 if hard else 0.3 + push.length() * 0.035
+	_slide = dir * (2.5 if hard else minf(push.length() * 0.1, 2.2)) # the broken foot skids a little along
+	var stump := MeshKit.cylinder(self, stump_radius * 1.15, 0.6, Vector3(0, 0.3, 0), _charred() if hit_burns else MeshKit.mat(debris_color * 0.75, 0.95), Vector3.ZERO, 8, stump_radius)
+	stump.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for k in 5: # jagged splinters standing up from the break, pale raw wood
+		var a := TAU * k / 5.0 + randf_range(-0.3, 0.3)
+		var sp := MeshKit.box(self, Vector3(0.09, randf_range(0.25, 0.5), 0.07), Vector3(cos(a) * stump_radius * 0.75, 0.7, sin(a) * stump_radius * 0.75), MeshKit.mat(Color(0.74, 0.62, 0.45), 0.9))
+		sp.rotation = Vector3(randf_range(-0.3, 0.3), a, randf_range(-0.3, 0.3))
+		sp.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if hit_burns:
+		_set_alight(_pivot)
+	_fall_t = 0.0
+	_fall_landed = false
+	set_physics_process(true)
+
+
+## The swing about the stump: theta'' = 1.5 g / L sin(theta) (a falling rod), until the crown meets the ground or
+## something solid; then two small rebounds and it lies still.
+func _hinge_step(delta: float, world: Node) -> void:
+	if _omega == 0.0 and _fall_landed:
+		return
+	if _bounces == 0:
+		_omega += 1.5 * 12.0 / topple_height * sin(_theta + 0.06) * delta
+	else:
+		_omega += 1.5 * 12.0 / topple_height * delta # back down after a rebound
+	_theta += _omega * delta
+	_slide = _slide.move_toward(Vector3.ZERO, 5.0 * delta)
+	_pivot.global_position += _slide * delta
+	var rot := Basis(_axis, _theta)
+	var tip := _pivot.global_position + rot * Vector3.UP * topple_height
+	var hit := _omega > 0.0 and (_theta > 1.62 or tip.y - Specials.ground_below(world, tip + Vector3.UP * 3.0).y < crown_radius)
+	if _omega > 0.0 and not hit: # a wall or a building in the way stops it there
+		var q := PhysicsRayQueryParameters3D.create(_pivot.global_position + rot * Vector3.UP * 2.0, tip + rot * Vector3.UP * 0.5, 1)
+		var w := get_world_3d().direct_space_state.intersect_ray(q)
+		hit = not w.is_empty() and not (w.collider as Node).is_in_group(&"ground")
+	if hit:
+		if _bounces == 0:
+			_crown_lands(world, tip)
+		_bounces += 1
+		_omega = -_omega * (0.2 if _bounces == 1 else 0.12)
+		if _bounces >= 3 or absf(_omega) < 0.05:
+			_omega = 0.0
+			_fall_landed = true
+		_theta += _omega * delta
+	_pivot.global_basis = Basis(_axis, _theta)
+
+
+func _crown_lands(world: Node, tip: Vector3) -> void:
+	var at := tip - Basis(_axis, _theta) * Vector3.UP * crown_radius * 0.6
+	var g := Specials.ground_below(world, at + Vector3.UP * 3.0)
+	var heavy := clampf(fall_mass / 250.0, 0.6, 1.6)
+	GameFeel.play("land_thud", at, world, 0.0, 0.62, true)
+	GameFeel.play("wood_break", at, world, -6.0, 0.7, true) # branches cracking under it
+	FxKit.leaves(world, at + Vector3.UP * 1.0, 1.3)
+	FxKit.dust_ring(world, g, 1.1 * heavy)
+	FxKit.puff(world, g + Vector3.UP * 0.6, 0.9 * heavy)
+	GameFeel.shake(at, 0.25 * heavy, 45.0)
+	if hit_burns:
+		FxKit.spark(world, g + Vector3.UP * 0.3, Vector3.UP) # embers
+
 static func _charred() -> StandardMaterial3D:
 	if _char_mat == null:
 		_char_mat = StandardMaterial3D.new()
@@ -235,7 +329,7 @@ static func _charred() -> StandardMaterial3D:
 
 
 ## Wood on fire: flames along the trunk and in the crown, the whole thing scorched black.
-func _set_alight(body: RigidBody3D) -> void:
+func _set_alight(body: Node3D) -> void:
 	var soot := StandardMaterial3D.new()
 	soot.albedo_color = Color(0.02, 0.015, 0.01, 0.72)
 	soot.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -270,7 +364,9 @@ func _physics_process(delta: float) -> void:
 		return
 	_fall_t += delta
 	var world := get_parent()
-	if not _fall_landed and _fall_t > 0.12:
+	if _pivot:
+		_hinge_step(delta, world)
+	elif not _fall_landed and _fall_t > 0.12:
 		var top := _fall_body.to_global(Vector3(0, topple_height, 0))
 		var g := Specials.ground_below(world, top + Vector3.UP * 2.0)
 		if top.y - g.y < 0.9 or _fall_t > 2.5:
@@ -284,7 +380,7 @@ func _physics_process(delta: float) -> void:
 				FxKit.spark(world, g + Vector3.UP * 0.2, Vector3.UP)
 			elif hit_burns:
 				FxKit.spark(world, g + Vector3.UP * 0.2, Vector3.UP) # a burst of embers where the crown lands
-	var gone := FALL_BURN_GONE if hit_burns and kind == "palm" else FALL_GONE
+	var gone := FALL_BURN_GONE if hit_burns and kind in ["palm", "tree"] else FALL_GONE
 	if _fall_t > gone - 1.2:
 		for f in _fall_fires:
 			if f is FoamFire:
@@ -298,8 +394,10 @@ func _physics_process(delta: float) -> void:
 		set_physics_process(false)
 		var body := _fall_body
 		_fall_body = null
-		body.freeze = true
-		body.collision_mask = 0
+		_pivot = null
+		if body is RigidBody3D:
+			(body as RigidBody3D).freeze = true
+			(body as RigidBody3D).collision_mask = 0
 		FxKit.puff(world, body.to_global(Vector3(0, topple_height * 0.5, 0)), 0.9)
 		var tw := body.create_tween()
 		tw.tween_property(body, "global_position:y", body.global_position.y - 1.6, 0.9).set_ease(Tween.EASE_IN)
@@ -340,6 +438,15 @@ func _break_feel(by: Vehicle) -> void:
 		"palm":
 			GameFeel.play("palm_break", center, world, 0.0, 1.0, true)
 			_debris()
+		"tree": # the trunk splits: a crack, pale splinters off the break, leaves shaken out of the crown
+			var foot := global_position + Vector3.UP * 0.7
+			GameFeel.play("palm_break", foot, world, 0.0, 0.85, true)
+			GameFeel.play("wood_break", foot, world, -3.0, 0.8, true)
+			FxKit.shatter(world, foot, Vector3(0.35, 0.3, 0.35), dir, speed * 0.6, Color(0.74, 0.62, 0.45), false)
+			FxKit.leaves(world, global_position + global_basis * Vector3(0, topple_height * 0.75, 0), 1.0)
+			GameFeel.shake(foot, 0.2, 35.0)
+			if you:
+				GameFeel.hitstop(get_tree(), 0.04, 0.1)
 		"metal":
 			GameFeel.play("metal_fall", center, world, 0.0, 1.1, true)
 			FxKit.crash_burst(world, global_position + Vector3.UP * 1.0, dir if dir != Vector3.UP else Vector3.FORWARD, 0.5)

@@ -883,6 +883,27 @@ Design chapters (characters, stages, sub bosses, Calypso) live in `docs/design/`
   `ParisArena.MOODS` (bright/toned/haze/overcast, `-- mood:<name>`, default toned) with a tinted panorama sky shader;
   `docs/screenshots/round31/paris_moods.png` for the owner to pick. Waiting on the owner: mood pick, building variety
   and enterable/destructible landmarks (options in doc 36).
+- **Round 32, full text `docs/design/37-owner-round-32.md`:** **Cleanup** (owner: "no dead code, no duplicates"):
+  HeroModels, Rim Shot, the Junkyard stage, the LA GL bake (la_city/la_outside/bake_backdrop/cube_to_panorama), Drive-By
+  leftovers and ~25 unused members gone; `LosAngelesArena extends ArenaKit` (one copy of batching/text/solids),
+  `FxKit.burst` (one-shot emitters), `FrontEnd._car_view/_turntable`, `T.aim/lin/link` + `carkit.rod` in the Blender
+  tools; sounds for unbuilt cars in `audio/later/specials`; sound peaks regenerated. Finding dead code: scan every
+  declaration for uses outside its own body (iterate), Godot warnings as errors per file
+  (`--check-only -s res://file.gd` with `debug/gdscript/warnings/unused_*=2` set for one run; a private var used from
+  another script is still reported unused: check before deleting), `vulture` for Python (ignore bpy attributes).
+  **Paris light = the owner's D (overcast)**: `ParisArena.LOOK`, the only light. **Backdrop** (owner: "empty; thousands
+  of houses to the horizon, made for the far observer"): `build_paris_backdrop.py` rebuilt: a basin (`height()`: flat to
+  ~450 m, rim 200 m + `HILLS`) so the city climbs in rows to the skyline; Haussmann blocks with UV-metre window /
+  dormer patterns to 1.8 km, suburbs (tile-roof houses, slabs, towers) to 4 km, boxes to 7 km, the ground's colour
+  carpet beyond; haze by distance (`REACH` 4200), overcast sky, smoke cards (no volumes), landmarks (La Defense +
+  Grande Arche, Montparnasse, Pantheon, domes, spires, chimneys, gasometers, TV mast), the Seine with bridges. One
+  big mesh from python lists (`Geo`, ~700k faces); only the -15..+40 degree band renders full size (border render),
+  the rest small and scaled up: 8192 x 4096 in ~13 min, test `2048 8` in ~25 s. In game the sky shader's `sky` tint is
+  0.8-0.86 and `haze_a` 0.22 (the picture carries its haze). **Trees** (owner: "separate, steel rods"): kind "tree",
+  `Breakable.hinge`: no rigid body; the trunk splits above a splintered stump and swings down about it
+  (`_hinge_step`: theta'' = 1.5 g/L sin theta, the foot skids along `_slide`), the crown stops at the ground or a wall
+  (`crown_radius`, ray), two small rebounds; crack + wood sounds, pale splinters, `FxKit.leaves` (billboard keeping
+  scale) on the hit and the landing; thicker flared trunk, 5 crooked limbs, mottled bark. LA palms unchanged.
 - **Movement:** slower, like TM Black (not lazy); big cars no crazy drifts; weaker turbo (built: max speed 21.3 + 1.1 x SPD,
   handbrake grip/turn per class in `Roster`, turbo x1.28 for ~4.5 s). **Turbo never regenerates**:
   full at start and after respawn, each turbo pickup refills it **completely**, turbo pickups are the **most common**
