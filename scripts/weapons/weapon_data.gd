@@ -276,8 +276,10 @@ const DEFS := {
 	# if he drives it into a wall. Cars he brushes aside take their ram damage x brush_mult (up to brush_cap).
 	"darkside_slam": {
 		"label": "Darkside Slam", "kind": "slam", "handler": "slam", "color": Color(0.85, 0.08, 0.06), "special": true,
-		"horn": 0.0, "time": 1.5, "speed_mult": 1.9, # round 30 (owner): off at once, half the run "accel_mult": 8.0, "kick": 14.0, "steer": 0.25, "damage": 30.0, "wall_bonus": 15.0, "pin": 1.5,
-		"brush_mult": 1.5, "brush_cap": 25.0, "shake": 0.8, "cooldown": 1.0, "recharge": 15.0, "sound_db": 2.0,
+		# round 30 (owner): off at once, half the run. Round 33 (owner): recharge 15% faster (15 -> 13 s base).
+		"horn": 0.0, "time": 1.5, "speed_mult": 1.9,
+		"accel_mult": 8.0, "kick": 14.0, "steer": 0.25, "damage": 30.0, "wall_bonus": 15.0, "pin": 1.5,
+		"brush_mult": 1.5, "brush_cap": 25.0, "shake": 0.8, "cooldown": 1.0, "recharge": 13.0, "sound_db": 2.0,
 	},
 	# Darkside's secondary: Ash Cloud (design 11, one charge). Round 31 (owner): it BURSTS out round him, a black
 	# wall racing out to "burst_r" m in "burst_time" s; every opponent it reaches loses "burst_drain" of a full energy
